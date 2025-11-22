@@ -2,70 +2,44 @@ package com.example.backend.document.repository;
 
 import com.example.backend.document.model.Document;
 import com.example.backend.document.model.Document.ProcessingStatus;
-import com.example.backend.chat.model.Chat;
 import com.example.backend.user.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Repository לניהול מסמכים (Documents)
+ * Repository למסמכים
  * 
- * מטפל בכל הפעולות על טבלת documents:
- * - חיפוש מסמכים לפי שיחה
- * - חיפוש לפי סטטוס עיבוד
- * - מעקב אחרי מסמכים שנכשלו
- * - בדיקת כפילויות
+ * כל המסמכים עכשיו שייכים ישירות למשתמש (User) ולא ל-Chat
  */
 @Repository
 public interface DocumentRepository extends JpaRepository<Document, Long> {
 
-    // ==================== חיפוש לפי שיחה ====================
+    // ==================== Basic Queries ====================
 
     /**
-     * כל המסמכים של שיחה (פעילים בלבד)
-     * ממוין לפי תאריך העלאה (החדש ביותר ראשון)
+     * מציאת מסמך לפי ID (רק אקטיביים)
      */
-    List<Document> findByChatAndActiveTrueOrderByCreatedAtDesc(Chat chat);
+    Optional<Document> findByIdAndActiveTrue(Long id);
 
     /**
-     * רק מסמכים שהסתיימו (COMPLETED)
-     * 
-     * למה זה חשוב?
-     * כשרוצים לשאול שאלה, צריך רק מסמכים מעובדים!
+     * מציאת כל המסמכים של משתמש (ממוינים לפי displayOrder)
      */
-    List<Document> findByChatAndProcessingStatusAndActiveTrue(
-        Chat chat, 
-        ProcessingStatus status
-    );
+    List<Document> findByUserAndActiveTrueOrderByDisplayOrderAsc(User user);
 
     /**
-     * ספירה - כמה מסמכים בשיחה?
+     * ספירת מסמכים אקטיביים של משתמש
      */
-    long countByChatAndActiveTrue(Chat chat);
+    long countByUserAndActiveTrue(User user);
+
+    // ==================== Status Queries ====================
 
     /**
-     * כמה מסמכים עדיין מעבדים?
-     */
-    long countByChatAndProcessingStatusAndActiveTrue(
-        Chat chat, 
-        ProcessingStatus status
-    );
-
-    // ==================== חיפוש לפי משתמש ====================
-
-    /**
-     * כל המסמכים של משתמש (מכל השיחות)
-     */
-    List<Document> findByUserOrderByCreatedAtDesc(User user);
-
-    /**
-     * מסמכים של משתמש לפי סטטוס
+     * מציאת מסמכים לפי סטטוס עיבוד
      */
     List<Document> findByUserAndProcessingStatusAndActiveTrue(
         User user, 
@@ -73,163 +47,156 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     );
 
     /**
-     * ספירה - כמה מסמכים יש למשתמש בסטטוס מסוים?
+     * מציאת כל המסמכים שהושלמו
      */
-    long countByUserAndProcessingStatus(User user, ProcessingStatus status);
-
-    // ==================== חיפוש לפי ID ====================
+    default List<Document> findCompletedDocuments(User user) {
+        return findByUserAndProcessingStatusAndActiveTrue(user, ProcessingStatus.COMPLETED);
+    }
 
     /**
-     * חיפוש מסמך לפי ID (פעיל בלבד)
+     * מציאת כל המסמכים שנכשלו
      */
-    Optional<Document> findByIdAndActiveTrue(Long id);
+    default List<Document> findFailedDocuments(User user) {
+        return findByUserAndProcessingStatusAndActiveTrue(user, ProcessingStatus.FAILED);
+    }
 
     /**
-     * חיפוש מסמך של משתמש ספציפי
-     * 
-     * למה?
-     * בדיקת הרשאות! משתמש לא יכול למחוק מסמך של מישהו אחר
+     * מציאת כל המסמכים שבעיבוד
      */
-    Optional<Document> findByIdAndUserAndActiveTrue(Long id, User user);
-
-    // ==================== בדיקת כפילויות ====================
+    default List<Document> findProcessingDocuments(User user) {
+        return findByUserAndProcessingStatusAndActiveTrue(user, ProcessingStatus.PROCESSING);
+    }
 
     /**
-     * בדיקה אם קובץ עם אותו שם כבר קיים בשיחה
-     * 
-     * למה זה חשוב?
-     * למנוע העלאת אותו קובץ פעמיים
+     * מציאת כל המסמכים שממתינים
      */
-    Optional<Document> findByChatAndOriginalFileNameAndActiveTrue(
-        Chat chat, 
-        String originalFileName
-    );
+    default List<Document> findPendingDocuments(User user) {
+        return findByUserAndProcessingStatusAndActiveTrue(user, ProcessingStatus.PENDING);
+    }
+
+    // ==================== Display Order ====================
 
     /**
-     * בדיקה לפי Hash של התוכן
-     * 
-     * למה Hash?
-     * אפילו אם שינו את השם, זה אותו תוכן!
+     * קבלת ה-displayOrder הגבוה ביותר של משתמש
+     * (כדי להוסיף מסמך חדש בסוף)
      */
-    Optional<Document> findByChatAndContentHashAndActiveTrue(
-        Chat chat, 
-        String contentHash
-    );
+    @Query("SELECT COALESCE(MAX(d.displayOrder), 0) FROM Document d " +
+           "WHERE d.user = :user AND d.active = true")
+    Integer getMaxDisplayOrderByUser(@Param("user") User user);
+
+    // ==================== File Hash ====================
 
     /**
-     * האם קיים מסמך עם Hash זהה?
-     */
-    boolean existsByChatAndContentHashAndActiveTrue(
-        Chat chat, 
-        String contentHash
-    );
-
-    // ==================== חיפוש לפי תאריך ====================
-
-    /**
-     * מסמכים שהועלו לאחרונה
-     */
-    List<Document> findByChatAndCreatedAtAfterAndActiveTrue(
-        Chat chat, 
-        LocalDateTime date
-    );
-
-    /**
-     * מסמכים שלא הסתיימו תוך זמן X
-     * שימושי למציאת תקלות!
-     */
-    @Query("SELECT d FROM Document d WHERE d.processingStatus = 'PROCESSING' " +
-           "AND d.createdAt < :timeoutDate " +
-           "AND d.active = true")
-    List<Document> findStuckDocuments(@Param("timeoutDate") LocalDateTime timeoutDate);
-
-    // ==================== שאילתות סטטיסטיות ====================
-
-    /**
-     * סכום גודל כל המסמכים בשיחה (בבתים)
-     * שימושי לדעת כמה מקום תופס
-     */
-    @Query("SELECT COALESCE(SUM(d.fileSize), 0) FROM Document d " +
-           "WHERE d.chat = :chat AND d.active = true")
-    Long getTotalFileSizeByChat(@Param("chat") Chat chat);
-
-    /**
-     * סכום תווים מעובדים בשיחה
-     */
-    @Query("SELECT COALESCE(SUM(d.characterCount), 0) FROM Document d " +
-           "WHERE d.chat = :chat " +
-           "AND d.processingStatus = 'COMPLETED' " +
-           "AND d.active = true")
-    Integer getTotalCharacterCountByChat(@Param("chat") Chat chat);
-
-    /**
-     * סכום chunks בשיחה
-     * 
-     * למה זה חשוב?
-     * יותר chunks = יותר embeddings = יותר עלויות OpenAI
-     */
-    @Query("SELECT COALESCE(SUM(d.chunkCount), 0) FROM Document d " +
-           "WHERE d.chat = :chat " +
-           "AND d.processingStatus = 'COMPLETED' " +
-           "AND d.active = true")
-    Integer getTotalChunkCountByChat(@Param("chat") Chat chat);
-
-    /**
-     * מסמכים שנכשלו לאחרונה
-     * שימושי ל-monitoring
+     * בדיקה אם קיים מסמך עם אותו hash (למניעת כפילויות)
      */
     @Query("SELECT d FROM Document d " +
-           "WHERE d.processingStatus = 'FAILED' " +
+           "WHERE d.user = :user " +
+           "AND d.contentHash = :contentHash " +
+           "AND d.active = true")
+    Optional<Document> findByUserAndContentHash(
+        @Param("user") User user,
+        @Param("contentHash") String contentHash
+    );
+
+    /**
+     * בדיקה אם קיים מסמך עם אותו שם קובץ
+     */
+    @Query("SELECT d FROM Document d " +
+           "WHERE d.user = :user " +
+           "AND d.originalFileName = :fileName " +
+           "AND d.active = true")
+    Optional<Document> findByUserAndFileName(
+        @Param("user") User user,
+        @Param("fileName") String fileName
+    );
+
+    // ==================== Statistics ====================
+
+    /**
+     * סטטיסטיקות בסיסיות של מסמכים
+     */
+    @Query("SELECT " +
+           "COUNT(d), " +
+           "SUM(d.fileSize), " +
+           "SUM(d.chunkCount), " +
+           "SUM(d.characterCount) " +
+           "FROM Document d " +
+           "WHERE d.user = :user " +
            "AND d.active = true " +
-           "AND d.processedAt > :since " +
-           "ORDER BY d.processedAt DESC")
-    List<Document> findRecentFailures(@Param("since") LocalDateTime since);
+           "AND d.processingStatus = 'COMPLETED'")
+    Object[] getDocumentStatistics(@Param("user") User user);
 
     /**
-     * סטטיסטיקות לפי סטטוס
-     * מחזיר: [(COMPLETED, 10), (PROCESSING, 2), (FAILED, 1)]
+     * ספירת מסמכים לפי סטטוס
      */
-    @Query("SELECT d.processingStatus, COUNT(d) FROM Document d " +
-           "WHERE d.chat = :chat AND d.active = true " +
+    @Query("SELECT d.processingStatus, COUNT(d) " +
+           "FROM Document d " +
+           "WHERE d.user = :user " +
+           "AND d.active = true " +
            "GROUP BY d.processingStatus")
-    List<Object[]> countDocumentsByStatus(@Param("chat") Chat chat);
+    List<Object[]> countByStatusForUser(@Param("user") User user);
+
+    // ==================== Batch Operations ====================
 
     /**
-     * מסמכים הגדולים ביותר בשיחה
-     * שימושי למציאת בעיות ביצועים
-     */
-    @Query("SELECT d FROM Document d " +
-           "WHERE d.chat = :chat AND d.active = true " +
-           "ORDER BY d.fileSize DESC")
-    List<Document> findLargestDocuments(
-        @Param("chat") Chat chat, 
-        org.springframework.data.domain.Pageable pageable
-    );
-
-    // ==================== עדכונים ====================
-
-    /**
-     * עדכון סטטוס של כל המסמכים בשיחה
-     * שימושי אם צריך לעצור עיבוד
-     */
-    @Query("UPDATE Document d SET d.processingStatus = :newStatus " +
-           "WHERE d.chat = :chat " +
-           "AND d.processingStatus = :currentStatus")
-    @org.springframework.data.jpa.repository.Modifying
-    @org.springframework.transaction.annotation.Transactional
-    int updateStatusForChat(
-        @Param("chat") Chat chat,
-        @Param("currentStatus") ProcessingStatus currentStatus,
-        @Param("newStatus") ProcessingStatus newStatus
-    );
-
-    /**
-     * מחיקה רכה של מסמכים ישנים שנכשלו
+     * מחיקה רכה של כל המסמכים של משתמש
      */
     @Query("UPDATE Document d SET d.active = false " +
-           "WHERE d.processingStatus = 'FAILED' " +
-           "AND d.processedAt < :date")
-    @org.springframework.data.jpa.repository.Modifying
-    @org.springframework.transaction.annotation.Transactional
-    int cleanupOldFailedDocuments(@Param("date") LocalDateTime date);
+           "WHERE d.user = :user AND d.active = true")
+    void softDeleteAllByUser(@Param("user") User user);
+
+    /**
+     * מחיקה רכה של מסמכים לפי סטטוס
+     */
+    @Query("UPDATE Document d SET d.active = false " +
+           "WHERE d.user = :user " +
+           "AND d.processingStatus = :status " +
+           "AND d.active = true")
+    void softDeleteByUserAndStatus(
+        @Param("user") User user,
+        @Param("status") ProcessingStatus status
+    );
+
+    // ==================== Search ====================
+
+    /**
+     * חיפוש מסמכים לפי שם
+     */
+    @Query("SELECT d FROM Document d " +
+           "WHERE d.user = :user " +
+           "AND d.active = true " +
+           "AND LOWER(d.originalFileName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
+    List<Document> searchDocumentsByFileName(
+        @Param("user") User user,
+        @Param("searchTerm") String searchTerm
+    );
+
+    /**
+     * מציאת מסמכים גדולים (מעל גודל מסוים)
+     */
+    @Query("SELECT d FROM Document d " +
+           "WHERE d.user = :user " +
+           "AND d.active = true " +
+           "AND d.fileSize > :minSize " +
+           "ORDER BY d.fileSize DESC")
+    List<Document> findLargeDocuments(
+        @Param("user") User user,
+        @Param("minSize") Long minSize
+    );
+
+    // ==================== Date Range ====================
+
+    /**
+     * מציאת מסמכים שנוצרו בטווח תאריכים
+     */
+    @Query("SELECT d FROM Document d " +
+           "WHERE d.user = :user " +
+           "AND d.active = true " +
+           "AND d.createdAt BETWEEN :startDate AND :endDate " +
+           "ORDER BY d.createdAt DESC")
+    List<Document> findByUserAndDateRange(
+        @Param("user") User user,
+        @Param("startDate") java.time.LocalDateTime startDate,
+        @Param("endDate") java.time.LocalDateTime endDate
+    );
 }

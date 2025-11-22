@@ -27,11 +27,11 @@ import java.util.Map;
  * Controller for managing documents
  *
  * Endpoints:
- * - GET    /api/documents/chat/{chatId}  - Get documents for chat
- * - GET    /api/documents/{id}           - Get document details
- * - GET    /api/documents/{id}/download  - Download document
- * - DELETE /api/documents/{id}           - Delete document
- * - GET    /api/documents/chat/{chatId}/stats - Get statistics
+ * - GET    /api/documents/my-documents    - Get all documents for current user
+ * - GET    /api/documents/{id}            - Get document details
+ * - GET    /api/documents/{id}/download   - Download document
+ * - DELETE /api/documents/{id}            - Delete document
+ * - PUT    /api/documents/reorder         - Reorder documents
  */
 @RestController
 @RequestMapping("/api/documents")
@@ -48,44 +48,18 @@ public class DocumentController {
     // ==================== Get Documents ====================
 
     /**
-     * Get all documents for a chat
+     * Get all documents for the current user
      *
-     * GET /api/documents/chat/{chatId}
-     *
-     * Response: List<DocumentResponse>
-     */
-    @GetMapping("/chat/{chatId}")
-    public ResponseEntity<Map<String, Object>> getDocumentsByChat(
-            @PathVariable Long chatId) {
-
-        User currentUser = getCurrentUser();
-        
-        List<DocumentResponse> documents = 
-            documentService.getDocumentsByChat(chatId, currentUser);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("data", documents);
-        response.put("count", documents.size());
-
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Get processed documents only
-     *
-     * GET /api/documents/chat/{chatId}/processed
+     * GET /api/documents/my-documents
      *
      * Response: List<DocumentResponse>
      */
-    @GetMapping("/chat/{chatId}/processed")
-    public ResponseEntity<Map<String, Object>> getProcessedDocuments(
-            @PathVariable Long chatId) {
-
+    @GetMapping("/my-documents")
+    public ResponseEntity<Map<String, Object>> getMyDocuments() {
         User currentUser = getCurrentUser();
         
         List<DocumentResponse> documents = 
-            documentService.getProcessedDocuments(chatId, currentUser);
+            documentService.getDocumentsByUser(currentUser);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
@@ -196,25 +170,32 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== Statistics ====================
+    // ==================== Reorder Documents ====================
 
     /**
-     * Get document statistics for chat
+     * Reorder documents
      *
-     * GET /api/documents/chat/{chatId}/stats
+     * PUT /api/documents/reorder
+     * Body: { "documentIds": [3, 1, 2] }
      *
-     * Response: DocumentStatistics
+     * Response: success message
      */
-    @GetMapping("/chat/{chatId}/stats")
-    public ResponseEntity<Map<String, Object>> getDocumentStatistics(
-            @PathVariable Long chatId) {
+    @PutMapping("/reorder")
+    public ResponseEntity<Map<String, Object>> reorderDocuments(
+            @RequestBody Map<String, List<Long>> requestBody) {
+        
+        User currentUser = getCurrentUser();
+        List<Long> documentIds = requestBody.get("documentIds");
+        
+        if (documentIds == null || documentIds.isEmpty()) {
+            throw new ValidationException("documentIds", "רשימת מסמכים ריקה");
+        }
 
-        DocumentService.DocumentStatistics stats = 
-            documentService.getDocumentStatistics(chatId);
+        documentService.reorderDocuments(currentUser, documentIds);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("data", stats);
+        response.put("message", "סדר המסמכים עודכן בהצלחה");
 
         return ResponseEntity.ok(response);
     }
@@ -239,5 +220,4 @@ public class DocumentController {
 
         return (User) principal;
     }
-
 }

@@ -28,8 +28,7 @@ public class DocumentResponse {
     private Integer processingProgress;
     private Integer characterCount;
     private Integer chunkCount;
-    private Long chatId;
-    private String chatTitle;
+
     private Boolean active;
     private String errorMessage;
 

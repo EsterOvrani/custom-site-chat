@@ -5,7 +5,6 @@ import com.example.backend.document.model.Document;
 import org.mapstruct.*;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -20,10 +19,9 @@ public interface DocumentMapper {
     /**
      * המרה מ-Document Entity ל-DocumentResponse DTO
      */
-    @Mapping(source = "chat.id", target = "chatId")
-    @Mapping(source = "chat.title", target = "chatTitle")
+    @Mapping(source = "user.id", target = "userId")
     @Mapping(target = "fileSizeFormatted", expression = "java(formatFileSize(document.getFileSize()))")
-    @Mapping(target = "statistics", ignore = true)  // נמלא בService
+    @Mapping(target = "statistics", ignore = true)
     DocumentResponse toResponse(Document document);
 
     /**
@@ -111,6 +109,12 @@ public interface DocumentMapper {
      * עדכון Document מ-DTO
      */
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "user", ignore = true)
+    @Mapping(target = "contentHash", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "displayOrder", ignore = true)
     void updateDocumentFromResponse(DocumentResponse response, @MappingTarget Document document);
 
     /**

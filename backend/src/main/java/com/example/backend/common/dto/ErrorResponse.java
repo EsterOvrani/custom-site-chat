@@ -2,20 +2,17 @@ package com.example.backend.common.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.Builder;
+import lombok.Builder; 
 import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.Map;
 
-/**
- * מבנה אחיד לכל תגובות השגיאה במערכת
- */
 @Data
-@Builder
+@Builder  // ⬅️ זה יוצר את builder()
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ErrorResponse {
-    
+
     /**
      * האם הפעולה הצליחה
      */

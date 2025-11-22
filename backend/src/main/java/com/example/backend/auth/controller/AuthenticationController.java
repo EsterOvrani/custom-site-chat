@@ -8,6 +8,7 @@ import com.example.backend.auth.service.AuthenticationService;
 import com.example.backend.auth.service.GoogleOAuthService;
 import com.example.backend.auth.service.JwtService;
 import com.example.backend.user.model.User;
+import com.example.backend.collection.service.CollectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -35,6 +36,8 @@ public class AuthenticationController {
     private final JwtService jwtService;
     private final AuthenticationService authenticationService;
     private final GoogleOAuthService googleOAuthService;
+    private final CollectionService collectionService;
+        
 
     @PostMapping("/google")
     public ResponseEntity<Map<String, Object>> googleLogin(@RequestBody GoogleAuthRequest request) {
@@ -92,9 +95,19 @@ public class AuthenticationController {
     // ==================== Login ====================
     
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> authenticate(@RequestBody LoginUserDto loginUserDto) {
+    public ResponseEntity<Map<String, Object>> authenticate(
+            @RequestBody LoginUserDto loginUserDto) {
+        
         User authenticatedUser = authenticationService.authenticate(loginUserDto);
         String jwtToken = jwtService.generateToken(authenticatedUser);
+        
+        // ✅ הוסף את זה - צור/קבל קולקשן
+        CollectionInfoResponse collectionInfo = null;
+        try {
+            collectionInfo = collectionService.getOrCreateUserCollection(authenticatedUser);
+        } catch (Exception e) {
+            log.warn("Could not create collection during login", e);
+        }
         
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
@@ -104,8 +117,17 @@ public class AuthenticationController {
             "username", authenticatedUser.getUsername(),
             "email", authenticatedUser.getEmail(),
             "fullName", authenticatedUser.getFirstName() + " " + authenticatedUser.getLastName(),
-            "profilePictureUrl", authenticatedUser.getProfilePictureUrl() != null ? authenticatedUser.getProfilePictureUrl() : ""
+            "profilePictureUrl", authenticatedUser.getProfilePictureUrl() != null 
+                ? authenticatedUser.getProfilePictureUrl() : ""
         ));
+        
+        // ✅ הוסף מידע על הקולקשן
+        if (collectionInfo != null) {
+            response.put("collection", Map.of(
+                "hasCollection", true,
+                "collectionName", collectionInfo.getCollectionName()
+            ));
+        }
         
         return ResponseEntity.ok(response);
     }

@@ -1,24 +1,38 @@
 package com.example.backend.user.model;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
-import java.util.List;
+import java.util.Collections;
+import java.util.UUID;
 
 @Entity
 @Table(name = "users")
-@Getter
-@Setter
+@Data  // ⬅️ זה חשוב!
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class User implements UserDetails {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(nullable = false, unique = true)
+    private String username;
+
+    @Column(nullable = false)
+    private String password;
+
+    @Column(nullable = false, unique = true)
+    private String email;
 
     @Column(name = "first_name")
     private String firstName;
@@ -26,49 +40,78 @@ public class User implements UserDetails {
     @Column(name = "last_name")
     private String lastName;
 
-    @Column(unique = true, nullable = false)
-    private String username;
-
-    @Column(unique = true, nullable = false)
-    private String email;
-
-    @Column(nullable = false)
-    private String password;
-
-    @Column(name = "verification_code")
-    private String verificationCode;
-
-    @Column(name = "verification_expiration")
-    private LocalDateTime verificationCodeExpiresAt;
-
     @Column(name = "profile_picture_url")
     private String profilePictureUrl;
 
-    private boolean enabled;
+    @Column(name = "auth_provider")
+    @Enumerated(EnumType.STRING)
+    private AuthProvider authProvider = AuthProvider.LOCAL;
 
-    // Default constructor
-    public User() {
+    @Column(name = "google_id")
+    private String googleId;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    // ==================== Collection Fields ====================
+    
+    @Column(name = "collection_name", unique = true)
+    private String collectionName;
+
+    @Column(name = "collection_secret_key", unique = true)
+    private String collectionSecretKey;
+
+    @Column(name = "collection_created_at")
+    private LocalDateTime collectionCreatedAt;
+
+    @Column(name = "embed_code", columnDefinition = "TEXT")
+    private String embedCode;
+
+    // ==================== Lifecycle Callbacks ====================
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 
-    // Constructor with firstName and lastName
-    public User(String username, String email, String password, String firstName, String lastName) {
-        this.username = username;
-        this.email = email;
-        this.password = password;
-        this.firstName = firstName;
-        this.lastName = lastName;
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
     }
 
-    // Old constructor (kept for backward compatibility)
-    public User(String username, String email, String password) {
-        this.username = username;
-        this.email = email;
-        this.password = password;
+    // ==================== Helper Methods ====================
+
+    public boolean hasCollection() {
+        return collectionName != null && collectionSecretKey != null;
     }
+
+    public String generateCollectionName() {
+        return "user_" + this.id + "_" + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    public String generateSecretKey() {
+        return "sk_" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    // ==================== UserDetails Implementation ====================
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of();
+        return Collections.emptyList();
+    }
+
+    @Override
+    public String getPassword() {
+        return this.password;
+    }
+
+    @Override
+    public String getUsername() {
+        return this.username;
     }
 
     @Override
@@ -88,6 +131,13 @@ public class User implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return enabled;
+        return true;
+    }
+
+    // ==================== Enum ====================
+
+    public enum AuthProvider {
+        LOCAL,
+        GOOGLE
     }
 }

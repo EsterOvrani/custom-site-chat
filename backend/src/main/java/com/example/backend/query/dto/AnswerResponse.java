@@ -1,4 +1,4 @@
-package com.example.backend.chat.dto;
+package com.example.backend.query.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -11,25 +11,6 @@ import java.util.List;
 
 /**
  * DTO לתשובה מה-AI
- * 
- * מה Backend מחזיר אחרי ששואלים שאלה
- * 
- * דוגמה:
- * POST /api/chats/1/ask
- * Response:
- * {
- *   "answer": "הריבית בחוזה היא 3.5% משתנה",
- *   "sources": [
- *     {
- *       "documentName": "חוזה.pdf",
- *       "pageNumber": 3,
- *       "relevanceScore": 0.95
- *     }
- *   ],
- *   "confidence": 0.92,
- *   "tokensUsed": 450,
- *   "responseTime": 2340
- * }
  */
 @Data
 @NoArgsConstructor
@@ -45,29 +26,26 @@ public class AnswerResponse {
     /**
      * האם התשובה הצליחה?
      */
+    @Builder.Default
     private Boolean success = true;
 
     /**
      * רמת ביטחון בתשובה (0.0 - 1.0)
-     * 
-     * 0.0 - 0.5 = נמוך (אדום)
-     * 0.5 - 0.8 = בינוני (כתום)
-     * 0.8 - 1.0 = גבוה (ירוק)
      */
     private Double confidence;
 
     /**
-     * מקורות המידע (מאיזה מסמכים התשובה הגיעה)
+     * מקורות המידע
      */
     private List<Source> sources;
 
     /**
-     * מזהה ההודעה שנשמרה (לשרשור)
+     * מזהה ההודעה שנשמרה (לא בשימוש יותר - אין שמירת הודעות)
      */
     private Long messageId;
 
     /**
-     * כמה tokens השתמשנו? (עלויות)
+     * כמה tokens השתמשנו
      */
     private Integer tokensUsed;
 
@@ -95,7 +73,7 @@ public class AnswerResponse {
     // ==================== Inner Classes ====================
 
     /**
-     * מידע על מקור (מסמך שממנו הגיעה התשובה)
+     * מידע על מקור
      */
     @Data
     @Builder
@@ -124,13 +102,13 @@ public class AnswerResponse {
 
         /**
          * רמת רלוונטיות (0.0 - 1.0)
-         * כמה המקור רלוונטי לשאלה?
          */
         private Double relevanceScore;
 
         /**
          * האם זה המקור העיקרי?
          */
+        @Builder.Default
         private Boolean isPrimary = false;
     }
 
@@ -189,7 +167,7 @@ public class AnswerResponse {
     }
 
     /**
-     * קבלת המקור העיקרי (עם הרלוונטיות הגבוהה ביותר)
+     * קבלת המקור העיקרי
      */
     public Source getPrimarySource() {
         if (sources == null || sources.isEmpty()) {
@@ -211,7 +189,6 @@ public class AnswerResponse {
 
     /**
      * חישוב עלות משוערת (בדולרים)
-     * OpenAI: ~$0.0001 per token
      */
     public Double getEstimatedCost() {
         if (tokensUsed == null) {
@@ -221,14 +198,14 @@ public class AnswerResponse {
     }
 
     /**
-     * האם התשובה ארוכה? (מעל 500 תווים)
+     * האם התשובה ארוכה?
      */
     public boolean isLongAnswer() {
         return answer != null && answer.length() > 500;
     }
 
     /**
-     * האם התשובה קצרה? (עד 50 תווים)
+     * האם התשובה קצרה?
      */
     public boolean isShortAnswer() {
         return answer != null && answer.length() <= 50;

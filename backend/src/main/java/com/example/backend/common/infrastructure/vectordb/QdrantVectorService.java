@@ -67,57 +67,38 @@ public class QdrantVectorService {
         }
     }
 
-    /**
-     * יצירת קולקשין חדש להעלאה
-     * @param chatTitle שם השיחה
-     */
-    public String createNewCollectionForUpload(String chatTitle) {
-        String collectionName = "it still didnt created";
+    // ✅ הוסף פונקציה חדשה:
+    public String createUserCollection(String userId, String collectionName) {
         try {
-            // ✅ ניקוי שם השיחה - הסרת תווים לא חוקיים
-            String cleanTitle = chatTitle
-                .replaceAll("[^a-zA-Z0-9א-ת\\s]", "") // רק אותיות ומספרים
-                .replaceAll("\\s+", "_")              // רווחים -> קו תחתון
-                .toLowerCase();                        // אותיות קטנות
+            log.info("Creating collection for user {}: {}", userId, collectionName);
 
-            // ✅ הגבלת אורך (Qdrant לא אוהב שמות ארוכים מדי)
-            if (cleanTitle.length() > 50) {
-                cleanTitle = cleanTitle.substring(0, 50);
-            }
-
-            String timestamp = LocalDateTime.now()
-                .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-
-            collectionName = cleanTitle + "_" + timestamp;
-
-            log.info("Creating new collection: {}", collectionName);
-
-            // יצור את הקולקשין דרך REST API
+            // יצור את הקולקשן
             createCollectionIfNotExists(collectionName);
-            
 
-            // ✅ המתן עד שהקולקשן מוכן (מקסימום 30 שניות)
+            // המתן שיהיה מוכן
             if (!waitForCollectionReady(collectionName, 30)) {
-                throw ExternalServiceException.vectorDbError("פג זמן ההמתנה ליצירת קולקשן: " + collectionName);
+                throw ExternalServiceException.vectorDbError(
+                    "פג זמן ההמתנה ליצירת קולקשן: " + collectionName
+                );
             }
 
             // יצירת EmbeddingStore
             EmbeddingStore<TextSegment> newStore = QdrantEmbeddingStore.builder()
-                    .host(qdrantProperties.getHost())
-                    .port(qdrantProperties.getPort())
-                    .collectionName(collectionName)
-                    .build();
+                .host(qdrantProperties.getHost())
+                .port(qdrantProperties.getPort())
+                .collectionName(collectionName)
+                .build();
 
-            // שמירת המידע
             collectionStoreMap.put(collectionName, newStore);
-            currentActiveCollectionName = collectionName;
 
-            log.info("✅ Collection created and configured: {}", collectionName);
+            log.info("✅ User collection created: {}", collectionName);
             return collectionName;
 
         } catch (Exception e) {
-            log.error("❌ Failed to create collection: {}", e.getMessage(), e);
-            throw ExternalServiceException.vectorDbError("נכשל ביצירת קולקשן: " + e.getMessage());
+            log.error("❌ Failed to create user collection", e);
+            throw ExternalServiceException.vectorDbError(
+                "נכשל ביצירת קולקשן: " + e.getMessage()
+            );
         }
     }
 

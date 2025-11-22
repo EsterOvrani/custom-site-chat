@@ -1,7 +1,5 @@
 package com.example.backend.document.service;
 
-import com.example.backend.chat.model.Chat;
-import com.example.backend.chat.repository.ChatRepository;
 import com.example.backend.document.dto.DocumentResponse;
 import com.example.backend.document.mapper.DocumentMapper;
 import com.example.backend.document.model.Document;
@@ -10,8 +8,8 @@ import com.example.backend.document.repository.DocumentRepository;
 import com.example.backend.common.infrastructure.storage.S3Service;
 import com.example.backend.common.infrastructure.vectordb.QdrantVectorService;
 import com.example.backend.user.model.User;
+import com.example.backend.user.repository.UserRepository;
 import com.example.backend.common.infrastructure.document.DocumentChunkingService;
-import com.example.backend.document.model.Document;
 import com.example.backend.common.exception.ResourceNotFoundException;
 import com.example.backend.common.exception.ValidationException;
 import com.example.backend.common.exception.UnauthorizedException;
@@ -21,8 +19,6 @@ import com.example.backend.common.exception.ExternalServiceException;
 // LangChain4j imports
 import dev.langchain4j.data.document.DocumentParser;
 import dev.langchain4j.data.document.parser.apache.pdfbox.ApachePdfBoxDocumentParser;
-import dev.langchain4j.data.document.splitter.DocumentSplitters;
-import dev.langchain4j.data.document.splitter.DocumentByParagraphSplitter;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -41,9 +37,7 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
 import java.io.ByteArrayInputStream;
-
 
 @Service
 @RequiredArgsConstructor
@@ -52,26 +46,28 @@ import java.io.ByteArrayInputStream;
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
-    private final ChatRepository chatRepository;
+    private final UserRepository userRepository;
     private final DocumentMapper documentMapper;
     private final S3Service s3Service;
     private final QdrantVectorService qdrantVectorService;
-    private final EmbeddingModel embeddingModel; // Injected from QdrantConfig
+    private final EmbeddingModel embeddingModel;
     private final DocumentChunkingService chunkingService;
 
     private static final int CHUNK_SIZE = 1000;
     private static final int CHUNK_OVERLAP = 200;
 
+    // ==================== Main Processing Method ====================
+
     /**
      * Process document - entry point
      * Note: Not @Async here - delegates work to internal async function
      */
-    public void processDocument(MultipartFile file, Chat chat) {
+    public void processDocument(MultipartFile file, User user) {
         log.info("🔵 ========================================");
         log.info("🔵 processDocument() CALLED - preparing file for async processing");
         log.info("🔵 File: {}", file.getOriginalFilename());
         log.info("🔵 File size: {}", file.getSize());
-        log.info("🔵 Chat ID: {}", chat.getId());
+        log.info("🔵 User ID: {}", user.getId());
         log.info("🔵 ========================================");
         
         try {
@@ -84,7 +80,7 @@ public class DocumentService {
             log.info("✅ File read to memory: {} bytes", fileBytes.length);
             
             // Step 2: Pass data to async function
-            processDocumentAsync(fileBytes, originalFilename, contentType, fileSize, chat);
+            processDocumentAsync(fileBytes, originalFilename, contentType, fileSize, user);
             
         } catch (IOException e) {
             log.error("❌ Failed to read file to memory: {}", file.getOriginalFilename(), e);
@@ -101,13 +97,13 @@ public class DocumentService {
             String originalFilename, 
             String contentType,
             long fileSize,
-            Chat chat) {
+            User user) {
         
         log.info("🔵 ========================================");
         log.info("🔵 processDocumentAsync() STARTED with LangChain4j!");
         log.info("🔵 File: {}", originalFilename);
         log.info("🔵 File bytes: {}", fileBytes.length);
-        log.info("🔵 Chat ID: {}", chat.getId());
+        log.info("🔵 User ID: {}", user.getId());
         log.info("🔵 ========================================");
 
         Document document = null;
@@ -116,7 +112,7 @@ public class DocumentService {
         try {
             // Step 1: Upload to S3 - create InputStream from bytes
             log.info("📍 Step 1: Uploading to MinIO...");
-            filePath = generateFilePath(chat, originalFilename);
+            filePath = generateFilePath(user, originalFilename);
             
             s3Service.uploadFile(
                 new ByteArrayInputStream(fileBytes),
@@ -128,7 +124,12 @@ public class DocumentService {
 
             // Step 2: Create Document Entity
             log.info("📍 Step 2: Creating Document entity...");
-            document = createDocumentEntity(originalFilename, fileSize, chat, filePath, fileBytes);
+            document = createDocumentEntity(originalFilename, fileSize, user, filePath, fileBytes);
+            
+            // Set display order
+            Integer maxOrder = documentRepository.getMaxDisplayOrderByUser(user);
+            document.setDisplayOrder(maxOrder != null ? maxOrder + 1 : 0);
+            
             document = documentRepository.save(document);
             log.info("✅ Document entity saved with ID: {} and size: {}", document.getId(), fileSize);
 
@@ -164,14 +165,20 @@ public class DocumentService {
 
             // Step 6: Store in Qdrant
             log.info("📍 Step 6: Storing in Qdrant...");
-            String collectionName = chat.getVectorCollectionName();
+            String collectionName = user.getCollectionName();
+            
+            if (collectionName == null || collectionName.isEmpty()) {
+                throw new ValidationException("user", "למשתמש אין קולקשן. אנא צור קולקשן תחילה.");
+            }
+            
             EmbeddingStore<TextSegment> embeddingStore = 
                 qdrantVectorService.getEmbeddingStoreForCollection(collectionName);
 
             if (embeddingStore == null) {
                 log.error("❌ No embedding store found for collection: {}", collectionName);
-                throw ExternalServiceException.vectorDbError("לא נמצא אחסון וקטורי עבור הקולקשן: " + collectionName);
-
+                throw ExternalServiceException.vectorDbError(
+                    "לא נמצא אחסון וקטורי עבור הקולקשן: " + collectionName
+                );
             }
 
             // Create embeddings and store
@@ -182,6 +189,7 @@ public class DocumentService {
                 segment.metadata().put("document_id", document.getId().toString());
                 segment.metadata().put("document_name", originalFilename);
                 segment.metadata().put("chunk_index", String.valueOf(processed));
+                segment.metadata().put("user_id", user.getId().toString());
                 
                 embeddingStore.add(embedding, segment);
                 
@@ -197,18 +205,14 @@ public class DocumentService {
             document.markAsCompleted(characterCount, chunkCount);
             documentRepository.save(document);
             
-            updateChatStatus(chat.getId());
-            
             log.info("✅ Document {} processed successfully", document.getId());
 
         } catch (FileProcessingException e) {
-            // שגיאת עיבוד קובץ ספציפית
             log.error("🔴 File processing error: {}", e.getMessage());
             if (document != null) {
                 document.markAsFailed(e.getMessage());
                 documentRepository.save(document);
             }
-            markChatAsFailed(chat.getId(), "נכשל בעיבוד מסמך: " + originalFilename);
             cleanupFile(filePath);
             throw e;
             
@@ -225,28 +229,33 @@ public class DocumentService {
                 documentRepository.save(document);
             }
             
-            markChatAsFailed(chat.getId(), "נכשל בעיבוד מסמך: " + originalFilename);
             cleanupFile(filePath);
             
             throw FileProcessingException.uploadFailed(originalFilename);
         }
     }
 
-// ==================== Helper Methods ====================
+    // ==================== Helper Methods ====================
 
-    private String generateFilePath(Chat chat, String originalFilename) {
-        return String.format("users/%d/chats/%d/%s_%s",
-            chat.getUser().getId(),
-            chat.getId(),
+    /**
+     * Generate file path in S3
+     * Changed from chat-based to user-based
+     */
+    private String generateFilePath(User user, String originalFilename) {
+        return String.format("users/%d/documents/%s_%s",
+            user.getId(),
             System.currentTimeMillis(),
             originalFilename
         );
     }
 
+    /**
+     * Create document entity
+     */
     private Document createDocumentEntity(
             String originalFilename, 
             long fileSize, 
-            Chat chat, 
+            User user, 
             String filePath, 
             byte[] fileBytes) {
         
@@ -257,8 +266,7 @@ public class DocumentService {
         document.setFilePath(filePath);
         document.setProcessingStatus(ProcessingStatus.PENDING);
         document.setProcessingProgress(0);
-        document.setChat(chat);
-        document.setUser(chat.getUser());
+        document.setUser(user);
         document.setActive(true);
 
         try {
@@ -290,6 +298,9 @@ public class DocumentService {
         log.info("✅ File validation passed: {} bytes", fileBytes.length);
     }
 
+    /**
+     * Calculate SHA-256 hash of file content
+     */
     private String calculateHash(byte[] data) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -309,35 +320,9 @@ public class DocumentService {
         }
     }
 
-
-    
-    private void updateChatStatus(Long chatId) {
-        log.info("Updating status for chat: {}", chatId);
-
-        Chat chat = chatRepository.findById(chatId)
-            .orElseThrow(() -> new ResourceNotFoundException("שיחה", chatId));
-        chat.decrementPendingDocuments();
-
-        if (chat.getPendingDocuments() == 0) {
-            chat.setStatus(Chat.ChatStatus.READY);
-            log.info("Chat {} is now READY", chatId);
-        }
-
-        chatRepository.save(chat);
-    }
-
-    private void markChatAsFailed(Long chatId, String errorMessage) {
-        log.error("Marking chat: {} as FAILED. Error: {}", chatId, errorMessage);
-
-        Chat chat = chatRepository.findById(chatId)
-            .orElseThrow(() -> new ResourceNotFoundException("שיחה", chatId));
-
-        chat.setStatus(Chat.ChatStatus.FAILED);
-        chat.setErrorMessage(errorMessage);
-        
-        chatRepository.save(chat);
-    }
-
+    /**
+     * Cleanup file from MinIO if processing failed
+     */
     private void cleanupFile(String filePath) {
         if (filePath != null) {
             try {
@@ -351,18 +336,21 @@ public class DocumentService {
 
     // ==================== Get Documents Methods ====================
 
-    public List<DocumentResponse> getDocumentsByChat(Long chatId, User user) {
-        log.info("Getting documents for chat: {}", chatId);
-
-        Chat chat = new Chat();
-        chat.setId(chatId);
+    /**
+     * Get all documents for a user (ordered by display order)
+     */
+    public List<DocumentResponse> getDocumentsByUser(User user) {
+        log.info("Getting documents for user: {}", user.getId());
 
         List<Document> documents = documentRepository
-            .findByChatAndActiveTrueOrderByCreatedAtDesc(chat);
+            .findByUserAndActiveTrueOrderByDisplayOrderAsc(user);
 
         return documentMapper.toResponseList(documents);
     }
 
+    /**
+     * Get a specific document
+     */
     public DocumentResponse getDocument(Long documentId, User user) {
         log.info("Getting document: {}", documentId);
 
@@ -376,18 +364,23 @@ public class DocumentService {
         return documentMapper.toResponse(document);
     }
 
-    public List<DocumentResponse> getProcessedDocuments(Long chatId, User user) {
-        log.info("Getting processed documents for chat: {}", chatId);
-
-        Chat chat = new Chat();
-        chat.setId(chatId);
+    /**
+     * Get only processed documents
+     */
+    public List<DocumentResponse> getProcessedDocuments(User user) {
+        log.info("Getting processed documents for user: {}", user.getId());
 
         List<Document> documents = documentRepository
-            .findByChatAndProcessingStatusAndActiveTrue(chat, ProcessingStatus.COMPLETED);
+            .findByUserAndProcessingStatusAndActiveTrue(user, ProcessingStatus.COMPLETED);
 
         return documentMapper.toResponseList(documents);
     }
 
+    // ==================== Delete Document ====================
+
+    /**
+     * Delete a document (soft delete)
+     */
     public void deleteDocument(Long documentId, User user) {
         log.info("Deleting document: {}", documentId);
 
@@ -398,6 +391,7 @@ public class DocumentService {
             throw new UnauthorizedException("מסמך", documentId);
         }
 
+        // Soft delete
         document.setActive(false);
         documentRepository.save(document);
 
@@ -409,23 +403,110 @@ public class DocumentService {
             log.warn("Failed to delete file from MinIO", e);
             throw ExternalServiceException.storageServiceError("נכשל במחיקת הקובץ מהאחסון");
         }
+
+        // TODO: Delete embeddings from Qdrant for this specific document
+        // This requires tracking which embeddings belong to which document
+        log.warn("⚠️ Embeddings not deleted from Qdrant - implement if needed");
     }
 
-    public DocumentStatistics getDocumentStatistics(Long chatId) {
-        Chat chat = new Chat();
-        chat.setId(chatId);
+    /**
+     * Delete all documents for a user (used when deleting user/collection)
+     */
+    @Transactional
+    public int deleteAllDocumentsByUser(User user) {
+        try {
+            log.info("🗑️ Deleting all documents for user: {}", user.getId());
 
-        long total = documentRepository.countByChatAndActiveTrue(chat);
-        long completed = documentRepository.countByChatAndProcessingStatusAndActiveTrue(
-            chat, ProcessingStatus.COMPLETED);
-        long processing = documentRepository.countByChatAndProcessingStatusAndActiveTrue(
-            chat, ProcessingStatus.PROCESSING);
-        long failed = documentRepository.countByChatAndProcessingStatusAndActiveTrue(
-            chat, ProcessingStatus.FAILED);
+            List<Document> documents = documentRepository
+                .findByUserAndActiveTrueOrderByDisplayOrderAsc(user);
 
-        Long totalSize = documentRepository.getTotalFileSizeByChat(chat);
-        Integer totalChars = documentRepository.getTotalCharacterCountByChat(chat);
-        Integer totalChunks = documentRepository.getTotalChunkCountByChat(chat);
+            if (documents.isEmpty()) {
+                log.info("📂 No documents found to delete for user: {}", user.getId());
+                return 0;
+            }
+
+            int count = documents.size();
+
+            // Soft delete all
+            for (Document doc : documents) {
+                doc.setActive(false);
+            }
+            documentRepository.saveAll(documents);
+
+            log.info("✅ Soft deleted {} document entities for user: {}", count, user.getId());
+            return count;
+
+        } catch (Exception e) {
+            log.error("❌ Failed to delete documents for user: {}", user.getId(), e);
+            throw new ResourceNotFoundException("נכשל במחיקת המסמכים");
+        }
+    }
+
+    // ==================== Reorder Documents ====================
+
+    /**
+     * Reorder documents by user
+     */
+    public void reorderDocuments(User user, List<Long> documentIds) {
+        log.info("Reordering documents for user: {}", user.getId());
+
+        if (documentIds == null || documentIds.isEmpty()) {
+            throw new ValidationException("documentIds", "רשימת מסמכים ריקה");
+        }
+
+        for (int i = 0; i < documentIds.size(); i++) {
+            Long docId = documentIds.get(i);
+            Document doc = documentRepository.findByIdAndActiveTrue(docId)
+                .orElseThrow(() -> new ResourceNotFoundException("מסמך", docId));
+
+            if (!doc.getUser().getId().equals(user.getId())) {
+                throw new UnauthorizedException("מסמך", docId);
+            }
+
+            doc.setDisplayOrder(i);
+            documentRepository.save(doc);
+        }
+
+        log.info("✅ Documents reordered successfully for user: {}", user.getId());
+    }
+
+    // ==================== Statistics ====================
+
+    /**
+     * Get document statistics for user
+     */
+    public DocumentStatistics getDocumentStatistics(User user) {
+        log.info("Getting statistics for user: {}", user.getId());
+
+        long total = documentRepository.countByUserAndActiveTrue(user);
+        
+        long completed = documentRepository.countByUserAndProcessingStatusAndActiveTrue(
+            user, ProcessingStatus.COMPLETED
+        );
+        
+        long processing = documentRepository.countByUserAndProcessingStatusAndActiveTrue(
+            user, ProcessingStatus.PROCESSING
+        );
+        
+        long failed = documentRepository.countByUserAndProcessingStatusAndActiveTrue(
+            user, ProcessingStatus.FAILED
+        );
+
+        // Calculate total size and chunks
+        List<Document> completedDocs = documentRepository
+            .findByUserAndProcessingStatusAndActiveTrue(user, ProcessingStatus.COMPLETED);
+
+        Long totalSize = completedDocs.stream()
+            .map(Document::getFileSize)
+            .reduce(0L, Long::sum);
+
+        Integer totalChars = completedDocs.stream()
+            .map(Document::getCharacterCount)
+            .reduce(0, Integer::sum);
+
+        Integer totalChunks = completedDocs.stream()
+            .map(Document::getChunkCount)
+            .reduce(0, Integer::sum);
 
         return DocumentStatistics.builder()
             .totalDocuments(total)
@@ -438,56 +519,7 @@ public class DocumentService {
             .build();
     }
 
-    /**
-     * Delete all documents for a chat (by chat ID)
-     * Deletes only from DB, not files from S3
-     *
-     * @param chatId - chat identifier
-     * @param user - user (for permission check)
-     * @return number of documents deleted
-     */
-    @Transactional
-    public int deleteAllDocumentsByChat(Long chatId, User user) {
-        try {
-            log.info("🗑️ Deleting all documents for chat: {}", chatId);
-
-            // Create Chat entity with ID (for query)
-            Chat chat = new Chat();
-            chat.setId(chatId);
-
-            // Get all documents
-            List<Document> documents = documentRepository
-                .findByChatAndActiveTrueOrderByCreatedAtDesc(chat);
-
-            if (documents.isEmpty()) {
-                log.info("📂 No documents found to delete for chat: {}", chatId);
-                return 0;
-            }
-
-            // Permission check - ensure all documents belong to user
-            boolean unauthorized = documents.stream()
-                .anyMatch(doc -> !doc.getUser().getId().equals(user.getId()));
-                            
-            if (unauthorized) {
-                throw new UnauthorizedException("אין הרשאה למחוק מסמכים של משתמש אחר");
-            }
-
-            int count = documents.size();
-
-            // Delete from DB
-            documentRepository.deleteAll(documents);
-
-            log.info("✅ Deleted {} document entities for chat: {}", count, chatId);
-            return count;
-
-        } catch (UnauthorizedException e) {
-            log.error("❌ Authorization violation: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            log.error("❌ Failed to delete documents for chat: {}", chatId, e);
-            throw new ResourceNotFoundException("נכשל במחיקת המסמכים");
-        }
-    }
+    // ==================== Statistics DTO ====================
 
     @lombok.Data
     @lombok.Builder
@@ -499,5 +531,48 @@ public class DocumentService {
         private Long totalFileSize;
         private Integer totalCharacters;
         private Integer totalChunks;
+
+        /**
+         * Get formatted total size
+         */
+        public String getFormattedTotalSize() {
+            if (totalFileSize == null || totalFileSize == 0) {
+                return "0 B";
+            }
+
+            if (totalFileSize < 1024) {
+                return totalFileSize + " B";
+            } else if (totalFileSize < 1024 * 1024) {
+                return String.format("%.2f KB", totalFileSize / 1024.0);
+            } else if (totalFileSize < 1024 * 1024 * 1024) {
+                return String.format("%.2f MB", totalFileSize / (1024.0 * 1024.0));
+            } else {
+                return String.format("%.2f GB", totalFileSize / (1024.0 * 1024.0 * 1024.0));
+            }
+        }
+
+        /**
+         * Get completion percentage
+         */
+        public double getCompletionPercentage() {
+            if (totalDocuments == null || totalDocuments == 0) {
+                return 0.0;
+            }
+            return (completedDocuments * 100.0) / totalDocuments;
+        }
+
+        /**
+         * Check if any documents are processing
+         */
+        public boolean isProcessing() {
+            return processingDocuments != null && processingDocuments > 0;
+        }
+
+        /**
+         * Check if any documents failed
+         */
+        public boolean hasFailed() {
+            return failedDocuments != null && failedDocuments > 0;
+        }
     }
 }
