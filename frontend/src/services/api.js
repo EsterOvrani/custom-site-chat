@@ -21,8 +21,7 @@ api.interceptors.request.use(
     console.log('🔵 API Request:', {
       method: config.method.toUpperCase(),
       url: config.url,
-      hasToken: !!token,
-      data: config.data
+      hasToken: !!token
     });
     
     return config;
@@ -38,8 +37,7 @@ api.interceptors.response.use(
   response => {
     console.log('✅ API Response:', {
       url: response.config.url,
-      status: response.status,
-      data: response.data
+      status: response.status
     });
     return response;
   },
@@ -47,8 +45,7 @@ api.interceptors.response.use(
     console.error('❌ API Error:', {
       url: error.config?.url,
       status: error.response?.status,
-      message: error.message,
-      data: error.response?.data
+      message: error.message
     });
     
     if (error.response?.status === 401) {
@@ -82,22 +79,39 @@ export const authAPI = {
   googleLogin: (credential) => api.post('/auth/google', { credential })
 };
 
-// ==================== Chat API ====================
-export const chatAPI = {
+// ==================== Collection API ====================
+export const collectionAPI = {
   /**
-   * Create new chat
-   * @param {string} title - chat title
-   * @param {File[]} files - PDF files
+   * Get or create user collection
    */
-  createChat: (title, files) => {
-    const formData = new FormData();
-    formData.append('title', title);
-    
-    files.forEach((file) => {
-      formData.append('files', file);
-    });
+  getCollectionInfo: () => api.get('/collection/info'),
 
-    return api.post('/chats', formData, {
+  /**
+   * Regenerate secret key
+   */
+  regenerateSecretKey: () => api.post('/collection/regenerate-key'),
+
+  /**
+   * Get embed code
+   */
+  getEmbedCode: () => api.get('/collection/embed-code')
+};
+
+// ==================== Document API ====================
+export const documentAPI = {
+  /**
+   * Get all user documents
+   */
+  getMyDocuments: () => api.get('/documents/my-documents'),
+
+  /**
+   * Upload new document
+   */
+  uploadDocument: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return api.post('/documents/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -105,77 +119,21 @@ export const chatAPI = {
   },
 
   /**
-   * Get all chats
+   * Delete document
    */
-  getAllChats: () => api.get('/chats'),
+  deleteDocument: (documentId) => api.delete(`/documents/${documentId}`),
 
   /**
-   * Search chats
+   * Reorder documents
    */
-  searchChats: (searchTerm) => api.get('/chats/search', {
-    params: { q: searchTerm }
+  reorderDocuments: (documentIds) => api.put('/documents/reorder', {
+    documentIds
   }),
 
   /**
-   * Get specific chat
+   * Get download URL
    */
-  getChat: (chatId) => api.get(`/chats/${chatId}`),
-
-  /**
-   * Update chat title
-   */
-  updateChatTitle: (chatId, newTitle) => api.put(`/chats/${chatId}`, {
-    title: newTitle
-  }),
-
-  /**
-   * Delete chat
-   */
-  deleteChat: (chatId) => api.delete(`/chats/${chatId}`),
-
-  /**
-   * Get detailed processing status
-   */
-  getProcessingStatus: (chatId) => api.get(`/chats/${chatId}/processing-status`),
-
-  /**
-   * Ask a question
-   */
-  askQuestion: (chatId, question, contextMessageCount = 5) => {
-    return api.post(`/chats/${chatId}/ask`, {
-      question,
-      contextMessageCount,
-      includeFullContext: false
-    });
-  },
-
-  /**
-   * Get message history
-   */
-  getChatMessages: (chatId) => api.get(`/chats/${chatId}/messages`),
-
-  /**
-   * Get statistics
-   */
-  getUserStatistics: () => api.get('/chats/statistics')
-};
-
-// ==================== Document API ====================
-export const documentAPI = {
-  /**
-   * Get documents for a chat
-   */
-  getDocumentsByChat: (chatId) => api.get(`/documents/chat/${chatId}`),
-
-  /**
-   * Get processed documents only
-   */
-  getProcessedDocuments: (chatId) => api.get(`/documents/chat/${chatId}/processed`),
-
-  /**
-   * Get specific document
-   */
-  getDocument: (documentId) => api.get(`/documents/${documentId}`),
+  getDownloadUrl: (documentId) => api.get(`/documents/${documentId}/download-url`),
 
   /**
    * Download document
@@ -184,22 +142,7 @@ export const documentAPI = {
     return api.get(`/documents/${documentId}/download`, {
       responseType: 'blob'
     });
-  },
-
-  /**
-   * Get temporary download URL
-   */
-  getDownloadUrl: (documentId) => api.get(`/documents/${documentId}/download-url`),
-
-  /**
-   * Delete document
-   */
-  deleteDocument: (documentId) => api.delete(`/documents/${documentId}`),
-
-  /**
-   * Get document statistics
-   */
-  getDocumentStatistics: (chatId) => api.get(`/documents/chat/${chatId}/stats`)
+  }
 };
 
 export default api;

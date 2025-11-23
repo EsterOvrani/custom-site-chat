@@ -1,24 +1,21 @@
 // frontend/src/components/Dashboard/Dashboard.js
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authAPI, chatAPI } from '../../services/api';
-import Sidebar from './Sidebar';
-import ChatArea from './ChatArea';
-import NewSessionModal from './NewSessionModal';
-import DocumentsModal from './DocumentsModal';
+import { authAPI, collectionAPI, documentAPI } from '../../services/api';
+import DocumentsList from './DocumentsList';
+import CollectionSettings from './CollectionSettings';
+import UploadDocumentModal from './UploadDocumentModal';
 import './Dashboard.css';
 
 const Dashboard = () => {
   // ==================== State ====================
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentSession, setCurrentSession] = useState(null);
-  const [sessions, setSessions] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showNewSessionModal, setShowNewSessionModal] = useState(false);
+  const [collection, setCollection] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  const [activeTab, setActiveTab] = useState('documents'); // 'documents' or 'settings'
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(false);
-  const [showDocumentsModal, setShowDocumentsModal] = useState(false);
 
   const navigate = useNavigate();
 
@@ -29,7 +26,8 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (currentUser) {
-      loadSessions();
+      loadCollection();
+      loadDocuments();
     }
   }, [currentUser]);
 
@@ -60,235 +58,88 @@ const Dashboard = () => {
     }
   };
 
-  // ==================== Session Functions ====================
-  const loadSessions = async () => {
+  // ==================== Collection Functions ====================
+  const loadCollection = async () => {
     try {
-      setLoading(true);
-      const response = await chatAPI.getAllChats();
-      
+      const response = await collectionAPI.getCollectionInfo();
       if (response.data.success) {
-        const chatsData = response.data.data.chats.map(chat => ({
-          id: chat.id,
-          title: chat.title,
-          documentsCount: chat.documentCount,
-          messagesCount: chat.messageCount,
-          lastActivityAt: formatDateTime(chat.lastActivityAt),
-          createdAt: formatDateTime(chat.createdAt),
-          isReady: chat.isReady,
-          status: chat.status,
-          pendingDocuments: chat.pendingDocuments,
-          documentCount: chat.documentCount
-        }));
-        
-        setSessions(chatsData);
-      } else {
-        showToast('שגיאה בטעינת שיחות', 'error');
+        setCollection(response.data.data);
       }
     } catch (error) {
-      console.error('Error loading sessions:', error);
-      showToast('שגיאה בחיבור לשרת', 'error');
+      console.error('Error loading collection:', error);
+      showToast('שגיאה בטעינת הגדרות', 'error');
+    }
+  };
+
+  const handleRegenerateKey = async () => {
+    if (!window.confirm('האם אתה בטוח? המפתח הישן יהפוך ללא תקף!')) return;
+
+    try {
+      setLoading(true);
+      const response = await collectionAPI.regenerateSecretKey();
+      if (response.data.success) {
+        setCollection(response.data.data);
+        showToast('מפתח חדש נוצר בהצלחה', 'success');
+      }
+    } catch (error) {
+      console.error('Error regenerating key:', error);
+      showToast('שגיאה ביצירת מפתח חדש', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const createNewSession = () => {
-    setShowNewSessionModal(true);
-  };
-
-  // ✅ עדכון הפונקציה לטפל ב-chatId שמוחזר
-  const submitNewSession = async (chatId) => {
-    console.log('🔔 submitNewSession called with:', chatId);
-    
-    // אם קיבלנו chatId - זה אומר שהעיבוד הסתיים בהצלחה
-    if (chatId) {
-      console.log('✅ Valid chatId received, closing modal...');
-      setShowNewSessionModal(false);
-      showToast('✅ שיחה חדשה נוצרה והמסמכים עובדו בהצלחה!', 'success');
-      
-      console.log('🔄 Loading sessions...');
-      // טען מחדש את רשימת השיחות
-      await loadSessions();
-      
-      console.log('🔄 Loading chat:', chatId);
-      // ✅ טען את השיחה החדשה
-      await loadSession(chatId);
-      
-      console.log('✅ Done!');
-      return;
-    } else {
-      console.warn('⚠️ No chatId provided to submitNewSession');
-    }
-  };
-
-  const loadSession = async (sessionId) => {
+  // ==================== Document Functions ====================
+  const loadDocuments = async () => {
     try {
       setLoading(true);
-      console.log('📥 Loading session:', sessionId);
-      
-      const response = await chatAPI.getChat(sessionId);
+      const response = await documentAPI.getMyDocuments();
       
       if (response.data.success) {
-        const chatData = response.data.data;
-        
-        setCurrentSession({
-          id: chatData.id,
-          title: chatData.title,
-          documentsCount: chatData.documentCount,
-          messagesCount: chatData.messageCount,
-          isReady: chatData.isReady,
-          status: chatData.status,
-          pendingDocuments: chatData.pendingDocuments,
-          documentCount: chatData.documentCount
-        });
-        
-        await loadMessages(sessionId);
-        
-        showToast('שיחה נטענה בהצלחה', 'success');
-      } else {
-        showToast(response.data.error || 'שגיאה בטעינת שיחה', 'error');
+        setDocuments(response.data.data || []);
       }
     } catch (error) {
-      console.error('❌ Error loading session:', error);
-      showToast('שגיאה בטעינת שיחה', 'error');
+      console.error('Error loading documents:', error);
+      showToast('שגיאה בטעינת מסמכים', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadMessages = async (chatId) => {
+  const handleUploadComplete = () => {
+    setShowUploadModal(false);
+    loadDocuments();
+    showToast('✅ המסמך הועלה בהצלחה ומעובד כעת', 'success');
+  };
+
+  const handleDeleteDocument = async (documentId) => {
+    if (!window.confirm('האם אתה בטוח שברצונך למחוק מסמך זה?')) return;
+
     try {
-      const response = await chatAPI.getChatMessages(chatId);
-      
+      const response = await documentAPI.deleteDocument(documentId);
       if (response.data.success) {
-        const messagesData = response.data.data.map(msg => ({
-          role: msg.role.toLowerCase(),
-          content: msg.content,
-          timestamp: msg.createdAt,
-          confidenceScore: msg.confidenceScore,
-          sources: msg.sources
-        }));
-        
-        setMessages(messagesData);
+        showToast('✅ המסמך נמחק בהצלחה', 'success');
+        loadDocuments();
       }
     } catch (error) {
-      console.error('❌ Error loading messages:', error);
+      console.error('Error deleting document:', error);
+      showToast('שגיאה במחיקת מסמך', 'error');
     }
   };
 
-  const deleteSession = async (sessionId, e) => {
-    if (e) e.stopPropagation();
-    
-    if (!window.confirm('האם אתה בטוח שברצונך למחוק שיחה זו?')) return;
-
+  const handleReorderDocuments = async (newOrder) => {
     try {
-      console.log('🗑️ Deleting session:', sessionId);
-      
-      const response = await chatAPI.deleteChat(sessionId);
-      
-      if (response.data.success) {
-        showToast('✅ שיחה נמחקה בהצלחה', 'success');
-        
-        if (currentSession && currentSession.id === sessionId) {
-          setCurrentSession(null);
-          setMessages([]);
-        }
-        
-        await loadSessions();
-      } else {
-        showToast(response.data.error || 'שגיאה במחיקת שיחה', 'error');
-      }
+      const documentIds = newOrder.map(doc => doc.id);
+      await documentAPI.reorderDocuments(documentIds);
+      setDocuments(newOrder);
+      showToast('✅ סדר המסמכים עודכן', 'success');
     } catch (error) {
-      console.error('❌ Error deleting session:', error);
-      showToast('שגיאה במחיקת שיחה', 'error');
-    }
-  };
-
-  // ==================== Message Functions ====================
-  const sendMessage = async (text) => {
-    if (!currentSession) {
-      showToast('נא לבחור שיחה תחילה', 'error');
-      return false;
-    }
-
-    if (!text.trim()) {
-      showToast('נא להזין שאלה', 'error');
-      return false;
-    }
-
-    if (!currentSession.isReady || currentSession.status === 'PROCESSING') {
-      showToast('⏳ השיחה עדיין מעבדת מסמכים. אנא המתן...', 'warning');
-      return false;
-    }
-
-    const userMessage = {
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString()
-    };
-    setMessages(prev => [...prev, userMessage]);
-
-    try {
-      console.log('💬 Sending message:', text);
-      
-      const response = await chatAPI.askQuestion(currentSession.id, text);
-
-      if (response.data.success) {
-        const answerData = response.data.data;
-        
-        const assistantMessage = {
-          role: 'assistant',
-          content: answerData.answer,
-          timestamp: answerData.timestamp,
-          confidenceScore: answerData.confidence,
-          sources: answerData.sources
-        };
-        
-        setMessages(prev => [...prev, assistantMessage]);
-        
-        if (answerData.confidence < 0.5) {
-          showToast('⚠️ רמת ביטחון נמוכה בתשובה', 'warning');
-        }
-        
-        return true;
-      } else {
-        setMessages(prev => prev.filter(msg => msg !== userMessage));
-        showToast(response.data.error || 'שגיאה בשליחת הודעה', 'error');
-        return false;
-      }
-    } catch (error) {
-      console.error('❌ Error sending message:', error);
-      
-      setMessages(prev => prev.filter(msg => msg !== userMessage));
-      
-      if (error.response?.data?.error) {
-        showToast(error.response.data.error, 'error');
-      } else {
-        showToast('שגיאה בשליחת הודעה', 'error');
-      }
-      return false;
+      console.error('Error reordering documents:', error);
+      showToast('שגיאה בעדכון סדר המסמכים', 'error');
     }
   };
 
   // ==================== Helper Functions ====================
-  const formatDateTime = (dateTimeString) => {
-    if (!dateTimeString) return '';
-    
-    const date = new Date(dateTimeString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'עכשיו';
-    if (diffMins < 60) return `לפני ${diffMins} דקות`;
-    if (diffHours < 24) return `לפני ${diffHours} שעות`;
-    if (diffDays < 7) return `לפני ${diffDays} ימים`;
-    
-    return date.toLocaleDateString('he-IL');
-  };
-
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => {
@@ -296,18 +147,12 @@ const Dashboard = () => {
     }, 3000);
   };
 
-  const filteredSessions = sessions.filter(session =>
-    session.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   // ==================== Render ====================
   return (
     <div className="dashboard">
       {/* ==================== Header ==================== */}
       <header className="header">
-        <div className="logo" onClick={() => window.location.reload()}>
-          📚 custom site chat
-        </div>
+        <div className="logo">📚 Custom Site Chat</div>
         <div className="user-info">
           <span className="welcome-text">
             שלום, {currentUser?.fullName || currentUser?.username}
@@ -318,34 +163,51 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* ==================== Main Layout ==================== */}
-      <div className="main-layout">
-        <Sidebar
-          sessions={filteredSessions}
-          currentSession={currentSession}
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          onNewSession={createNewSession}
-          onSelectSession={loadSession}
-          onDeleteSession={deleteSession}
-        />
+      {/* ==================== Main Content ==================== */}
+      <div className="main-content">
+        {/* Tabs */}
+        <div className="tabs">
+          <button
+            className={`tab ${activeTab === 'documents' ? 'active' : ''}`}
+            onClick={() => setActiveTab('documents')}
+          >
+            📄 המסמכים שלי ({documents.length})
+          </button>
+          <button
+            className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+          >
+            ⚙️ קוד הטמעה והגדרות
+          </button>
+        </div>
 
-        <ChatArea
-          currentSession={currentSession}
-          messages={messages}
-          onSendMessage={sendMessage}
-          onShowDocuments={() => setShowDocumentsModal(true)}
-          currentUser={currentUser}
-        />
+        {/* Tab Content */}
+        <div className="tab-content">
+          {activeTab === 'documents' && (
+            <DocumentsList
+              documents={documents}
+              onUploadNew={() => setShowUploadModal(true)}
+              onDelete={handleDeleteDocument}
+              onReorder={handleReorderDocuments}
+              loading={loading}
+            />
+          )}
+
+          {activeTab === 'settings' && collection && (
+            <CollectionSettings
+              collection={collection}
+              onRegenerateKey={handleRegenerateKey}
+              loading={loading}
+            />
+          )}
+        </div>
       </div>
 
       {/* ==================== Modals ==================== */}
-      
-      {/* New Session Modal */}
-      {showNewSessionModal && (
-        <NewSessionModal
-          onClose={() => setShowNewSessionModal(false)}
-          onSubmit={submitNewSession}
+      {showUploadModal && (
+        <UploadDocumentModal
+          onClose={() => setShowUploadModal(false)}
+          onComplete={handleUploadComplete}
         />
       )}
 
@@ -372,13 +234,6 @@ const Dashboard = () => {
           <div className="spinner"></div>
           <p style={{ marginTop: '15px', textAlign: 'center' }}>טוען...</p>
         </div>
-      )}
-
-      {showDocumentsModal && currentSession && (
-        <DocumentsModal
-          chatId={currentSession.id}
-          onClose={() => setShowDocumentsModal(false)}
-        />
       )}
     </div>
   );
