@@ -16,7 +16,6 @@ import com.example.backend.common.exception.UnauthorizedException;
 import com.example.backend.common.exception.FileProcessingException;
 import com.example.backend.common.exception.ExternalServiceException;
 
-// LangChain4j imports
 import dev.langchain4j.data.document.DocumentParser;
 import dev.langchain4j.data.document.parser.apache.pdfbox.ApachePdfBoxDocumentParser;
 import dev.langchain4j.data.segment.TextSegment;
@@ -32,11 +31,8 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.scheduling.annotation.Async;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.security.MessageDigest;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.io.ByteArrayInputStream;
 
 @Service
@@ -58,10 +54,6 @@ public class DocumentService {
 
     // ==================== Main Processing Method ====================
 
-    /**
-     * Process document - entry point
-     * Note: Not @Async here - delegates work to internal async function
-     */
     public void processDocument(MultipartFile file, User user) {
         log.info("🔵 ========================================");
         log.info("🔵 processDocument() CALLED - preparing file for async processing");
@@ -71,7 +63,6 @@ public class DocumentService {
         log.info("🔵 ========================================");
         
         try {
-            // Step 1: Read file content to memory before async processing
             byte[] fileBytes = file.getBytes();
             String originalFilename = file.getOriginalFilename();
             String contentType = file.getContentType();
@@ -79,7 +70,6 @@ public class DocumentService {
             
             log.info("✅ File read to memory: {} bytes", fileBytes.length);
             
-            // Step 2: Pass data to async function
             processDocumentAsync(fileBytes, originalFilename, contentType, fileSize, user);
             
         } catch (IOException e) {
@@ -88,9 +78,6 @@ public class DocumentService {
         }
     }
 
-    /**
-     * Actual document processing - runs in separate thread
-     */
     @Async
     public void processDocumentAsync(
             byte[] fileBytes,
@@ -110,7 +97,6 @@ public class DocumentService {
         String filePath = null;
 
         try {
-            // Step 1: Upload to S3 - create InputStream from bytes
             log.info("📍 Step 1: Uploading to MinIO...");
             filePath = generateFilePath(user, originalFilename);
             
@@ -122,23 +108,19 @@ public class DocumentService {
             );
             log.info("✅ File uploaded to MinIO successfully");
 
-            // Step 2: Create Document Entity
             log.info("📍 Step 2: Creating Document entity...");
             document = createDocumentEntity(originalFilename, fileSize, user, filePath, fileBytes);
             
-            // Set display order
             Integer maxOrder = documentRepository.getMaxDisplayOrderByUser(user);
             document.setDisplayOrder(maxOrder != null ? maxOrder + 1 : 0);
             
             document = documentRepository.save(document);
             log.info("✅ Document entity saved with ID: {} and size: {}", document.getId(), fileSize);
 
-            // Step 3: Validate (check bytes, not MultipartFile)
             validateFile(originalFilename, fileBytes);
             document.startProcessing();
             document = documentRepository.save(document);
 
-            // Step 4: Parse PDF using LangChain4j - create InputStream from bytes
             log.info("📍 Step 4: Parsing PDF with LangChain4j...");
             DocumentParser parser = new ApachePdfBoxDocumentParser();
             
@@ -151,7 +133,6 @@ public class DocumentService {
             document.setCharacterCount(characterCount);
             log.info("✅ Extracted {} characters from PDF", characterCount);
 
-            // Step 5: Split into chunks
             log.info("📍 Step 5: Splitting into chunks...");
             List<TextSegment> segments = chunkingService.chunkDocument(
                 text, 
@@ -163,7 +144,6 @@ public class DocumentService {
             document.setChunkCount(chunkCount);
             log.info("✅ Split into {} chunks", chunkCount);
 
-            // Step 6: Store in Qdrant
             log.info("📍 Step 6: Storing in Qdrant...");
             String collectionName = user.getCollectionName();
             
@@ -181,7 +161,6 @@ public class DocumentService {
                 );
             }
 
-            // Create embeddings and store
             int processed = 0;
             for (TextSegment segment : segments) {
                 Embedding embedding = embeddingModel.embed(segment).content();
@@ -201,7 +180,6 @@ public class DocumentService {
                 log.debug("Processed chunk {}/{}", processed, segments.size());
             }
 
-            // Step 7: Mark as Completed
             document.markAsCompleted(characterCount, chunkCount);
             documentRepository.save(document);
             
@@ -237,10 +215,6 @@ public class DocumentService {
 
     // ==================== Helper Methods ====================
 
-    /**
-     * Generate file path in S3
-     * Changed from chat-based to user-based
-     */
     private String generateFilePath(User user, String originalFilename) {
         return String.format("users/%d/documents/%s_%s",
             user.getId(),
@@ -249,9 +223,6 @@ public class DocumentService {
         );
     }
 
-    /**
-     * Create document entity
-     */
     private Document createDocumentEntity(
             String originalFilename, 
             long fileSize, 
@@ -279,9 +250,6 @@ public class DocumentService {
         return document;
     }
 
-    /**
-     * Validate file using bytes, not MultipartFile
-     */
     private void validateFile(String filename, byte[] fileBytes) {
         if (fileBytes == null || fileBytes.length == 0) {
             throw new ValidationException("file", "הקובץ ריק");
@@ -298,9 +266,6 @@ public class DocumentService {
         log.info("✅ File validation passed: {} bytes", fileBytes.length);
     }
 
-    /**
-     * Calculate SHA-256 hash of file content
-     */
     private String calculateHash(byte[] data) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -320,9 +285,6 @@ public class DocumentService {
         }
     }
 
-    /**
-     * Cleanup file from MinIO if processing failed
-     */
     private void cleanupFile(String filePath) {
         if (filePath != null) {
             try {
@@ -336,9 +298,6 @@ public class DocumentService {
 
     // ==================== Get Documents Methods ====================
 
-    /**
-     * Get all documents for a user (ordered by display order)
-     */
     public List<DocumentResponse> getDocumentsByUser(User user) {
         log.info("Getting documents for user: {}", user.getId());
 
@@ -348,9 +307,6 @@ public class DocumentService {
         return documentMapper.toResponseList(documents);
     }
 
-    /**
-     * Get a specific document
-     */
     public DocumentResponse getDocument(Long documentId, User user) {
         log.info("Getting document: {}", documentId);
 
@@ -364,9 +320,6 @@ public class DocumentService {
         return documentMapper.toResponse(document);
     }
 
-    /**
-     * Get only processed documents
-     */
     public List<DocumentResponse> getProcessedDocuments(User user) {
         log.info("Getting processed documents for user: {}", user.getId());
 
@@ -377,6 +330,26 @@ public class DocumentService {
     }
 
     // ==================== Delete Document ====================
+
+    /**
+     * Delete embeddings for specific document from Qdrant
+     */
+    private void deleteDocumentEmbeddings(Document document) {
+        try {
+            String collectionName = document.getUser().getCollectionName();
+            if (collectionName == null) {
+                log.warn("No collection name for user: {}", document.getUser().getId());
+                return;
+            }
+
+            qdrantVectorService.deleteDocumentEmbeddings(collectionName, document.getId());
+            
+            log.info("✅ Deleted embeddings for document: {}", document.getId());
+            
+        } catch (Exception e) {
+            log.error("Failed to delete embeddings for document: {}", document.getId(), e);
+        }
+    }
 
     /**
      * Delete a document (soft delete)
@@ -391,26 +364,27 @@ public class DocumentService {
             throw new UnauthorizedException("מסמך", documentId);
         }
 
-        // Soft delete
+        // 1. Delete embeddings from Qdrant
+        deleteDocumentEmbeddings(document);
+
+        // 2. Soft delete in DB
         document.setActive(false);
         documentRepository.save(document);
 
-        // Delete from MinIO
+        // 3. Delete from S3
         try {
             s3Service.deleteFile(document.getFilePath());
-            log.info("Deleted file from MinIO: {}", document.getFilePath());
+            log.info("✅ Deleted file from S3: {}", document.getFilePath());
         } catch (Exception e) {
-            log.warn("Failed to delete file from MinIO", e);
+            log.warn("⚠️ Failed to delete file from S3", e);
             throw ExternalServiceException.storageServiceError("נכשל במחיקת הקובץ מהאחסון");
         }
 
-        // TODO: Delete embeddings from Qdrant for this specific document
-        // This requires tracking which embeddings belong to which document
-        log.warn("⚠️ Embeddings not deleted from Qdrant - implement if needed");
+        log.info("✅ Document {} deleted successfully", documentId);
     }
 
     /**
-     * Delete all documents for a user (used when deleting user/collection)
+     * Delete all documents for a user
      */
     @Transactional
     public int deleteAllDocumentsByUser(User user) {
@@ -427,13 +401,33 @@ public class DocumentService {
 
             int count = documents.size();
 
-            // Soft delete all
+            // 1. Soft delete all in DB
             for (Document doc : documents) {
                 doc.setActive(false);
             }
             documentRepository.saveAll(documents);
 
-            log.info("✅ Soft deleted {} document entities for user: {}", count, user.getId());
+            // 2. Delete all from S3
+            for (Document doc : documents) {
+                try {
+                    s3Service.deleteFile(doc.getFilePath());
+                } catch (Exception e) {
+                    log.warn("Failed to delete file from S3: {}", doc.getFilePath());
+                }
+            }
+
+            // 3. Delete all embeddings (מחק את כל הקולקשן)
+            String collectionName = user.getCollectionName();
+            if (collectionName != null) {
+                try {
+                    qdrantVectorService.deleteCollection(collectionName);
+                    qdrantVectorService.createUserCollection(user.getId().toString(), collectionName);
+                } catch (Exception e) {
+                    log.error("Failed to reset collection", e);
+                }
+            }
+
+            log.info("✅ Deleted {} documents for user: {}", count, user.getId());
             return count;
 
         } catch (Exception e) {
@@ -444,9 +438,6 @@ public class DocumentService {
 
     // ==================== Reorder Documents ====================
 
-    /**
-     * Reorder documents by user
-     */
     public void reorderDocuments(User user, List<Long> documentIds) {
         log.info("Reordering documents for user: {}", user.getId());
 
@@ -472,9 +463,6 @@ public class DocumentService {
 
     // ==================== Statistics ====================
 
-    /**
-     * Get document statistics for user
-     */
     public DocumentStatistics getDocumentStatistics(User user) {
         log.info("Getting statistics for user: {}", user.getId());
 
@@ -492,7 +480,6 @@ public class DocumentService {
             user, ProcessingStatus.FAILED
         );
 
-        // Calculate total size and chunks
         List<Document> completedDocs = documentRepository
             .findByUserAndProcessingStatusAndActiveTrue(user, ProcessingStatus.COMPLETED);
 
@@ -519,8 +506,6 @@ public class DocumentService {
             .build();
     }
 
-    // ==================== Statistics DTO ====================
-
     @lombok.Data
     @lombok.Builder
     public static class DocumentStatistics {
@@ -532,9 +517,6 @@ public class DocumentService {
         private Integer totalCharacters;
         private Integer totalChunks;
 
-        /**
-         * Get formatted total size
-         */
         public String getFormattedTotalSize() {
             if (totalFileSize == null || totalFileSize == 0) {
                 return "0 B";
@@ -551,9 +533,6 @@ public class DocumentService {
             }
         }
 
-        /**
-         * Get completion percentage
-         */
         public double getCompletionPercentage() {
             if (totalDocuments == null || totalDocuments == 0) {
                 return 0.0;
@@ -561,16 +540,10 @@ public class DocumentService {
             return (completedDocuments * 100.0) / totalDocuments;
         }
 
-        /**
-         * Check if any documents are processing
-         */
         public boolean isProcessing() {
             return processingDocuments != null && processingDocuments > 0;
         }
 
-        /**
-         * Check if any documents failed
-         */
         public boolean hasFailed() {
             return failedDocuments != null && failedDocuments > 0;
         }

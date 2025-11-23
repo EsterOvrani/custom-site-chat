@@ -18,7 +18,6 @@ import org.springframework.web.client.RestTemplate;
 import jakarta.annotation.PostConstruct;
 import java.util.List;
 
-// ✅ הוסף את אלה:
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,25 +30,19 @@ public class QdrantVectorService {
     private final QdrantProperties qdrantProperties;
     private final RestTemplate restTemplate = new RestTemplate();
 
-    // כתובת Qdrant REST API
     private String qdrantUrl;
-
-    // מיפוי של קולקשין ל-EmbeddingStore
     private final Map<String, EmbeddingStore<TextSegment>> collectionStoreMap = new ConcurrentHashMap<>();
-
     private String currentActiveCollectionName;
 
     @PostConstruct
     public void initialize() {
         try {
-            // בנה את כתובת Qdrant
             qdrantUrl = String.format("http://%s:6333", qdrantProperties.getHost());
 
             log.info("Initializing Qdrant Vector service");
             log.info("Qdrant URL: {}", qdrantUrl);
             log.info("Qdrant Port (gRPC): {}", qdrantProperties.getPort());
 
-            // בדוק קישוריות ל-Qdrant
             try {
                 String healthUrl = qdrantUrl + "/health";
                 ResponseEntity<String> response = restTemplate.getForEntity(healthUrl, String.class);
@@ -67,22 +60,18 @@ public class QdrantVectorService {
         }
     }
 
-    // ✅ הוסף פונקציה חדשה:
     public String createUserCollection(String userId, String collectionName) {
         try {
             log.info("Creating collection for user {}: {}", userId, collectionName);
 
-            // יצור את הקולקשן
             createCollectionIfNotExists(collectionName);
 
-            // המתן שיהיה מוכן
             if (!waitForCollectionReady(collectionName, 30)) {
                 throw ExternalServiceException.vectorDbError(
                     "פג זמן ההמתנה ליצירת קולקשן: " + collectionName
                 );
             }
 
-            // יצירת EmbeddingStore
             EmbeddingStore<TextSegment> newStore = QdrantEmbeddingStore.builder()
                 .host(qdrantProperties.getHost())
                 .port(qdrantProperties.getPort())
@@ -102,14 +91,11 @@ public class QdrantVectorService {
         }
     }
 
-    /**
-     * בדיקה אם קולקשן קיים וזמין
-     */
     private boolean waitForCollectionReady(String collectionName, int maxWaitSeconds) {
         String checkUrl = qdrantUrl + "/collections/" + collectionName;
 
         int attempts = 0;
-        int maxAttempts = maxWaitSeconds * 2; // כל 500ms
+        int maxAttempts = maxWaitSeconds * 2;
 
         while (attempts < maxAttempts) {
             try {
@@ -127,7 +113,7 @@ public class QdrantVectorService {
             }
 
             try {
-                Thread.sleep(500); // המתן חצי שנייה
+                Thread.sleep(500);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
@@ -140,12 +126,8 @@ public class QdrantVectorService {
         return false;
     }
 
-    /**
-     * יצור קולקשין אם הוא לא קיים
-     */
     private void createCollectionIfNotExists(String collectionName) {
         try {
-            // בדיקה אם הקולקשין קיים
             String getUrl = qdrantUrl + "/collections/" + collectionName;
             try {
                 ResponseEntity<String> checkResponse = restTemplate.getForEntity(getUrl, String.class);
@@ -157,7 +139,6 @@ public class QdrantVectorService {
                 log.debug("Collection '{}' not found, creating new one", collectionName);
             }
 
-            // יצור קולקשין חדש דרך PUT
             String createUrl = qdrantUrl + "/collections/" + collectionName;
 
             Map<String, Object> body = Map.of(
@@ -197,8 +178,51 @@ public class QdrantVectorService {
     }
 
     /**
-     * קבלת ה-EmbeddingStore של הקולקשין הנוכחי
+     * מחיקת embeddings של מסמך ספציפי לפי document_id
      */
+    public void deleteDocumentEmbeddings(String collectionName, Long documentId) {
+        try {
+            log.info("🗑️ Deleting embeddings for document {} from collection {}", 
+                documentId, collectionName);
+
+            String deleteUrl = qdrantUrl + "/collections/" + collectionName + "/points/delete";
+
+            Map<String, Object> body = Map.of(
+                "filter", Map.of(
+                    "must", List.of(
+                        Map.of(
+                            "key", "document_id",
+                            "match", Map.of("value", documentId.toString())
+                        )
+                    )
+                )
+            );
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                deleteUrl,
+                HttpMethod.POST,
+                entity,
+                String.class
+            );
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("✅ Deleted embeddings for document: {}", documentId);
+            } else {
+                log.error("❌ Failed to delete embeddings: {}", response.getBody());
+            }
+
+        } catch (Exception e) {
+            log.error("❌ Error deleting document embeddings", e);
+            throw ExternalServiceException.vectorDbError(
+                "נכשל במחיקת embeddings: " + e.getMessage()
+            );
+        }
+    }
+
     public EmbeddingStore<TextSegment> getCurrentEmbeddingStore() {
         if (currentActiveCollectionName == null) {
             log.warn("⚠️ No active collection found");
@@ -211,9 +235,6 @@ public class QdrantVectorService {
         return store;
     }
 
-    /**
-     * קבלת ה-EmbeddingStore של קולקשין ספציפי
-     */
     public EmbeddingStore<TextSegment> getEmbeddingStoreForCollection(String collectionName) {
         log.info("🔍 Looking for collection: {}", collectionName);
         log.info("📊 Available collections: {}", collectionStoreMap.keySet());
@@ -222,10 +243,8 @@ public class QdrantVectorService {
 
         if (store == null) {
             log.warn("❌ Collection not in cache, trying to create...");
-            // נסה ליצור אותו אם הוא לא קיים
             createCollectionIfNotExists(collectionName);
 
-            // אחרי יצירה, צור EmbeddingStore חדש
             store = QdrantEmbeddingStore.builder()
                     .host(qdrantProperties.getHost())
                     .port(qdrantProperties.getPort())
@@ -238,23 +257,14 @@ public class QdrantVectorService {
         return store;
     }
 
-    /**
-     * קבלת שם הקולקשין הנוכחי
-     */
     public String getCurrentCollectionName() {
         return currentActiveCollectionName;
     }
 
-    /**
-     * בדיקה אם הקולקשין קיים ופעיל
-     */
     public boolean isCollectionActive(String collectionName) {
         return collectionStoreMap.containsKey(collectionName);
     }
 
-    /**
-     * הסרת קולקשין מה-cache
-     */
     public void removeCollectionFromCache(String collectionName) {
         collectionStoreMap.remove(collectionName);
 
@@ -278,17 +288,6 @@ public class QdrantVectorService {
         return qdrantProperties != null;
     }
 
-    // /**
-    //  * יצירת קולקשין חדש לקובץ בודד (legacy method - לתאימות לאחור)
-    //  */
-    // @Deprecated
-    // public String createNewCollectionForFile(String fileId, String fileName) {
-    //     return createNewCollectionForUpload(fileName);
-    // }
-
-    /**
-     * מחיקת קולקשין מ-Qdrant לחלוטין (לא רק מה-cache)
-     */
     public void deleteCollection(String collectionName) {
         if (collectionName == null || collectionName.isEmpty()) {
             log.warn("⚠️ Cannot delete collection - name is null or empty");
@@ -298,11 +297,9 @@ public class QdrantVectorService {
         try {
             log.info("🗑️ Deleting Qdrant collection: {}", collectionName);
 
-            // מחיקה מ-Qdrant עצמו
             String deleteUrl = qdrantUrl + "/collections/" + collectionName;
             restTemplate.delete(deleteUrl);
 
-            // מחיקה מה-cache (משתמש בפונקציה הקיימת!)
             removeCollectionFromCache(collectionName);
 
             log.info("✅ Collection '{}' deleted successfully", collectionName);

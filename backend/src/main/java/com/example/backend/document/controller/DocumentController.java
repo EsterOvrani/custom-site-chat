@@ -17,22 +17,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Controller for managing documents
- *
- * Endpoints:
- * - GET    /api/documents/my-documents    - Get all documents for current user
- * - GET    /api/documents/{id}            - Get document details
- * - GET    /api/documents/{id}/download   - Download document
- * - DELETE /api/documents/{id}            - Delete document
- * - PUT    /api/documents/reorder         - Reorder documents
- */
 @RestController
 @RequestMapping("/api/documents")
 @RequiredArgsConstructor
@@ -40,20 +31,26 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class DocumentController {
 
-    // ==================== Dependencies ====================
-    
     private final DocumentService documentService;
     private final S3Service s3Service;
 
-    // ==================== Get Documents ====================
+    // A. העלאת מסמך חדש
+    @PostMapping("/upload")
+    public ResponseEntity<Map<String, Object>> uploadDocument(
+            @RequestParam("file") MultipartFile file) {
+        
+        User currentUser = getCurrentUser();
+        
+        documentService.processDocument(file, currentUser);
 
-    /**
-     * Get all documents for the current user
-     *
-     * GET /api/documents/my-documents
-     *
-     * Response: List<DocumentResponse>
-     */
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "המסמך הועלה ומעובד ברקע");
+
+        return ResponseEntity.ok(response);
+    }
+
+    // C. קבלת כל המסמכים של המשתמש
     @GetMapping("/my-documents")
     public ResponseEntity<Map<String, Object>> getMyDocuments() {
         User currentUser = getCurrentUser();
@@ -69,13 +66,7 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get specific document
-     *
-     * GET /api/documents/{id}
-     *
-     * Response: DocumentResponse
-     */
+    // G. קבלת מסמך ספציפי
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getDocument(@PathVariable Long id) {
         User currentUser = getCurrentUser();
@@ -89,26 +80,15 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== Download Document ====================
-
-    /**
-     * Download original document
-     *
-     * GET /api/documents/{id}/download
-     *
-     * Response: PDF file
-     */
+    // F. הורדת מסמך
     @GetMapping("/{id}/download")
     public ResponseEntity<?> downloadDocument(@PathVariable Long id) {
         User currentUser = getCurrentUser();
 
-        // Get document details
         DocumentResponse document = documentService.getDocument(id, currentUser);
 
-        // Download from S3
         InputStream fileStream = s3Service.downloadFile(document.getFilePath());
 
-        // Prepare headers
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
         headers.setContentDispositionFormData(
@@ -121,24 +101,36 @@ public class DocumentController {
             .body(new InputStreamResource(fileStream));
     }
 
-    /**
-     * Get temporary download URL
-     *
-     * GET /api/documents/{id}/download-url
-     *
-     * Response: { "url": "..." }
-     */
+    // E. פתיחת מסמך בטאב חדש
+    @GetMapping("/{id}/view")
+    public ResponseEntity<?> viewDocument(@PathVariable Long id) {
+        User currentUser = getCurrentUser();
+
+        DocumentResponse document = documentService.getDocument(id, currentUser);
+
+        InputStream fileStream = s3Service.downloadFile(document.getFilePath());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDispositionFormData(
+            "inline",
+            document.getOriginalFileName()
+        );
+
+        return ResponseEntity.ok()
+            .headers(headers)
+            .body(new InputStreamResource(fileStream));
+    }
+
     @GetMapping("/{id}/download-url")
     public ResponseEntity<Map<String, Object>> getDownloadUrl(@PathVariable Long id) {
         User currentUser = getCurrentUser();
 
-        // Get document details
         DocumentResponse document = documentService.getDocument(id, currentUser);
 
-        // Create temporary URL (valid for 1 hour)
         String presignedUrl = s3Service.getPresignedUrl(
             document.getFilePath(),
-            3600  // 1 hour
+            3600
         );
 
         Map<String, Object> response = new HashMap<>();
@@ -149,15 +141,7 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== Delete Document ====================
-
-    /**
-     * Delete document
-     *
-     * DELETE /api/documents/{id}
-     *
-     * Response: success message
-     */
+    // B. מחיקת מסמך בודד
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deleteDocument(@PathVariable Long id) {
         User currentUser = getCurrentUser();
@@ -170,16 +154,21 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== Reorder Documents ====================
+    // D. מחיקת כל המסמכים של המשתמש
+    @DeleteMapping("/delete-all")
+    public ResponseEntity<Map<String, Object>> deleteAllDocuments() {
+        User currentUser = getCurrentUser();
+        
+        int deletedCount = documentService.deleteAllDocumentsByUser(currentUser);
 
-    /**
-     * Reorder documents
-     *
-     * PUT /api/documents/reorder
-     * Body: { "documentIds": [3, 1, 2] }
-     *
-     * Response: success message
-     */
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "כל המסמכים נמחקו בהצלחה");
+        response.put("deletedCount", deletedCount);
+
+        return ResponseEntity.ok(response);
+    }
+
     @PutMapping("/reorder")
     public ResponseEntity<Map<String, Object>> reorderDocuments(
             @RequestBody Map<String, List<Long>> requestBody) {
@@ -200,11 +189,6 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== Helper Methods ====================
-
-    /**
-     * Get currently authenticated user
-     */
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
