@@ -7,9 +7,12 @@ import com.example.backend.auth.dto.VerifyUserDto;
 import com.example.backend.auth.service.AuthenticationService;
 import com.example.backend.auth.service.GoogleOAuthService;
 import com.example.backend.auth.service.JwtService;
-import com.example.backend.user.model.User;
+import com.example.backend.collection.dto.CollectionInfoResponse;  // ✅ הוסף את זה!
 import com.example.backend.collection.service.CollectionService;
+import com.example.backend.user.model.User;
+
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,13 +34,13 @@ import lombok.extern.slf4j.*;
 @RestController
 @RequiredArgsConstructor
 @Slf4j
+
 public class AuthenticationController {
     
     private final JwtService jwtService;
     private final AuthenticationService authenticationService;
     private final GoogleOAuthService googleOAuthService;
-    private final CollectionService collectionService;
-        
+    private final CollectionService collectionService;  
 
     @PostMapping("/google")
     public ResponseEntity<Map<String, Object>> googleLogin(@RequestBody GoogleAuthRequest request) {
@@ -93,15 +96,17 @@ public class AuthenticationController {
     }
     
     // ==================== Login ====================
-    
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> authenticate(
             @RequestBody LoginUserDto loginUserDto) {
         
+        // שלב 1: אימות משתמש (בודק username + password)
         User authenticatedUser = authenticationService.authenticate(loginUserDto);
+        
+        // שלב 2: יצירת JWT token
         String jwtToken = jwtService.generateToken(authenticatedUser);
         
-        // ✅ הוסף את זה - צור/קבל קולקשן
+        // ✅ שלב 3: יצירה/קבלת קולקשן למשתמש
         CollectionInfoResponse collectionInfo = null;
         try {
             collectionInfo = collectionService.getOrCreateUserCollection(authenticatedUser);
@@ -109,6 +114,7 @@ public class AuthenticationController {
             log.warn("Could not create collection during login", e);
         }
         
+        // שלב 4: בניית התגובה
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("token", jwtToken);
@@ -116,12 +122,10 @@ public class AuthenticationController {
         response.put("user", Map.of(
             "username", authenticatedUser.getUsername(),
             "email", authenticatedUser.getEmail(),
-            "fullName", authenticatedUser.getFirstName() + " " + authenticatedUser.getLastName(),
-            "profilePictureUrl", authenticatedUser.getProfilePictureUrl() != null 
-                ? authenticatedUser.getProfilePictureUrl() : ""
+            "fullName", authenticatedUser.getFirstName() + " " + authenticatedUser.getLastName()
         ));
         
-        // ✅ הוסף מידע על הקולקשן
+        // ✅ הוספת מידע על הקולקשן
         if (collectionInfo != null) {
             response.put("collection", Map.of(
                 "hasCollection", true,

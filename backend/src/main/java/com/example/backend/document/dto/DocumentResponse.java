@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @Builder
 public class DocumentResponse {
 
-    private Long id;
+    private Long userId;
     private String originalFileName;
     private String fileType;
     private Long fileSize;

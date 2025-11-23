@@ -278,13 +278,13 @@ public class QdrantVectorService {
         return qdrantProperties != null;
     }
 
-    /**
-     * יצירת קולקשין חדש לקובץ בודד (legacy method - לתאימות לאחור)
-     */
-    @Deprecated
-    public String createNewCollectionForFile(String fileId, String fileName) {
-        return createNewCollectionForUpload(fileName);
-    }
+    // /**
+    //  * יצירת קולקשין חדש לקובץ בודד (legacy method - לתאימות לאחור)
+    //  */
+    // @Deprecated
+    // public String createNewCollectionForFile(String fileId, String fileName) {
+    //     return createNewCollectionForUpload(fileName);
+    // }
 
     /**
      * מחיקת קולקשין מ-Qdrant לחלוטין (לא רק מה-cache)

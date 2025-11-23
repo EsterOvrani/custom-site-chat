@@ -74,6 +74,11 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
         return findByUserAndProcessingStatusAndActiveTrue(user, ProcessingStatus.PENDING);
     }
 
+    /**
+     * ספירת מסמכים לפי משתמש וסטטוס (אקטיביים בלבד)
+     */
+    long countByUserAndProcessingStatusAndActiveTrue(User user, ProcessingStatus status);
+
     // ==================== Display Order ====================
 
     /**

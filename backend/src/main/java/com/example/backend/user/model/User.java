@@ -70,6 +70,16 @@ public class User implements UserDetails {
     @Column(name = "embed_code", columnDefinition = "TEXT")
     private String embedCode;
 
+    @Column(name = "enabled")
+    @Builder.Default
+    private Boolean enabled = true;
+
+    @Column(name = "verification_code")
+    private String verificationCode;
+
+    @Column(name = "verification_code_expires_at")
+    private LocalDateTime verificationCodeExpiresAt;
+
     // ==================== Lifecycle Callbacks ====================
 
     @PrePersist
@@ -133,6 +143,56 @@ public class User implements UserDetails {
     public boolean isEnabled() {
         return true;
     }
+
+    // ==================== Verification Methods ====================
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public void setVerificationCode(String verificationCode) {
+        this.verificationCode = verificationCode;
+    }
+
+    public void setVerificationCodeExpiresAt(LocalDateTime verificationCodeExpiresAt) {
+        this.verificationCodeExpiresAt = verificationCodeExpiresAt;
+    }
+
+    public String getVerificationCode() {
+        return this.verificationCode;
+    }
+
+    public LocalDateTime getVerificationCodeExpiresAt() {
+        return this.verificationCodeExpiresAt;
+    }
+
+    public Boolean getEnabled() {
+        return this.enabled;
+    }
+
+    /**
+     * בדיקה אם קוד האימות תקף
+     */
+    public boolean isVerificationCodeValid(String code) {
+        if (this.verificationCode == null || this.verificationCodeExpiresAt == null) {
+            return false;
+        }
+        
+        if (LocalDateTime.now().isAfter(this.verificationCodeExpiresAt)) {
+            return false;
+        }
+        
+        return this.verificationCode.equals(code);
+    }
+
+    /**
+     * ניקוי קוד אימות
+     */
+    public void clearVerificationCode() {
+        this.verificationCode = null;
+        this.verificationCodeExpiresAt = null;
+    }
+
 
     // ==================== Enum ====================
 

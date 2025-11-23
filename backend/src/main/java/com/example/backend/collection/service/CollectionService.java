@@ -24,9 +24,17 @@ public class CollectionService {
      * יצירה או קבלת קולקשן של משתמש
      */
     public CollectionInfoResponse getOrCreateUserCollection(User user) {
+        
+        // ✅ בדיקה: האם למשתמש כבר יש קולקשן?
         if (user.hasCollection()) {
+            // יש לו קולקשן - פשוט תחזיר את הפרטים
+            log.info("User {} already has collection: {}", 
+                user.getId(), user.getCollectionName());
             return buildCollectionResponse(user);
         }
+        
+        // אין לו קולקשן - צור חדש
+        log.info("User {} doesn't have collection - creating new one", user.getId());
         return createNewCollection(user);
     }
 
@@ -36,18 +44,27 @@ public class CollectionService {
     private CollectionInfoResponse createNewCollection(User user) {
         log.info("Creating new collection for user: {}", user.getId());
 
+        // שלב 1: צור שם קולקשן ייחודי
         String collectionName = user.generateCollectionName();
+        // תוצאה: "user_123_a7b3f2e1"
+        
+        // שלב 2: צור secret key ייחודי
         String secretKey = user.generateSecretKey();
+        // תוצאה: "sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
 
+        // ✅ שלב 3: יצירת הקולקשן בפועל ב-Qdrant
         qdrantVectorService.createUserCollection(user.getId().toString(), collectionName);
 
+        // שלב 4: שמירת הפרטים במשתמש (בDB)
         user.setCollectionName(collectionName);
         user.setCollectionSecretKey(secretKey);
         user.setCollectionCreatedAt(LocalDateTime.now());
 
+        // שלב 5: יצירת קוד הטמעה (נעשה בשלב הבא)
         String embedCode = generateEmbedCode(secretKey);
         user.setEmbedCode(embedCode);
 
+        // שלב 6: שמירה ב-DB
         userRepository.save(user);
 
         log.info("Collection created: {}", collectionName);

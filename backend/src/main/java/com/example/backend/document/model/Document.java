@@ -90,6 +90,7 @@ public class Document {
         this.updatedAt = LocalDateTime.now();
     }
 
+
     // ==================== Helper Methods ====================
 
     public boolean isProcessed() {
@@ -102,6 +103,49 @@ public class Document {
 
     public boolean hasFailed() {
         return processingStatus == ProcessingStatus.FAILED;
+    }
+
+    // ==================== Processing Methods ====================
+
+    /**
+     * התחלת עיבוד מסמך
+     */
+    public void startProcessing() {
+        this.processingStatus = ProcessingStatus.PROCESSING;
+        this.processingProgress = 0;
+        this.errorMessage = null;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * סיום עיבוד בהצלחה
+     */
+    public void markAsCompleted(int characterCount, int chunkCount) {
+        this.processingStatus = ProcessingStatus.COMPLETED;
+        this.processingProgress = 100;
+        this.characterCount = characterCount;
+        this.chunkCount = chunkCount;
+        this.processedAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+        this.errorMessage = null;
+    }
+
+    /**
+     * סימון כנכשל
+     */
+    public void markAsFailed(String errorMessage) {
+        this.processingStatus = ProcessingStatus.FAILED;
+        this.errorMessage = errorMessage;
+        this.processedAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * עדכון אחוז ההתקדמות
+     */
+    public void updateProgress(int progress) {
+        this.processingProgress = Math.min(100, Math.max(0, progress));
+        this.updatedAt = LocalDateTime.now();
     }
 
     // ==================== Enum ====================
