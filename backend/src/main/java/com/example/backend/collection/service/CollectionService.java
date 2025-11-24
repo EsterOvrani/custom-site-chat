@@ -112,12 +112,17 @@ public class CollectionService {
      * יצירת קוד הטמעה
      */
     private String generateEmbedCode(String secretKey) {
-        // ⭐ זה הקוד האמיתי!
         return String.format(
             "<!-- Custom Site Chat Widget -->\n" +
             "<script>\n" +
             "  window.CHAT_WIDGET_SECRET_KEY = '%s';\n" +
-            "  window.CHAT_WIDGET_API_URL = 'http://localhost:8080'; // שנה לכתובת האמיתית בייצור\n" +
+            "  window.CHAT_WIDGET_API_URL = 'http://localhost:8080';\n" +
+            "  \n" +
+            "  // ⭐ התאמה אישית (אופציונלי)\n" +
+            "  window.CHAT_WIDGET_TITLE = 'צ\\'אט עם שירות הלקוחות';\n" +
+            "  window.CHAT_WIDGET_BOT_NAME = 'עוזר';\n" +
+            "  window.CHAT_WIDGET_BOT_AVATAR = 'https://example.com/bot-avatar.png'; // או null\n" +
+            "  window.CHAT_WIDGET_USER_AVATAR = null; // או קישור לתמונה\n" +
             "</script>\n" +
             "<script src=\"http://localhost:3000/chat-widget.js\"></script>\n" +
             "<!-- End Chat Widget -->",
