@@ -19,6 +19,7 @@ public interface DocumentMapper {
     /**
      * המרה מ-Document Entity ל-DocumentResponse DTO
      */
+    @Mapping(source = "id", target = "id")
     @Mapping(source = "user.id", target = "userId")
     @Mapping(target = "fileSizeFormatted", expression = "java(formatFileSize(document.getFileSize()))")
     @Mapping(target = "statistics", ignore = true)
