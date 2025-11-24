@@ -61,7 +61,7 @@ public class QueryService {
             );
 
             if (relevantDocs.isEmpty()) {
-                return createNoResultsResponse();
+                return createNoResultsResponse(request.getQuestion());
             }
 
             // 3. בניית ההקשר ושאילת AI
@@ -149,20 +149,71 @@ public class QueryService {
         }
     }
 
+    /**
+     * ⭐ זיהוי שפה של השאלה
+     */
+    private String detectLanguage(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return "en";
+        }
+        
+        // ספירת תווים עבריים
+        int hebrewChars = 0;
+        int totalChars = 0;
+        
+        for (char c : text.toCharArray()) {
+            if (Character.isLetter(c)) {
+                totalChars++;
+                // טווח Unicode של עברית: U+0590 to U+05FF
+                if (c >= '\u0590' && c <= '\u05FF') {
+                    hebrewChars++;
+                }
+            }
+        }
+        
+        // אם יותר מ-30% מהתווים הם עברית, זו שאלה בעברית
+        if (totalChars > 0 && (hebrewChars * 100.0 / totalChars) > 30) {
+            return "he";
+        }
+        
+        return "en";
+    }
+
+    /**
+     * ⭐ בניית הודעות עם הנחיית שפה מפורשת
+     */
     private List<dev.langchain4j.data.message.ChatMessage> buildChatMessages(
             String question,
             List<RelevantDocument> relevantDocs) {
 
         List<dev.langchain4j.data.message.ChatMessage> messages = new ArrayList<>();
 
+        // זיהוי שפה
+        String detectedLanguage = detectLanguage(question);
+        String languageName = detectedLanguage.equals("he") ? "Hebrew" : "English";
+        String languageInstruction = detectedLanguage.equals("he") 
+            ? "ANSWER IN HEBREW (עברית) ONLY!" 
+            : "ANSWER IN ENGLISH ONLY!";
+
+        log.info("🌐 Detected language: {} ({})", languageName, detectedLanguage);
+
+        // הנחיות ברורות לשפה
         messages.add(SystemMessage.from(
-            "You are a helpful AI assistant. " +
-            "Answer in the SAME LANGUAGE as the question. " +
-            "Base your answer only on the provided documents."
+            "You are a helpful AI assistant that answers questions based on provided documents.\n" +
+            "\n" +
+            "CRITICAL LANGUAGE RULE:\n" +
+            "- The user asked in " + languageName + "\n" +
+            "- " + languageInstruction + "\n" +
+            "- Do NOT translate the question\n" +
+            "- Do NOT mix languages\n" +
+            "- Be natural and conversational in " + languageName + "\n" +
+            "\n" +
+            "Base your answer ONLY on the provided documents.\n" +
+            "If you cannot find the answer in the documents, say so in " + languageName + "."
         ));
 
         StringBuilder context = new StringBuilder();
-        context.append("Relevant information:\n\n");
+        context.append("Relevant information from documents:\n\n");
         
         for (int i = 0; i < relevantDocs.size(); i++) {
             RelevantDocument doc = relevantDocs.get(i);
@@ -174,7 +225,9 @@ public class QueryService {
         }
 
         messages.add(UserMessage.from(
-            context.toString() + "\nQuestion: " + question
+            context.toString() + 
+            "\nUser Question (" + languageName + "): " + question +
+            "\n\nREMEMBER: Answer in " + languageName + " only!"
         ));
 
         return messages;
@@ -221,9 +274,17 @@ public class QueryService {
         return text.substring(0, maxLength) + "...";
     }
 
-    private AnswerResponse createNoResultsResponse() {
+    /**
+     * ⭐ תגובה "לא נמצאו תוצאות" בשפה הנכונה
+     */
+    private AnswerResponse createNoResultsResponse(String question) {
+        String detectedLanguage = detectLanguage(question);
+        String message = detectedLanguage.equals("he") 
+            ? "מצטער, לא מצאתי מידע רלוונטי במסמכים."
+            : "Sorry, I couldn't find relevant information in the documents.";
+
         return AnswerResponse.builder()
-            .answer("Sorry, I couldn't find relevant information.")
+            .answer(message)
             .success(true)
             .confidence(0.0)
             .timestamp(LocalDateTime.now())

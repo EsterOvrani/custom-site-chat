@@ -1,7 +1,7 @@
 (function() {
   'use strict';
 
-  // ⭐ המתן שהדף ייטען לגמרי לפני קריאת המשתנים
+  // ==================== Initialization ====================
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initWidget);
   } else {
@@ -22,7 +22,6 @@
       userAvatar: window.CHAT_WIDGET_USER_AVATAR || null
     };
 
-    // ⭐ Debug - בדיקה
     console.log('🔧 Widget Config:', WIDGET_CONFIG);
 
     if (!WIDGET_CONFIG.secretKey) {
@@ -30,22 +29,34 @@
       return;
     }
 
-    // ==================== CSS Styles ====================
+    // ==================== Inject CSS ====================
+    injectStyles(WIDGET_CONFIG);
+
+    // ==================== Create Widget HTML ====================
+    createWidgetHTML(WIDGET_CONFIG);
+
+    // ==================== Initialize Widget ====================
+    setupEventListeners();
+  }
+
+  // ==================== CSS Injection ====================
+  function injectStyles(config) {
     const styles = `
+      /* Container */
       .chat-widget-container {
         position: fixed;
-        ${WIDGET_CONFIG.position.includes('right') ? 'right: 20px;' : 'left: 20px;'}
+        ${config.position.includes('right') ? 'right: 20px;' : 'left: 20px;'}
         bottom: 20px;
         z-index: 9999;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        direction: rtl;
       }
 
+      /* Toggle Button */
       .chat-widget-button {
         width: 60px;
         height: 60px;
         border-radius: 50%;
-        background: linear-gradient(135deg, ${WIDGET_CONFIG.primaryColor} 0%, ${WIDGET_CONFIG.secondaryColor} 100%);
+        background: linear-gradient(135deg, ${config.primaryColor} 0%, ${config.secondaryColor} 100%);
         border: none;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         cursor: pointer;
@@ -60,10 +71,11 @@
         transform: scale(1.1);
       }
 
+      /* Widget Window */
       .chat-widget-window {
         position: absolute;
         bottom: 80px;
-        ${WIDGET_CONFIG.position.includes('right') ? 'right: 0;' : 'left: 0;'}
+        ${config.position.includes('right') ? 'right: 0;' : 'left: 0;'}
         width: 380px;
         height: 600px;
         background: white;
@@ -90,8 +102,9 @@
         }
       }
 
+      /* Header */
       .chat-widget-header {
-        background: linear-gradient(135deg, ${WIDGET_CONFIG.primaryColor} 0%, ${WIDGET_CONFIG.secondaryColor} 100%);
+        background: linear-gradient(135deg, ${config.primaryColor} 0%, ${config.secondaryColor} 100%);
         color: white;
         padding: 20px;
         display: flex;
@@ -124,6 +137,7 @@
         background: rgba(255,255,255,0.2);
       }
 
+      /* Messages Container */
       .chat-widget-messages {
         flex: 1;
         overflow-y: auto;
@@ -131,21 +145,32 @@
         background: #f8f9ff;
       }
 
+      /* Message Wrapper */
       .chat-message {
         margin-bottom: 16px;
         display: flex;
+        align-items: flex-start;
         gap: 10px;
       }
 
+      /* הודעת משתמש */
       .chat-message.user {
         flex-direction: row-reverse;
+        justify-content: flex-start;
       }
 
+      /* הודעת AI */
+      .chat-message.assistant {
+        flex-direction: row;
+        justify-content: flex-start;
+      }
+
+      /* Avatar */
       .chat-message-avatar {
         width: 36px;
         height: 36px;
         border-radius: 50%;
-        background: ${WIDGET_CONFIG.primaryColor};
+        background: ${config.primaryColor};
         color: white;
         display: flex;
         align-items: center;
@@ -157,7 +182,7 @@
       }
 
       .chat-message.assistant .chat-message-avatar {
-        background: ${WIDGET_CONFIG.secondaryColor};
+        background: ${config.secondaryColor};
       }
 
       .chat-message-avatar img {
@@ -166,27 +191,47 @@
         object-fit: cover;
       }
 
+      /* Message Content Wrapper */
+      .chat-message-content {
+        display: flex;
+        flex-direction: column;
+        max-width: 70%;
+      }
+
+      /* Message Bubble */
       .chat-message-bubble {
         padding: 12px 16px;
         border-radius: 12px;
-        max-width: 70%;
         line-height: 1.5;
         font-size: 14px;
+        word-wrap: break-word;
+        white-space: pre-wrap;
       }
 
-      .chat-message.user .chat-message-bubble {
-        background: ${WIDGET_CONFIG.primaryColor};
-        color: white;
+      /* כיוון טקסט לפי שפה */
+      .chat-message-bubble.rtl {
+        direction: rtl;
         text-align: right;
+      }
+
+      .chat-message-bubble.ltr {
+        direction: ltr;
+        text-align: left;
+      }
+
+      /* צבעי Bubble */
+      .chat-message.user .chat-message-bubble {
+        background: ${config.primaryColor};
+        color: white;
       }
 
       .chat-message.assistant .chat-message-bubble {
         background: white;
         color: #333;
-        text-align: right;
         border: 1px solid #e1e8ed;
       }
 
+      /* Input Area */
       .chat-widget-input-area {
         padding: 16px;
         border-top: 1px solid #e1e8ed;
@@ -207,15 +252,17 @@
         font-family: inherit;
         resize: none;
         outline: none;
+        direction: rtl;
+        text-align: right;
       }
 
       .chat-widget-input:focus {
-        border-color: ${WIDGET_CONFIG.primaryColor};
+        border-color: ${config.primaryColor};
       }
 
       .chat-widget-send {
         padding: 12px 20px;
-        background: ${WIDGET_CONFIG.primaryColor};
+        background: ${config.primaryColor};
         color: white;
         border: none;
         border-radius: 8px;
@@ -233,6 +280,7 @@
         cursor: not-allowed;
       }
 
+      /* Typing Indicator */
       .typing-indicator {
         display: flex;
         gap: 4px;
@@ -264,6 +312,7 @@
         }
       }
 
+      /* Empty State */
       .chat-widget-empty {
         display: flex;
         flex-direction: column;
@@ -284,16 +333,16 @@
     const styleSheet = document.createElement('style');
     styleSheet.textContent = styles;
     document.head.appendChild(styleSheet);
+  }
 
-    // ==================== HTML Structure ====================
+  // ==================== HTML Creation ====================
+  function createWidgetHTML(config) {
     const widgetHTML = `
       <div class="chat-widget-container">
-        <button class="chat-widget-button" id="chat-widget-toggle">
-          💬
-        </button>
+        <button class="chat-widget-button" id="chat-widget-toggle">💬</button>
         <div class="chat-widget-window" id="chat-widget-window">
           <div class="chat-widget-header">
-            <h3>${escapeHtml(WIDGET_CONFIG.title)}</h3>
+            <h3>${escapeHtml(config.title)}</h3>
             <button class="chat-widget-close" id="chat-widget-close">✕</button>
           </div>
           <div class="chat-widget-messages" id="chat-widget-messages">
@@ -321,88 +370,147 @@
     const widgetContainer = document.createElement('div');
     widgetContainer.innerHTML = widgetHTML;
     document.body.appendChild(widgetContainer);
+  }
 
-    // ==================== State ====================
-    let messages = [];
-    let isOpen = false;
-    let isLoading = false;
-    let sessionId = generateSessionId();
+  // ==================== Event Listeners Setup ====================
+  function setupEventListeners() {
+    const state = {
+      messages: [],
+      isOpen: false,
+      isLoading: false,
+      sessionId: generateSessionId()
+    };
 
-    // ==================== DOM Elements ====================
-    const toggleButton = document.getElementById('chat-widget-toggle');
-    const closeButton = document.getElementById('chat-widget-close');
-    const widgetWindow = document.getElementById('chat-widget-window');
-    const messagesContainer = document.getElementById('chat-widget-messages');
-    const inputField = document.getElementById('chat-widget-input');
-    const sendButton = document.getElementById('chat-widget-send');
+    const elements = {
+      toggleButton: document.getElementById('chat-widget-toggle'),
+      closeButton: document.getElementById('chat-widget-close'),
+      widgetWindow: document.getElementById('chat-widget-window'),
+      messagesContainer: document.getElementById('chat-widget-messages'),
+      inputField: document.getElementById('chat-widget-input'),
+      sendButton: document.getElementById('chat-widget-send')
+    };
 
-    // ==================== Event Listeners ====================
-    toggleButton.addEventListener('click', toggleWidget);
-    closeButton.addEventListener('click', toggleWidget);
-    sendButton.addEventListener('click', sendMessage);
-    inputField.addEventListener('keydown', (e) => {
+    elements.toggleButton.addEventListener('click', () => toggleWidget(state, elements));
+    elements.closeButton.addEventListener('click', () => toggleWidget(state, elements));
+    elements.sendButton.addEventListener('click', () => sendMessage(state, elements));
+    
+    elements.inputField.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendMessage();
+        sendMessage(state, elements);
       }
     });
+  }
 
-    // ==================== Functions ====================
-    function generateSessionId() {
-      return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  // ==================== Utility Functions ====================
+  
+  function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // זיהוי שפה
+  function detectLanguage(text) {
+    if (!text || text.trim().length === 0) return 'en';
+    
+    let hebrewChars = 0;
+    let totalChars = 0;
+    
+    for (let char of text) {
+      if (/\p{L}/u.test(char)) {
+        totalChars++;
+        if (char >= '\u0590' && char <= '\u05FF') {
+          hebrewChars++;
+        }
+      }
+    }
+    
+    return (totalChars > 0 && (hebrewChars / totalChars) > 0.3) ? 'he' : 'en';
+  }
+
+  function createAvatar(role) {
+    const config = {
+      botName: window.CHAT_WIDGET_BOT_NAME || 'AI',
+      botAvatar: window.CHAT_WIDGET_BOT_AVATAR || null,
+      userAvatar: window.CHAT_WIDGET_USER_AVATAR || null
+    };
+
+    if (role === 'user') {
+      if (config.userAvatar) {
+        return `<img src="${escapeHtml(config.userAvatar)}" alt="User" />`;
+      }
+      return 'אני';
+    } else {
+      if (config.botAvatar) {
+        return `<img src="${escapeHtml(config.botAvatar)}" alt="${escapeHtml(config.botName)}" />`;
+      }
+      return escapeHtml(config.botName.charAt(0));
+    }
+  }
+
+  // ==================== Widget Functions ====================
+  
+  function toggleWidget(state, elements) {
+    state.isOpen = !state.isOpen;
+    elements.widgetWindow.classList.toggle('open', state.isOpen);
+    
+    if (state.isOpen) {
+      elements.inputField.focus();
+      elements.toggleButton.textContent = '✕';
+    } else {
+      elements.toggleButton.textContent = '💬';
+    }
+  }
+
+  // רינדור הודעות
+  function renderMessages(state, elements) {
+    if (state.messages.length === 0) {
+      elements.messagesContainer.innerHTML = `
+        <div class="chat-widget-empty">
+          <div class="chat-widget-empty-icon">💬</div>
+          <h3>שלום!</h3>
+          <p>שאל שאלה על המסמכים שלך</p>
+        </div>
+      `;
+      return;
     }
 
-    function toggleWidget() {
-      isOpen = !isOpen;
-      widgetWindow.classList.toggle('open', isOpen);
+    const messagesHTML = state.messages.map(msg => {
+      // זיהוי שפה
+      const language = detectLanguage(msg.content);
+      const textDirection = language === 'he' ? 'rtl' : 'ltr';
       
-      if (isOpen) {
-        inputField.focus();
-        toggleButton.textContent = '✕';
-      } else {
-        toggleButton.textContent = '💬';
-      }
-    }
-
-    function createAvatar(role) {
-      if (role === 'user') {
-        if (WIDGET_CONFIG.userAvatar) {
-          return `<img src="${escapeHtml(WIDGET_CONFIG.userAvatar)}" alt="User" />`;
-        }
-        return 'אני';
-      } else {
-        if (WIDGET_CONFIG.botAvatar) {
-          return `<img src="${escapeHtml(WIDGET_CONFIG.botAvatar)}" alt="${escapeHtml(WIDGET_CONFIG.botName)}" />`;
-        }
-        const firstLetter = WIDGET_CONFIG.botName.charAt(0);
-        return escapeHtml(firstLetter);
-      }
-    }
-
-    function renderMessages() {
-      if (messages.length === 0) {
-        messagesContainer.innerHTML = `
-          <div class="chat-widget-empty">
-            <div class="chat-widget-empty-icon">💬</div>
-            <h3>שלום!</h3>
-            <p>שאל שאלה על המסמכים שלך</p>
-          </div>
-        `;
-        return;
-      }
-
-      messagesContainer.innerHTML = messages.map(msg => `
+      // ניקוי טקסט - הסרת שורות ריקות ורווחים מיותרים
+      const cleanedContent = msg.content
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .join('\n')
+        .trim();
+      
+      return `
         <div class="chat-message ${msg.role}">
           <div class="chat-message-avatar">${createAvatar(msg.role)}</div>
-          <div class="chat-message-bubble">${escapeHtml(msg.content)}</div>
+          <div class="chat-message-content">
+            <div class="chat-message-bubble ${textDirection}">${escapeHtml(cleanedContent)}</div>
+          </div>
         </div>
-      `).join('');
+      `;
+    }).join('');
 
-      if (isLoading) {
-        messagesContainer.innerHTML += `
-          <div class="chat-message assistant">
-            <div class="chat-message-avatar">${createAvatar('assistant')}</div>
-            <div class="chat-message-bubble">
+    elements.messagesContainer.innerHTML = messagesHTML;
+
+    if (state.isLoading) {
+      elements.messagesContainer.innerHTML += `
+        <div class="chat-message assistant">
+          <div class="chat-message-avatar">${createAvatar('assistant')}</div>
+          <div class="chat-message-content">
+            <div class="chat-message-bubble rtl">
               <div class="typing-indicator">
                 <div class="typing-dot"></div>
                 <div class="typing-dot"></div>
@@ -410,77 +518,76 @@
               </div>
             </div>
           </div>
-        `;
-      }
-
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        </div>
+      `;
     }
 
-    async function sendMessage() {
-      const question = inputField.value.trim();
-      
-      if (!question || isLoading) return;
+    elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
+  }
 
-      messages.push({
-        role: 'user',
-        content: question,
-        timestamp: new Date().toISOString()
+  async function sendMessage(state, elements) {
+    const question = elements.inputField.value.trim();
+    
+    if (!question || state.isLoading) return;
+
+    const config = {
+      apiUrl: window.CHAT_WIDGET_API_URL || 'http://localhost:8080',
+      secretKey: window.CHAT_WIDGET_SECRET_KEY
+    };
+
+    state.messages.push({
+      role: 'user',
+      content: question,
+      timestamp: new Date().toISOString()
+    });
+
+    elements.inputField.value = '';
+    state.isLoading = true;
+    elements.sendButton.disabled = true;
+    renderMessages(state, elements);
+
+    try {
+      const response = await fetch(`${config.apiUrl}/api/query/ask`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          secretKey: config.secretKey,
+          question: question,
+          sessionId: state.sessionId
+        })
       });
 
-      inputField.value = '';
-      isLoading = true;
-      sendButton.disabled = true;
-      renderMessages();
+      const data = await response.json();
 
-      try {
-        const response = await fetch(`${WIDGET_CONFIG.apiUrl}/api/query/ask`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            secretKey: WIDGET_CONFIG.secretKey,
-            question: question,
-            sessionId: sessionId
-          })
-        });
-
-        const data = await response.json();
-
-        if (data.success && data.data.answer) {
-          messages.push({
-            role: 'assistant',
-            content: data.data.answer,
-            timestamp: new Date().toISOString()
-          });
-        } else {
-          messages.push({
-            role: 'assistant',
-            content: 'מצטער, לא הצלחתי למצוא תשובה. אנא נסה שוב.',
-            timestamp: new Date().toISOString()
-          });
-        }
-      } catch (error) {
-        console.error('Chat Widget Error:', error);
-        messages.push({
+      if (data.success && data.data.answer) {
+        state.messages.push({
           role: 'assistant',
-          content: 'אירעה שגיאה. אנא נסה שוב מאוחר יותר.',
+          content: data.data.answer,
           timestamp: new Date().toISOString()
         });
-      } finally {
-        isLoading = false;
-        sendButton.disabled = false;
-        renderMessages();
-        inputField.focus();
+      } else {
+        state.messages.push({
+          role: 'assistant',
+          content: 'מצטער, לא הצלחתי למצוא תשובה. אנא נסה שוב.',
+          timestamp: new Date().toISOString()
+        });
       }
+    } catch (error) {
+      console.error('Chat Widget Error:', error);
+      state.messages.push({
+        role: 'assistant',
+        content: 'אירעה שגיאה. אנא נסה שוב מאוחר יותר.',
+        timestamp: new Date().toISOString()
+      });
+    } finally {
+      state.isLoading = false;
+      elements.sendButton.disabled = false;
+      renderMessages(state, elements);
+      elements.inputField.focus();
     }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    console.log('✅ Chat Widget loaded successfully');
   }
+
+  console.log('✅ Chat Widget initialized successfully');
 })();

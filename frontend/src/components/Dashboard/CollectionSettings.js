@@ -147,15 +147,19 @@ const CollectionSettings = ({ collection, onRegenerateKey, loading }) => {
 
         <div style={{ position: 'relative' }}>
           <pre style={{
+            direction: 'ltr',           // ✅ ללא !important
+            textAlign: 'left',          // ✅ camelCase
             background: '#1e1e1e',
             color: '#d4d4d4',
             padding: '20px',
             borderRadius: '8px',
             overflow: 'auto',
             fontSize: '13px',
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New, monospace',
             maxHeight: '300px',
-            lineHeight: '1.6'
+            lineHeight: '1.6',
+            whiteSpace: 'pre-wrap',     // ✅ הוסף את זה
+            wordWrap: 'break-word'      // ✅ הוסף את זה
           }}>
             {collection.embedCode}
           </pre>
@@ -164,17 +168,18 @@ const CollectionSettings = ({ collection, onRegenerateKey, loading }) => {
             onClick={() => copyToClipboard(collection.embedCode, setCopiedEmbed)}
             style={{
               position: 'absolute',
-              top: '15px',
-              left: '15px',
+              top: '10px',
+              right: '10px',        // ✅ ימין במקום שמאל
               padding: '8px 16px',
-              background: copiedEmbed ? '#28a745' : '#667eea',
+              fontSize: '14px',
+              minWidth: '120px',
+              zIndex: 10,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: 'white',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '8px',
               cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '13px',
-              transition: 'background 0.2s'
+              fontWeight: '600'
             }}
           >
             {copiedEmbed ? '✓ הועתק' : '📋 העתק קוד'}
@@ -190,7 +195,7 @@ const CollectionSettings = ({ collection, onRegenerateKey, loading }) => {
           fontSize: '14px',
           color: '#1565c0'
         }}>
-          💡 <strong>טיפ:</strong> אחרי הדבקת הקוד, תראה בועה כחולה בפינת המסך. לחיצה עליה תפתח את חלון הצ'אט.
+          💡 <strong>טיפ:</strong> אחרי הדבקת הקוד, תראה בועה בפינת המסך. לחיצה עליה תפתח את חלון הצ'אט.
         </div>
       </div>
 
@@ -204,6 +209,8 @@ const CollectionSettings = ({ collection, onRegenerateKey, loading }) => {
       }}>
         <h4 style={{ marginBottom: '15px', color: '#333' }}>📖 דוגמת שימוש</h4>
         <pre style={{
+          direction: 'ltr',           // ✅ ללא !important
+          textAlign: 'left', 
           background: 'white',
           padding: '15px',
           borderRadius: '6px',
