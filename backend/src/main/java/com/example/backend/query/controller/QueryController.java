@@ -1,18 +1,16 @@
 package com.example.backend.query.controller;
 
-import com.example.backend.query.service.QueryService;
+import com.example.backend.common.dto.ApiResponse;
+import com.example.backend.common.exception.UnauthorizedException;  // ⭐ חסר!
 import com.example.backend.query.dto.PublicQueryRequest;
-import com.example.backend.query.dto.AnswerResponse;
-
-
+import com.example.backend.query.dto.QueryResponse;
+import com.example.backend.query.service.QueryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;  // ⭐ חסר!
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.HashMap;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/query")
@@ -23,21 +21,30 @@ public class QueryController {
 
     private final QueryService queryService;
 
-    /**
-     * שאילת שאלה ציבורית (ללא אימות!)
-     */
     @PostMapping("/ask")
-    public ResponseEntity<Map<String, Object>> askPublicQuestion(
+    public ResponseEntity<ApiResponse<QueryResponse>> askQuestion(
             @Valid @RequestBody PublicQueryRequest request) {
 
-        log.info("Public query received (session: {})", request.getSessionId());
+        log.info("📥 Query request received for secretKey: {}", request.getSecretKey());
 
-        AnswerResponse answer = queryService.askPublicQuestion(request);
+        try {
+            QueryResponse response = queryService.askQuestion(
+                    request.getSecretKey(),
+                    request.getQuestion(),
+                    request.getHistory()
+            );
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", answer.getSuccess());
-        response.put("data", answer);
+            return ResponseEntity.ok(ApiResponse.success(response));
 
-        return ResponseEntity.ok(response);
+        } catch (UnauthorizedException e) {
+            log.error("❌ Unauthorized: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(e.getMessage()));
+
+        } catch (Exception e) {
+            log.error("❌ Error processing query", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("שגיאה בעיבוד השאלה"));
+        }
     }
 }

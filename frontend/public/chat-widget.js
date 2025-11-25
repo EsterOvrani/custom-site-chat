@@ -1,3 +1,5 @@
+// frontend/public/chat-widget.js
+
 (function() {
   'use strict';
 
@@ -19,7 +21,8 @@
       title: window.CHAT_WIDGET_TITLE || 'צ\'אט עם המסמכים שלי',
       botName: window.CHAT_WIDGET_BOT_NAME || 'AI',
       botAvatar: window.CHAT_WIDGET_BOT_AVATAR || null,
-      userAvatar: window.CHAT_WIDGET_USER_AVATAR || null
+      userAvatar: window.CHAT_WIDGET_USER_AVATAR || null,
+      maxHistoryMessages: 10
     };
 
     console.log('🔧 Widget Config:', WIDGET_CONFIG);
@@ -36,7 +39,7 @@
     createWidgetHTML(WIDGET_CONFIG);
 
     // ==================== Initialize Widget ====================
-    setupEventListeners();
+    setupEventListeners(WIDGET_CONFIG);
   }
 
   // ==================== CSS Injection ====================
@@ -110,6 +113,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        position: relative;
       }
 
       .chat-widget-header h3 {
@@ -117,24 +121,36 @@
         font-size: 18px;
       }
 
-      .chat-widget-close {
-        background: none;
-        border: none;
-        color: white;
-        font-size: 24px;
-        cursor: pointer;
-        padding: 0;
-        width: 30px;
-        height: 30px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        transition: background 0.2s;
+      /* Message Counter */
+      .message-counter {
+        font-size: 11px;
+        opacity: 0.9;
+        margin-top: 3px;
       }
 
-      .chat-widget-close:hover {
+      /* Reset Button */
+      .reset-button {
+        position: absolute;
+        left: 20px;
+        top: 50%;
+        transform: translateY(-50%);
         background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 11px;
+        transition: all 0.3s;
+        display: none;
+      }
+
+      .reset-button:hover {
+        background: rgba(255,255,255,0.3);
+      }
+
+      .reset-button.show {
+        display: block;
       }
 
       /* Messages Container */
@@ -153,13 +169,11 @@
         gap: 10px;
       }
 
-      /* הודעת משתמש */
       .chat-message.user {
         flex-direction: row-reverse;
         justify-content: flex-start;
       }
 
-      /* הודעת AI */
       .chat-message.assistant {
         flex-direction: row;
         justify-content: flex-start;
@@ -208,7 +222,6 @@
         white-space: pre-wrap;
       }
 
-      /* כיוון טקסט לפי שפה */
       .chat-message-bubble.rtl {
         direction: rtl;
         text-align: right;
@@ -219,7 +232,6 @@
         text-align: left;
       }
 
-      /* צבעי Bubble */
       .chat-message.user .chat-message-bubble {
         background: ${config.primaryColor};
         color: white;
@@ -229,6 +241,22 @@
         background: white;
         color: #333;
         border: 1px solid #e1e8ed;
+      }
+
+      /* Limit Warning */
+      .limit-warning {
+        background: #fff3cd;
+        color: #856404;
+        padding: 10px;
+        border-radius: 8px;
+        margin: 10px 20px;
+        font-size: 13px;
+        text-align: center;
+        display: none;
+      }
+
+      .limit-warning.show {
+        display: block;
       }
 
       /* Input Area */
@@ -258,6 +286,11 @@
 
       .chat-widget-input:focus {
         border-color: ${config.primaryColor};
+      }
+
+      .chat-widget-input:disabled {
+        background-color: #f5f5f5;
+        cursor: not-allowed;
       }
 
       .chat-widget-send {
@@ -342,8 +375,16 @@
         <button class="chat-widget-button" id="chat-widget-toggle">💬</button>
         <div class="chat-widget-window" id="chat-widget-window">
           <div class="chat-widget-header">
-            <h3>${escapeHtml(config.title)}</h3>
-            <button class="chat-widget-close" id="chat-widget-close">✕</button>
+            <button class="reset-button" id="reset-button">
+              🔄 התחל שיחה חדשה
+            </button>
+            <div>
+              <h3>${escapeHtml(config.title)}</h3>
+              <div class="message-counter" id="message-counter">0/10 הודעות</div>
+            </div>
+          </div>
+          <div class="limit-warning" id="limit-warning">
+            ⚠️ הגעת למגבלת 10 הודעות. לחץ על "התחל שיחה חדשה" למעלה.
           </div>
           <div class="chat-widget-messages" id="chat-widget-messages">
             <div class="chat-widget-empty">
@@ -373,33 +414,119 @@
   }
 
   // ==================== Event Listeners Setup ====================
-  function setupEventListeners() {
+  function setupEventListeners(config) {
     const state = {
       messages: [],
+      history: [],
       isOpen: false,
       isLoading: false,
-      sessionId: generateSessionId()
+      sessionId: generateSessionId(),
+      maxHistoryMessages: config.maxHistoryMessages
     };
 
     const elements = {
       toggleButton: document.getElementById('chat-widget-toggle'),
-      closeButton: document.getElementById('chat-widget-close'),
+      resetButton: document.getElementById('reset-button'),
       widgetWindow: document.getElementById('chat-widget-window'),
       messagesContainer: document.getElementById('chat-widget-messages'),
       inputField: document.getElementById('chat-widget-input'),
-      sendButton: document.getElementById('chat-widget-send')
+      sendButton: document.getElementById('chat-widget-send'),
+      messageCounter: document.getElementById('message-counter'),
+      limitWarning: document.getElementById('limit-warning')
     };
 
+    // טען היסטוריה מ-sessionStorage
+    loadHistoryFromSession(state, elements, config);
+
     elements.toggleButton.addEventListener('click', () => toggleWidget(state, elements));
-    elements.closeButton.addEventListener('click', () => toggleWidget(state, elements));
-    elements.sendButton.addEventListener('click', () => sendMessage(state, elements));
+    elements.resetButton.addEventListener('click', () => resetChat(state, elements, config));
+    elements.sendButton.addEventListener('click', () => sendMessage(state, elements, config));
     
     elements.inputField.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendMessage(state, elements);
+        sendMessage(state, elements, config);
       }
     });
+  }
+
+  // ==================== History Management ====================
+  
+  function loadHistoryFromSession(state, elements, config) {
+    try {
+      const storageKey = 'chatHistory_' + config.secretKey;
+      const saved = sessionStorage.getItem(storageKey);
+      if (saved) {
+        const data = JSON.parse(saved);
+        state.history = data.history || [];
+        state.messages = data.messages || [];
+        
+        renderMessages(state, elements, config);
+        updateUI(state, elements);
+        
+        console.log('✅ Loaded history:', state.history.length, 'messages');
+      }
+    } catch (e) {
+      console.error('Failed to load history:', e);
+    }
+  }
+
+  function saveHistoryToSession(state, config) {
+    try {
+      const storageKey = 'chatHistory_' + config.secretKey;
+      sessionStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          history: state.history,
+          messages: state.messages
+        })
+      );
+    } catch (e) {
+      console.error('Failed to save history:', e);
+    }
+  }
+
+  function isAtLimit(state) {
+    return state.history.length >= state.maxHistoryMessages;
+  }
+
+  function updateUI(state, elements) {
+    const messageCount = state.history.length;
+    
+    // עדכן מונה
+    elements.messageCounter.textContent = `${messageCount}/${state.maxHistoryMessages} הודעות`;
+    
+    // הצג/הסתר כפתור איפוס
+    if (messageCount > 0) {
+      elements.resetButton.classList.add('show');
+    } else {
+      elements.resetButton.classList.remove('show');
+    }
+    
+    // הצג אזהרה אם הגענו למגבלה
+    if (isAtLimit(state)) {
+      elements.limitWarning.classList.add('show');
+      elements.inputField.disabled = true;
+      elements.sendButton.disabled = true;
+    } else {
+      elements.limitWarning.classList.remove('show');
+      elements.inputField.disabled = false;
+      elements.sendButton.disabled = false;
+    }
+  }
+
+  function resetChat(state, elements, config) {
+    if (confirm('האם אתה בטוח שברצונך להתחיל שיחה חדשה? ההיסטוריה תימחק.')) {
+      state.history = [];
+      state.messages = [];
+      const storageKey = 'chatHistory_' + config.secretKey;
+      sessionStorage.removeItem(storageKey);
+      
+      renderMessages(state, elements, config);
+      updateUI(state, elements);
+      
+      console.log('✅ Chat reset');
+    }
   }
 
   // ==================== Utility Functions ====================
@@ -414,7 +541,6 @@
     return div.innerHTML;
   }
 
-  // זיהוי שפה
   function detectLanguage(text) {
     if (!text || text.trim().length === 0) return 'en';
     
@@ -433,13 +559,7 @@
     return (totalChars > 0 && (hebrewChars / totalChars) > 0.3) ? 'he' : 'en';
   }
 
-  function createAvatar(role) {
-    const config = {
-      botName: window.CHAT_WIDGET_BOT_NAME || 'AI',
-      botAvatar: window.CHAT_WIDGET_BOT_AVATAR || null,
-      userAvatar: window.CHAT_WIDGET_USER_AVATAR || null
-    };
-
+  function createAvatar(role, config) {
     if (role === 'user') {
       if (config.userAvatar) {
         return `<img src="${escapeHtml(config.userAvatar)}" alt="User" />`;
@@ -467,8 +587,7 @@
     }
   }
 
-  // רינדור הודעות
-  function renderMessages(state, elements) {
+  function renderMessages(state, elements, config) {
     if (state.messages.length === 0) {
       elements.messagesContainer.innerHTML = `
         <div class="chat-widget-empty">
@@ -481,11 +600,9 @@
     }
 
     const messagesHTML = state.messages.map(msg => {
-      // זיהוי שפה
       const language = detectLanguage(msg.content);
       const textDirection = language === 'he' ? 'rtl' : 'ltr';
       
-      // ניקוי טקסט - הסרת שורות ריקות ורווחים מיותרים
       const cleanedContent = msg.content
         .split('\n')
         .map(line => line.trim())
@@ -495,7 +612,7 @@
       
       return `
         <div class="chat-message ${msg.role}">
-          <div class="chat-message-avatar">${createAvatar(msg.role)}</div>
+          <div class="chat-message-avatar">${createAvatar(msg.role, config)}</div>
           <div class="chat-message-content">
             <div class="chat-message-bubble ${textDirection}">${escapeHtml(cleanedContent)}</div>
           </div>
@@ -508,7 +625,7 @@
     if (state.isLoading) {
       elements.messagesContainer.innerHTML += `
         <div class="chat-message assistant">
-          <div class="chat-message-avatar">${createAvatar('assistant')}</div>
+          <div class="chat-message-avatar">${createAvatar('assistant', config)}</div>
           <div class="chat-message-content">
             <div class="chat-message-bubble rtl">
               <div class="typing-indicator">
@@ -525,26 +642,31 @@
     elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
   }
 
-  async function sendMessage(state, elements) {
+  async function sendMessage(state, elements, config) {
     const question = elements.inputField.value.trim();
     
-    if (!question || state.isLoading) return;
+    if (!question || state.isLoading || isAtLimit(state)) return;
 
-    const config = {
-      apiUrl: window.CHAT_WIDGET_API_URL || 'http://localhost:8080',
-      secretKey: window.CHAT_WIDGET_SECRET_KEY
-    };
-
+    // הוסף הודעת משתמש להצגה
     state.messages.push({
       role: 'user',
       content: question,
       timestamp: new Date().toISOString()
     });
 
+    // הוסף להיסטוריה
+    state.history.push({
+      role: 'user',
+      content: question
+    });
+
     elements.inputField.value = '';
     state.isLoading = true;
     elements.sendButton.disabled = true;
-    renderMessages(state, elements);
+    
+    renderMessages(state, elements, config);
+    saveHistoryToSession(state, config);
+    updateUI(state, elements);
 
     try {
       const response = await fetch(`${config.apiUrl}/api/query/ask`, {
@@ -555,17 +677,24 @@
         body: JSON.stringify({
           secretKey: config.secretKey,
           question: question,
-          sessionId: state.sessionId
+          history: state.history
         })
       });
 
       const data = await response.json();
 
       if (data.success && data.data.answer) {
+        // הוסף תשובה להצגה
         state.messages.push({
           role: 'assistant',
           content: data.data.answer,
           timestamp: new Date().toISOString()
+        });
+
+        // הוסף תשובה להיסטוריה
+        state.history.push({
+          role: 'assistant',
+          content: data.data.answer
         });
       } else {
         state.messages.push({
@@ -584,7 +713,10 @@
     } finally {
       state.isLoading = false;
       elements.sendButton.disabled = false;
-      renderMessages(state, elements);
+      
+      renderMessages(state, elements, config);
+      saveHistoryToSession(state, config);
+      updateUI(state, elements);
       elements.inputField.focus();
     }
   }
