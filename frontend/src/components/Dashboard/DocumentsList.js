@@ -91,24 +91,9 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
         }}>
           <div style={{ fontSize: '4rem', marginBottom: '20px' }}>📄</div>
           <h3 style={{ color: '#333', marginBottom: '10px' }}>אין מסמכים עדיין</h3>
-          <p style={{ color: '#666', marginBottom: '30px' }}>
-            העלה את המסמך הראשון שלך כדי להתחיל
+          <p style={{ color: '#666' }}>
+            העלה מסמכים כדי לבנות את מאגר הידע של הצ'אט שלך
           </p>
-          <button
-            onClick={onUploadNew}
-            style={{
-              padding: '12px 30px',
-              background: '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: '16px'
-            }}
-          >
-            העלה מסמך
-          </button>
         </div>
       )}
 

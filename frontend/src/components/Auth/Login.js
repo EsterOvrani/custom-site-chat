@@ -97,8 +97,8 @@ const Login = () => {
   return (
     <div className="login-page">
       <div className="login-container">
-        <div className="logo">📚 custom site chat</div>
-        <div className="subtitle">מערכת ניהול מסמכים חכמה</div>
+        <div className="logo">💬 Custom Site Chat</div>       
+        <div className="subtitle">מערכת לבניית צ'אט מותאם אישי</div>
 
         {error && (
           <div className="alert alert-error">{error}</div>

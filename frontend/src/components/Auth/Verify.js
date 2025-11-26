@@ -163,7 +163,7 @@ const Verify = () => {
   return (
     <div className="verify-page">
       <div className="verify-container">
-        <div className="logo">📚 custom site chat</div>
+        <div className="logo">💬 Custom Site Chat</div>      
         <div className="subtitle">אימות כתובת מייל</div>
 
         <div className="verify-status">

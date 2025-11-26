@@ -248,8 +248,8 @@ const Register = () => {
   return (
     <div className="register-page">
       <div className="register-container">
-        <div className="logo">📚 custom site chat</div>
-        <div className="subtitle">הצטרף למערכת ניהול המסמכים החכמה</div>
+        <div className="logo">💬 Custom Site Chat</div>       
+        <div className="subtitle">הירשם לבניית צ'אט מותאם אישית</div>
 
         {alert.message && (
           <div className={`alert alert-${alert.type}`}>{alert.message}</div>

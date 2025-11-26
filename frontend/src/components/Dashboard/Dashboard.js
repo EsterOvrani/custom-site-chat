@@ -109,7 +109,7 @@ const Dashboard = () => {
   const handleUploadComplete = () => {
     setShowUploadModal(false);
     loadDocuments();
-    showToast('✅ המסמך הועלה בהצלחה ומעובד כעת', 'success');
+    showToast('המסמך הועלה בהצלחה ומעובד כעת', 'success');
   };
 
   const handleDeleteDocument = async (documentId) => {
@@ -118,7 +118,7 @@ const Dashboard = () => {
     try {
       const response = await documentAPI.deleteDocument(documentId);
       if (response.data.success) {
-        showToast('✅ המסמך נמחק בהצלחה', 'success');
+        showToast('המסמך נמחק בהצלחה', 'success');
         loadDocuments();
       }
     } catch (error) {
@@ -132,7 +132,7 @@ const Dashboard = () => {
       const documentIds = newOrder.map(doc => doc.id);
       await documentAPI.reorderDocuments(documentIds);
       setDocuments(newOrder);
-      showToast('✅ סדר המסמכים עודכן', 'success');
+      showToast('סדר המסמכים עודכן', 'success');
     } catch (error) {
       console.error('Error reordering documents:', error);
       showToast('שגיאה בעדכון סדר המסמכים', 'error');
@@ -152,8 +152,7 @@ const Dashboard = () => {
     <div className="dashboard">
       {/* ==================== Header ==================== */}
       <header className="header">
-        <div className="logo">📚 Custom Site Chat</div>
-        <div className="user-info">
+        <div className="logo">💬 Custom Site Chat</div>        <div className="user-info">
           <span className="welcome-text">
             שלום, {currentUser?.fullName || currentUser?.username}
           </span>
