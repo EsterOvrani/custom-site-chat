@@ -1,7 +1,9 @@
 // frontend/src/components/Dashboard/DocumentsList.js
-import React from 'react';
+import React, { useState } from 'react';
+import { documentAPI } from '../../services/api';
 
 const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading }) => {
+  const [downloading, setDownloading] = useState({});
   
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';
@@ -37,6 +39,63 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
         {badge.label}
       </span>
     );
+  };
+
+  // ✅ פונקציה להורדת מסמך
+  const handleDownload = async (documentId, fileName) => {
+    try {
+      setDownloading(prev => ({ ...prev, [documentId]: true }));
+      
+      const response = await documentAPI.downloadDocument(documentId);
+      
+      // יצירת blob מהתוכן
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      
+      // יצירת קישור להורדה
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      
+      // ניקוי
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      alert('שגיאה בהורדת המסמך');
+    } finally {
+      setDownloading(prev => ({ ...prev, [documentId]: false }));
+    }
+  };
+
+  // ✅ פונקציה לפתיחת מסמך בטאב חדש
+  const handleView = async (documentId) => {
+    try {
+      const response = await documentAPI.getDownloadUrl(documentId);
+      
+      if (response.data.success && response.data.url) {
+        // פתיחה בטאב חדש עם presigned URL
+        window.open(response.data.url, '_blank');
+      } else {
+        // fallback - אם אין presigned URL, השתמש ב-endpoint ישיר
+        const viewUrl = `/api/documents/${documentId}/view`;
+        window.open(viewUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error viewing document:', error);
+      
+      // fallback - נסה endpoint ישיר
+      try {
+        const token = localStorage.getItem('token');
+        const viewUrl = `/api/documents/${documentId}/view`;
+        window.open(viewUrl + '?token=' + token, '_blank');
+      } catch (fallbackError) {
+        alert('שגיאה בפתיחת המסמך');
+      }
+    }
   };
 
   if (loading && documents.length === 0) {
@@ -113,7 +172,7 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
                 borderRadius: '12px',
                 padding: '20px',
                 transition: 'all 0.2s',
-                cursor: 'pointer'
+                cursor: 'default'
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
@@ -152,8 +211,98 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
                 )}
               </div>
 
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: '10px', paddingTop: '15px', borderTop: '1px solid #e1e8ed' }}>
+              {/* ✅ Actions - עם כפתורי הורדה וצפייה */}
+              <div style={{ 
+                display: 'flex', 
+                gap: '8px', 
+                paddingTop: '15px', 
+                borderTop: '1px solid #e1e8ed',
+                flexWrap: 'wrap'
+              }}>
+                {/* כפתור צפייה */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleView(doc.id);
+                  }}
+                  disabled={doc.processingStatus !== 'COMPLETED'}
+                  style={{
+                    flex: 1,
+                    minWidth: '80px',
+                    padding: '8px',
+                    background: doc.processingStatus === 'COMPLETED' ? '#e8f0fe' : '#f5f5f5',
+                    color: doc.processingStatus === 'COMPLETED' ? '#1976d2' : '#999',
+                    border: '1px solid',
+                    borderColor: doc.processingStatus === 'COMPLETED' ? '#bbdefb' : '#ddd',
+                    borderRadius: '6px',
+                    cursor: doc.processingStatus === 'COMPLETED' ? 'pointer' : 'not-allowed',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (doc.processingStatus === 'COMPLETED') {
+                      e.currentTarget.style.background = '#1976d2';
+                      e.currentTarget.style.color = 'white';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (doc.processingStatus === 'COMPLETED') {
+                      e.currentTarget.style.background = '#e8f0fe';
+                      e.currentTarget.style.color = '#1976d2';
+                    }
+                  }}
+                >
+                  👁️ צפה
+                </button>
+
+                {/* כפתור הורדה */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownload(doc.id, doc.originalFileName);
+                  }}
+                  disabled={downloading[doc.id] || doc.processingStatus !== 'COMPLETED'}
+                  style={{
+                    flex: 1,
+                    minWidth: '80px',
+                    padding: '8px',
+                    background: doc.processingStatus === 'COMPLETED' ? '#e8f5e9' : '#f5f5f5',
+                    color: doc.processingStatus === 'COMPLETED' ? '#2e7d32' : '#999',
+                    border: '1px solid',
+                    borderColor: doc.processingStatus === 'COMPLETED' ? '#c8e6c9' : '#ddd',
+                    borderRadius: '6px',
+                    cursor: (doc.processingStatus === 'COMPLETED' && !downloading[doc.id]) ? 'pointer' : 'not-allowed',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    transition: 'all 0.2s',
+                    opacity: downloading[doc.id] ? 0.6 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (doc.processingStatus === 'COMPLETED' && !downloading[doc.id]) {
+                      e.currentTarget.style.background = '#2e7d32';
+                      e.currentTarget.style.color = 'white';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (doc.processingStatus === 'COMPLETED' && !downloading[doc.id]) {
+                      e.currentTarget.style.background = '#e8f5e9';
+                      e.currentTarget.style.color = '#2e7d32';
+                    }
+                  }}
+                >
+                  {downloading[doc.id] ? '⏬ מוריד...' : '⬇️ הורד'}
+                </button>
+
+                {/* כפתור מחיקה */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -161,6 +310,7 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
                   }}
                   style={{
                     flex: 1,
+                    minWidth: '80px',
                     padding: '8px',
                     background: '#fee',
                     color: '#c33',
@@ -168,7 +318,22 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
                     borderRadius: '6px',
                     cursor: 'pointer',
                     fontSize: '14px',
-                    fontWeight: 500
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#dc3545';
+                    e.currentTarget.style.color = 'white';
+                    e.currentTarget.style.borderColor = '#dc3545';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#fee';
+                    e.currentTarget.style.color = '#c33';
+                    e.currentTarget.style.borderColor = '#fcc';
                   }}
                 >
                   🗑️ מחק
