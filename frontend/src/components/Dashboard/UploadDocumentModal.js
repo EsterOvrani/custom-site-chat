@@ -66,29 +66,24 @@ const UploadDocumentModal = ({ onClose, onComplete }) => {
     }
   };
 
-  const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget && !uploading) {
-      onClose();
-    }
-  };
 
-  return (
-    <div className="modal active" onClick={handleBackdropClick}>
-      <div className="modal-content" style={{ maxWidth: '500px' }} onClick={(e) => e.stopPropagation()}>
-        <h2 className="modal-header">📤 העלאת מסמך חדש</h2>
+return (
+  <div className="modal active">
+    <div className="modal-content" style={{ maxWidth: '500px' }}>
+      <h2 className="modal-header">📤 העלאת מסמך חדש</h2>
 
-        {error && (
-          <div style={{
-            padding: '12px',
-            background: '#fee',
-            color: '#c33',
-            border: '1px solid #fcc',
-            borderRadius: '8px',
-            marginBottom: '20px'
-          }}>
-            {error}
-          </div>
-        )}
+      {error && (
+        <div style={{
+          padding: '12px',
+          background: '#fee',
+          color: '#c33',
+          border: '1px solid #fcc',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
+          {error}
+        </div>
+      )}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
