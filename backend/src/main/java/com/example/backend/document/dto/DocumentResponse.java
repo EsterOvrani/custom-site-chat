@@ -1,6 +1,7 @@
 package com.example.backend.document.dto;
 
 import com.example.backend.document.model.Document.ProcessingStatus;
+import com.example.backend.document.model.Document.ProcessingStage;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,18 +17,20 @@ import java.time.LocalDateTime;
 public class DocumentResponse {
 
     private Long id;
-
     private Long userId;
     private String originalFileName;
     private String fileType;
     private Long fileSize;
     private String fileSizeFormatted;
-    
-    // ✅ נוסף!
     private String filePath;
     
     private ProcessingStatus processingStatus;
     private Integer processingProgress;
+    
+    // ⭐ חדש - שלב עיבוד נוכחי
+    private ProcessingStage processingStage;
+    private String processingStageDescription;
+    
     private Integer characterCount;
     private Integer chunkCount;
 
@@ -52,6 +55,8 @@ public class DocumentResponse {
         private Integer embeddingsCount;
         private Double estimatedCost;
     }
+
+    // ==================== Helper Methods ====================
 
     public boolean isProcessed() {
         return processingStatus == ProcessingStatus.COMPLETED;
@@ -83,41 +88,33 @@ public class DocumentResponse {
         }
     }
 
-    public String getStatusDescription() {
-        return switch (processingStatus) {
-            case PENDING -> "ממתין לעיבוד";
-            case PROCESSING -> String.format("מעבד... (%d%%)", processingProgress);
+    /**
+     * ⭐ חדש - תיאור שלב עיבוד בעברית
+     */
+    public String getProcessingStageDescription() {
+        if (processingStage == null) {
+            return "";
+        }
+        
+        return switch (processingStage) {
+            case UPLOADING -> "מעלה לשרת...";
+            case EXTRACTING_TEXT -> "מחלץ טקסט מהמסמך...";
+            case CREATING_CHUNKS -> "מחלק לחלקים...";
+            case CREATING_EMBEDDINGS -> "יוצר embeddings...";
+            case STORING -> "שומר במאגר...";
             case COMPLETED -> "הושלם בהצלחה";
-            case FAILED -> "נכשל: " + (errorMessage != null ? errorMessage : "שגיאה לא ידועה");
+            case FAILED -> "נכשל";
         };
     }
 
-    public boolean isLargeFile() {
-        return fileSize != null && fileSize > 10 * 1024 * 1024;
-    }
-
-    public String getProcessingDuration() {
-        if (processedAt == null || createdAt == null) {
-            return "לא ידוע";
-        }
-
-        long seconds = java.time.Duration.between(createdAt, processedAt).getSeconds();
-
-        if (seconds < 60) {
-            return seconds + " שניות";
-        } else if (seconds < 3600) {
-            return (seconds / 60) + " דקות";
-        } else {
-            return (seconds / 3600) + " שעות";
-        }
-    }
-
-    public Double getEstimatedEmbeddingCost() {
-        if (characterCount == null) {
-            return 0.0;
-        }
-
-        int estimatedTokens = characterCount / 4;
-        return estimatedTokens * 0.00000013;
+    public String getStatusDescription() {
+        return switch (processingStatus) {
+            case PENDING -> "ממתין לעיבוד";
+            case PROCESSING -> String.format("%s (%d%%)", 
+                getProcessingStageDescription(), 
+                processingProgress);
+            case COMPLETED -> "הושלם בהצלחה";
+            case FAILED -> "נכשל: " + (errorMessage != null ? errorMessage : "שגיאה לא ידועה");
+        };
     }
 }

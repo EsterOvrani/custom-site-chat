@@ -1,5 +1,5 @@
 // frontend/src/components/Dashboard/Dashboard.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI, collectionAPI, documentAPI } from '../../services/api';
 import DocumentsList from './DocumentsList';
@@ -8,16 +8,16 @@ import UploadDocumentModal from './UploadDocumentModal';
 import './Dashboard.css';
 
 const Dashboard = () => {
-  // ==================== State ====================
   const [currentUser, setCurrentUser] = useState(null);
   const [collection, setCollection] = useState(null);
   const [documents, setDocuments] = useState([]);
-  const [activeTab, setActiveTab] = useState('documents'); // 'documents' or 'settings'
+  const [activeTab, setActiveTab] = useState('documents');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const pollingIntervalRef = useRef(null);
 
   // ==================== Effects ====================
   useEffect(() => {
@@ -30,6 +30,37 @@ const Dashboard = () => {
       loadDocuments();
     }
   }, [currentUser]);
+
+  // ⭐ Polling - בדיקה אוטומטית של מסמכים בעיבוד
+  useEffect(() => {
+    const hasProcessingDocs = documents.some(doc => 
+      doc.processingStatus === 'PROCESSING' || doc.processingStatus === 'PENDING'
+    );
+
+    if (hasProcessingDocs) {
+      console.log('🔄 Starting polling - documents in progress detected');
+      
+      // בדיקה כל 2 שניות
+      pollingIntervalRef.current = setInterval(() => {
+        console.log('🔄 Polling for updates...');
+        loadDocuments(true); // true = silent refresh (ללא spinner)
+      }, 2000);
+    } else {
+      // אין מסמכים בעיבוד - עצור polling
+      if (pollingIntervalRef.current) {
+        console.log('⏹️ Stopping polling - no documents in progress');
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    }
+
+    // Cleanup
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, [documents]);
 
   // ==================== Auth Functions ====================
   const checkAuth = async () => {
@@ -90,19 +121,37 @@ const Dashboard = () => {
   };
 
   // ==================== Document Functions ====================
-  const loadDocuments = async () => {
+  
+  /**
+   * טעינת מסמכים
+   * @param {boolean} silent - אם true, לא להציג spinner
+   */
+  const loadDocuments = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
+      
       const response = await documentAPI.getMyDocuments();
       
       if (response.data.success) {
-        setDocuments(response.data.data || []);
+        const newDocs = response.data.data || [];
+        
+        // עדכן רק אם יש שינוי (למנוע re-renders מיותרים)
+        if (JSON.stringify(newDocs) !== JSON.stringify(documents)) {
+          setDocuments(newDocs);
+          console.log('📄 Documents updated:', newDocs.length);
+        }
       }
     } catch (error) {
       console.error('Error loading documents:', error);
-      showToast('שגיאה בטעינת מסמכים', 'error');
+      if (!silent) {
+        showToast('שגיאה בטעינת מסמכים', 'error');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -147,12 +196,31 @@ const Dashboard = () => {
     }, 3000);
   };
 
+  // ספירת מסמכים בעיבוד
+  const processingCount = documents.filter(doc => 
+    doc.processingStatus === 'PROCESSING' || doc.processingStatus === 'PENDING'
+  ).length;
+
   // ==================== Render ====================
   return (
     <div className="dashboard">
-      {/* ==================== Header ==================== */}
+      {/* Header */}
       <header className="header">
-        <div className="logo">💬 Custom Site Chat</div>        <div className="user-info">
+        <div className="logo">💬 Custom Site Chat</div>
+        <div className="user-info">
+          {processingCount > 0 && (
+            <span style={{
+              padding: '6px 12px',
+              background: '#ffc107',
+              color: 'white',
+              borderRadius: '12px',
+              fontSize: '13px',
+              fontWeight: 600,
+              marginLeft: '15px'
+            }}>
+              ⏳ {processingCount} מעבד
+            </span>
+          )}
           <span className="welcome-text">
             שלום, {currentUser?.fullName || currentUser?.username}
           </span>
@@ -162,7 +230,7 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* ==================== Main Content ==================== */}
+      {/* Main Content */}
       <div className="main-content">
         {/* Tabs */}
         <div className="tabs">
@@ -202,7 +270,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ==================== Modals ==================== */}
+      {/* Modals */}
       {showUploadModal && (
         <UploadDocumentModal
           onClose={() => setShowUploadModal(false)}
@@ -217,8 +285,8 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Global Loading Spinner */}
-      {loading && (
+      {/* Global Loading Spinner - רק אם loading=true ואין polling */}
+      {loading && !processingCount && (
         <div style={{
           position: 'fixed',
           top: '50%',

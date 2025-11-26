@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "documents")
-@Data  // ⬅️ זה חשוב!
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -46,6 +46,11 @@ public class Document {
 
     @Column(name = "processing_progress")
     private Integer processingProgress = 0;
+
+    // ⭐ חדש - שלב עיבוד נוכחי
+    @Column(name = "processing_stage")
+    @Enumerated(EnumType.STRING)
+    private ProcessingStage processingStage = ProcessingStage.UPLOADING;
 
     @Column(name = "character_count")
     private Integer characterCount;
@@ -90,7 +95,6 @@ public class Document {
         this.updatedAt = LocalDateTime.now();
     }
 
-
     // ==================== Helper Methods ====================
 
     public boolean isProcessed() {
@@ -113,7 +117,17 @@ public class Document {
     public void startProcessing() {
         this.processingStatus = ProcessingStatus.PROCESSING;
         this.processingProgress = 0;
+        this.processingStage = ProcessingStage.UPLOADING;
         this.errorMessage = null;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * עדכון שלב עיבוד
+     */
+    public void updateStage(ProcessingStage stage, int progress) {
+        this.processingStage = stage;
+        this.processingProgress = Math.min(100, Math.max(0, progress));
         this.updatedAt = LocalDateTime.now();
     }
 
@@ -122,6 +136,7 @@ public class Document {
      */
     public void markAsCompleted(int characterCount, int chunkCount) {
         this.processingStatus = ProcessingStatus.COMPLETED;
+        this.processingStage = ProcessingStage.COMPLETED;
         this.processingProgress = 100;
         this.characterCount = characterCount;
         this.chunkCount = chunkCount;
@@ -135,6 +150,7 @@ public class Document {
      */
     public void markAsFailed(String errorMessage) {
         this.processingStatus = ProcessingStatus.FAILED;
+        this.processingStage = ProcessingStage.FAILED;
         this.errorMessage = errorMessage;
         this.processedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
@@ -148,12 +164,23 @@ public class Document {
         this.updatedAt = LocalDateTime.now();
     }
 
-    // ==================== Enum ====================
+    // ==================== Enums ====================
 
     public enum ProcessingStatus {
         PENDING,
         PROCESSING,
         COMPLETED,
         FAILED
+    }
+
+    // ⭐ חדש - שלבי עיבוד מפורטים
+    public enum ProcessingStage {
+        UPLOADING,          // מעלה לשרת
+        EXTRACTING_TEXT,    // מחלץ טקסט מה-PDF
+        CREATING_CHUNKS,    // מחלק לחלקים
+        CREATING_EMBEDDINGS,// יוצר embeddings
+        STORING,            // שומר ב-Qdrant
+        COMPLETED,          // הושלם
+        FAILED              // נכשל
     }
 }
