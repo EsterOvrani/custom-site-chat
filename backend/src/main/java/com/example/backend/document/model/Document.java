@@ -42,14 +42,17 @@ public class Document {
 
     @Column(name = "processing_status", nullable = false)
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private ProcessingStatus processingStatus = ProcessingStatus.PENDING;
 
     @Column(name = "processing_progress")
+    @Builder.Default
     private Integer processingProgress = 0;
 
     // ⭐ חדש - שלב עיבוד נוכחי
     @Column(name = "processing_stage")
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private ProcessingStage processingStage = ProcessingStage.UPLOADING;
 
     @Column(name = "character_count")
@@ -59,9 +62,11 @@ public class Document {
     private Integer chunkCount;
 
     @Column(name = "display_order")
+    @Builder.Default
     private Integer displayOrder = 0;
 
     @Column(name = "active")
+    @Builder.Default
     private Boolean active = true;
 
     @Column(name = "error_message", columnDefinition = "TEXT")

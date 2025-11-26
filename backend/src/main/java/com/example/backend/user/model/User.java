@@ -15,7 +15,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "users")
-@Data  // ⬅️ זה חשוב!
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -45,6 +45,7 @@ public class User implements UserDetails {
 
     @Column(name = "auth_provider")
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private AuthProvider authProvider = AuthProvider.LOCAL;
 
     @Column(name = "google_id")

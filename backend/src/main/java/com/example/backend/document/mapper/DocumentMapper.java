@@ -22,6 +22,7 @@ public interface DocumentMapper {
     @Mapping(source = "id", target = "id")
     @Mapping(source = "user.id", target = "userId")
     @Mapping(target = "fileSizeFormatted", expression = "java(formatFileSize(document.getFileSize()))")
+    @Mapping(target = "processingStageDescription", expression = "java(getStageDescription(document))")
     @Mapping(target = "statistics", ignore = true)
     DocumentResponse toResponse(Document document);
 
@@ -49,6 +50,25 @@ public interface DocumentMapper {
         } else {
             return String.format("%.2f GB", fileSize / (1024.0 * 1024.0 * 1024.0));
         }
+    }
+
+    /**
+     * תיאור שלב עיבוד
+     */
+    default String getStageDescription(Document document) {
+        if (document.getProcessingStage() == null) {
+            return "";
+        }
+        
+        return switch (document.getProcessingStage()) {
+            case UPLOADING -> "מעלה לשרת...";
+            case EXTRACTING_TEXT -> "מחלץ טקסט מהמסמך...";
+            case CREATING_CHUNKS -> "מחלק לחלקים...";
+            case CREATING_EMBEDDINGS -> "יוצר embeddings...";
+            case STORING -> "שומר במאגר...";
+            case COMPLETED -> "הושלם בהצלחה";
+            case FAILED -> "נכשל";
+        };
     }
 
     /**

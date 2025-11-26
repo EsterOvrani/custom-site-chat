@@ -34,18 +34,20 @@ public class DocumentController {
     private final DocumentService documentService;
     private final S3Service s3Service;
 
-    // A. העלאת מסמך חדש
+    // A. העלאת מסמך חדש - מחזיר מיד עם פרטי המסמך
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> uploadDocument(
             @RequestParam("file") MultipartFile file) {
         
         User currentUser = getCurrentUser();
         
-        documentService.processDocument(file, currentUser);
+        // ⭐ הפונקציה הזו תיצור את המסמך ב-DB ותחזיר אותו מיד
+        DocumentResponse document = documentService.processDocument(file, currentUser);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", "המסמך הועלה ומעובד ברקע");
+        response.put("document", document); // ⭐ מחזיר את המסמך מיד!
 
         return ResponseEntity.ok(response);
     }

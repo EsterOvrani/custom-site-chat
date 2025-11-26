@@ -49,7 +49,7 @@ public class DocumentService {
 
     // ==================== Main Processing Method ====================
 
-    public void processDocument(MultipartFile file, User user) {
+    public DocumentResponse processDocument(MultipartFile file, User user) {
         log.info("🔵 processDocument() CALLED - preparing file for async processing");
         
         try {
@@ -60,7 +60,37 @@ public class DocumentService {
             
             log.info("✅ File read to memory: {} bytes", fileBytes.length);
             
-            processDocumentAsync(fileBytes, originalFilename, contentType, fileSize, user);
+            // ⭐ יצירת filePath מיד
+            String filePath = generateFilePath(user, originalFilename);
+            
+            // ⭐ יצירת Document עם filePath תקין
+            Document document = createDocumentEntity(originalFilename, fileSize, user, filePath, fileBytes);
+            
+            Integer maxOrder = documentRepository.getMaxDisplayOrderByUser(user);
+            document.setDisplayOrder(maxOrder != null ? maxOrder + 1 : 0);
+            document.setProcessingStage(ProcessingStage.UPLOADING);
+            document.setProcessingProgress(5);
+            
+            // ⭐ שמירה ב-DB - מיד!
+            document = documentRepository.save(document);
+            log.info("✅ Document entity created with ID: {} - RETURNING IMMEDIATELY", document.getId());
+            
+            // ⭐ המר ל-DTO כדי להחזיר לפרונטאנד
+            DocumentResponse response = documentMapper.toResponse(document);
+            
+            // ⭐ קריאה לפונקציה אסינכרונית - זה ימשיך ברקע
+            processDocumentAsync(
+                document.getId(), 
+                fileBytes, 
+                originalFilename, 
+                contentType, 
+                fileSize, 
+                filePath, 
+                user
+            );
+            
+            // ⭐ החזר את המסמך מיד!
+            return response;
             
         } catch (IOException e) {
             log.error("❌ Failed to read file to memory", e);
@@ -70,37 +100,27 @@ public class DocumentService {
 
     @Async
     public void processDocumentAsync(
+            Long documentId,
             byte[] fileBytes,
             String originalFilename, 
             String contentType,
             long fileSize,
+            String filePath,
             User user) {
         
-        log.info("🔵 processDocumentAsync() STARTED");
-
-        Document document = null;
-        String filePath = null;
+        log.info("🔵 processDocumentAsync() STARTED for document ID: {}", documentId);
 
         try {
-            // ==================== שלב 1: יצירת רשומה ב-DB ====================
-            log.info("📍 Stage 1: Creating document record");
-            document = createDocumentEntity(originalFilename, fileSize, user, null, fileBytes);
+            // ==================== שלב 1: טעינת Document מה-DB ====================
+            Document document = documentRepository.findById(documentId)
+                    .orElseThrow(() -> new ResourceNotFoundException("מסמך", documentId));
             
-            Integer maxOrder = documentRepository.getMaxDisplayOrderByUser(user);
-            document.setDisplayOrder(maxOrder != null ? maxOrder + 1 : 0);
-            document.setProcessingStage(ProcessingStage.UPLOADING);
-            document.setProcessingProgress(5);
-            
-            document = documentRepository.save(document);
-            log.info("✅ Document entity created with ID: {}", document.getId());
+            log.info("📍 Stage 1: Processing document {}", document.getId());
 
             // ==================== שלב 2: העלאה ל-S3 ====================
             log.info("📍 Stage 2: Uploading to S3");
             document.updateStage(ProcessingStage.UPLOADING, 10);
             documentRepository.save(document);
-            
-            filePath = generateFilePath(user, originalFilename);
-            document.setFilePath(filePath);
             
             s3Service.uploadFile(
                 new ByteArrayInputStream(fileBytes),
@@ -218,13 +238,17 @@ public class DocumentService {
         } catch (Exception e) {
             log.error("🔴 EXCEPTION in processDocumentAsync()!", e);
             
-            if (document != null) {
-                document.markAsFailed(e.getMessage());
-                documentRepository.save(document);
+            try {
+                Document document = documentRepository.findById(documentId).orElse(null);
+                if (document != null) {
+                    document.markAsFailed(e.getMessage());
+                    documentRepository.save(document);
+                }
+            } catch (Exception saveError) {
+                log.error("Failed to save error state", saveError);
             }
             
             cleanupFile(filePath);
-            throw FileProcessingException.uploadFailed(originalFilename);
         }
     }
 
@@ -330,7 +354,6 @@ public class DocumentService {
     }
 
     // ==================== Delete & Other Methods ====================
-    // ... (השאר ללא שינוי)
     
     private void deleteDocumentEmbeddings(Document document) {
         try {

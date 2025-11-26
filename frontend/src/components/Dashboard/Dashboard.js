@@ -155,10 +155,37 @@ const Dashboard = () => {
     }
   };
 
-  const handleUploadComplete = () => {
-    setShowUploadModal(false);
-    loadDocuments();
-    showToast('המסמך הועלה בהצלחה ומעובד כעת', 'success');
+  const handleUploadComplete = (newDocument, placeholderId) => {
+    console.log('📤 Upload event:', { newDocument, placeholderId });
+    
+    if (placeholderId) {
+      // ⭐ זו קריאה שנייה - צריך להחליף או להסיר את ה-placeholder
+      if (newDocument) {
+        // הצלחה - החלף placeholder עם מסמך אמיתי
+        setDocuments(prevDocs => 
+          prevDocs.map(doc => 
+            doc.id === placeholderId ? newDocument : doc
+          )
+        );
+        console.log('✅ Replaced placeholder with real document');
+      } else {
+        // שגיאה - הסר את ה-placeholder
+        setDocuments(prevDocs => 
+          prevDocs.filter(doc => doc.id !== placeholderId)
+        );
+        showToast('שגיאה בהעלאת המסמך', 'error');
+        console.error('❌ Upload failed, removed placeholder');
+      }
+    } else {
+      // ⭐ זו קריאה ראשונה - הוסף placeholder
+      setShowUploadModal(false);
+      
+      if (newDocument) {
+        setDocuments(prevDocs => [newDocument, ...prevDocs]);
+        showToast('מעלה מסמך...', 'success');
+        console.log('✅ Added placeholder document');
+      }
+    }
   };
 
   const handleDeleteDocument = async (documentId) => {
@@ -216,7 +243,8 @@ const Dashboard = () => {
               borderRadius: '12px',
               fontSize: '13px',
               fontWeight: 600,
-              marginLeft: '15px'
+              marginLeft: '15px',
+              animation: 'pulse 2s infinite'
             }}>
               ⏳ {processingCount} מעבד
             </span>
@@ -302,6 +330,20 @@ const Dashboard = () => {
           <p style={{ marginTop: '15px', textAlign: 'center' }}>טוען...</p>
         </div>
       )}
+
+      {/* ⭐ Add CSS animation for pulse */}
+      <style>
+        {`
+          @keyframes pulse {
+            0%, 100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0.7;
+            }
+          }
+        `}
+      </style>
     </div>
   );
 };
