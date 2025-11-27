@@ -1,110 +1,186 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
+
 const UploadDocumentModal = ({ onClose, onComplete }) => {
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]); // ⭐ שינוי: array של קבצים
   const [error, setError] = useState('');
-
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    
-    if (!file) return;
-
-    // בדיקת סוג קובץ
-    if (file.type !== 'application/pdf') {
-      setError('ניתן להעלות רק קבצי PDF');
-      return;
-    }
-
-    // בדיקת גודל (50MB)
-    if (file.size > 50 * 1024 * 1024) {
-      setError('גודל הקובץ חורג מ-50MB');
-      return;
-    }
-
-    setSelectedFile(file);
-    setError('');
-  };
+  const [uploading, setUploading] = useState(false);
 
   const formatFileSize = (bytes) => {
-    if (!bytes) return '0 B';
     if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+    else return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  };
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files); // ⭐ המרה ל-array
+    
+    // ⭐ ולידציה לכל קובץ
+    const validFiles = [];
+    let hasError = false;
+
+    for (const file of files) {
+      // בדיקת סוג קובץ
+      if (file.type !== 'application/pdf') {
+        setError(`הקובץ "${file.name}" אינו PDF. ניתן להעלות רק קבצי PDF.`);
+        hasError = true;
+        break;
+      }
+
+      // בדיקת גודל (50MB לכל קובץ)
+      const maxSize = 50 * 1024 * 1024;
+      if (file.size > maxSize) {
+        setError(`הקובץ "${file.name}" גדול מדי. גודל מקסימלי: 50MB`);
+        hasError = true;
+        break;
+      }
+
+      validFiles.push(file);
+    }
+
+    if (!hasError) {
+      setSelectedFiles(validFiles);
+      setError('');
+    } else {
+      setSelectedFiles([]);
+      e.target.value = ''; // איפוס input
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!selectedFile) {
-      setError('נא לבחור קובץ');
+    if (selectedFiles.length === 0) {
+      setError('נא לבחור לפחות קובץ אחד');
       return;
     }
 
-    // ⭐ צור placeholder מיד
-    const placeholderId = `temp-${Date.now()}`;
-    const placeholder = {
-      id: placeholderId,
-      originalFileName: selectedFile.name,
-      fileSize: selectedFile.size,
-      fileSizeFormatted: formatFileSize(selectedFile.size),
-      processingStatus: 'PENDING',
-      processingProgress: 5,
-      processingStage: 'UPLOADING',
-      processingStageDescription: 'מעלה לשרת...',
-      createdAt: new Date().toISOString(),
-      active: true,
-      isPlaceholder: true
-    };
+    setUploading(true);
+    setError('');
 
-    // ⭐ סגור את המודל מיד
-    onClose();
+    // ⭐ לולאה על כל הקבצים
+    const uploadPromises = selectedFiles.map(async (file) => {
+      // יצירת placeholder לכל קובץ
+      const placeholderId = `temp-${Date.now()}-${Math.random()}`;
+      const placeholder = {
+        id: placeholderId,
+        originalFileName: file.name,
+        fileSize: file.size,
+        fileSizeFormatted: formatFileSize(file.size),
+        processingStatus: 'PENDING',
+        processingProgress: 5,
+        processingStage: 'UPLOADING',
+        processingStageDescription: 'מעלה לשרת...',
+        createdAt: new Date().toISOString(),
+        active: true,
+        isPlaceholder: true
+      };
 
-    // ⭐ הוסף placeholder לרשימה
-    if (onComplete) {
-      onComplete(placeholder);
-    }
+      // ⭐ הוסף placeholder מיד
+      if (onComplete) {
+        onComplete(placeholder);
+      }
 
-    // ⭐ שלח את הקובץ ברקע
-    try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
+      // העלאה בפועל
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
 
-      const token = localStorage.getItem('token');
-      
-      const response = await axios.post(
-        '/api/documents/upload', 
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            'Authorization': `Bearer ${token}`
+        const token = localStorage.getItem('token');
+        
+        const response = await axios.post(
+          '/api/documents/upload', 
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              'Authorization': `Bearer ${token}`
+            }
           }
-        }
-      );
+        );
 
-      if (response.data.success && response.data.document) {
-        console.log('✅ Upload successful, replacing placeholder');
-        
-        // ⭐ החלף את ה-placeholder עם המסמך האמיתי
-        if (onComplete) {
-          onComplete(response.data.document, placeholderId);
+        console.log(`📥 [${file.name}] Server response:`, response.data);
+
+        if (response.data.success && response.data.document) {
+          const serverDoc = response.data.document;
+          
+          console.log(`✅ [${file.name}] Upload successful, replacing placeholder`);
+          
+          // ⭐ החלף placeholder במסמך אמיתי
+          if (onComplete) {
+            onComplete(serverDoc, placeholderId);
+          }
+
+          return { success: true, fileName: file.name };
+        } else {
+          console.error(`❌ [${file.name}] Upload failed - no document in response`);
+          
+          // ⭐ הסר placeholder
+          if (onComplete) {
+            onComplete(null, placeholderId);
+          }
+
+          return { success: false, fileName: file.name, error: 'שגיאה לא ידועה' };
         }
-      } else {
-        console.error('❌ Upload failed, removing placeholder');
-        
-        // ⭐ הסר את ה-placeholder
+
+      } catch (err) {
+        console.error(`❌ [${file.name}] Upload error:`, err);
+
+        // ⭐ הסר placeholder
         if (onComplete) {
           onComplete(null, placeholderId);
         }
+
+        return { 
+          success: false, 
+          fileName: file.name, 
+          error: err.response?.data?.message || err.message 
+        };
       }
-    } catch (err) {
-      console.error('❌ Upload error:', err);
+    });
+
+    // ⭐ המתן לסיום כל ההעלאות
+    try {
+      const results = await Promise.all(uploadPromises);
       
-      // ⭐ הסר את ה-placeholder
-      if (onComplete) {
-        onComplete(null, placeholderId);
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      console.log(`📊 Upload summary: ${successCount} succeeded, ${failCount} failed`);
+
+      if (failCount > 0) {
+        const failedFiles = results
+          .filter(r => !r.success)
+          .map(r => r.fileName)
+          .join(', ');
+        
+        setError(`נכשל העלאת הקבצים: ${failedFiles}`);
       }
+
+      // ⭐ סגור את המודל רק אחרי שהכל נשלח
+      if (successCount > 0) {
+        setTimeout(() => {
+          onClose();
+        }, 500);
+      }
+
+    } catch (err) {
+      console.error('❌ Upload process error:', err);
+      setError('שגיאה כללית בתהליך ההעלאה');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveFile = (index) => {
+    const newFiles = selectedFiles.filter((_, i) => i !== index);
+    setSelectedFiles(newFiles);
+    
+    // אם לא נשארו קבצים, אפס את ה-input
+    if (newFiles.length === 0) {
+      const fileInput = document.getElementById('file-input');
+      if (fileInput) fileInput.value = '';
     }
   };
 
@@ -112,118 +188,93 @@ const UploadDocumentModal = ({ onClose, onComplete }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>📄 העלאת מסמך חדש</h2>
-          <button className="modal-close" onClick={onClose}>
-            ×
-          </button>
+          <h2>📄 העלאת מסמכים</h2>
+          <button className="close-button" onClick={onClose}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="modal-body">
-            <div className="file-upload-container">
-              <input
-                type="file"
-                id="file-input"
-                accept=".pdf"
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
-              />
-              
-              <label
-                htmlFor="file-input"
-                className="file-upload-label"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '40px',
-                  border: '2px dashed #007bff',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  backgroundColor: selectedFile ? '#f0f8ff' : '#fafafa',
-                  transition: 'all 0.3s ease'
-                }}
-              >
-                {selectedFile ? (
-                  <>
-                    <div style={{ fontSize: '48px', marginBottom: '10px' }}>
-                      📄
-                    </div>
-                    <div style={{ 
-                      fontSize: '16px', 
-                      fontWeight: 600,
-                      marginBottom: '5px',
-                      color: '#333'
-                    }}>
-                      {selectedFile.name}
-                    </div>
-                    <div style={{ fontSize: '14px', color: '#666' }}>
-                      {formatFileSize(selectedFile.size)}
-                    </div>
-                    <div style={{ 
-                      marginTop: '15px',
-                      fontSize: '13px',
-                      color: '#007bff'
-                    }}>
-                      לחץ לבחירת קובץ אחר
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ fontSize: '48px', marginBottom: '10px' }}>
-                      📁
-                    </div>
-                    <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '5px' }}>
-                      לחץ לבחירת קובץ
-                    </div>
-                    <div style={{ fontSize: '14px', color: '#666' }}>
-                      או גרור קובץ לכאן
-                    </div>
-                  </>
-                )}
-              </label>
-
-              {error && (
-                <div className="error-message" style={{
-                  marginTop: '15px',
-                  padding: '10px',
-                  backgroundColor: '#fee',
-                  color: '#c33',
-                  borderRadius: '5px',
-                  fontSize: '14px'
-                }}>
-                  ⚠️ {error}
-                </div>
+          <div className="file-input-wrapper">
+            <label htmlFor="file-input" className="file-input-label">
+              {selectedFiles.length === 0 ? (
+                <>
+                  <span className="upload-icon">📁</span>
+                  <span>בחר קובץ אחד או יותר (PDF)</span>
+                  <span className="file-input-hint">גודל מקסימלי: 50MB לכל קובץ</span>
+                </>
+              ) : (
+                <>
+                  <span className="upload-icon">✅</span>
+                  <span>{selectedFiles.length} קבצים נבחרו</span>
+                  <span className="file-input-hint">לחץ לבחירת קבצים נוספים</span>
+                </>
               )}
-            </div>
-
-            <div style={{ 
-              marginTop: '20px', 
-              padding: '12px', 
-              background: '#f8f9fa', 
-              borderRadius: '6px',
-              fontSize: '13px',
-              color: '#666'
-            }}>
-              * ניתן להעלות קבצי PDF בלבד (מקסימום 50MB)
-            </div>
+            </label>
+            <input
+              id="file-input"
+              type="file"
+              accept="application/pdf"
+              onChange={handleFileSelect}
+              multiple  // ⭐ זה מאפשר בחירה מרובה!
+              disabled={uploading}
+            />
           </div>
 
-          <div className="modal-actions" style={{ marginTop: '25px' }}>
+          {/* ⭐ רשימת הקבצים שנבחרו */}
+          {selectedFiles.length > 0 && (
+            <div className="selected-files-list">
+              <h3>קבצים נבחרים:</h3>
+              {selectedFiles.map((file, index) => (
+                <div key={index} className="selected-file-item">
+                  <div className="file-info">
+                    <span className="file-name">📄 {file.name}</span>
+                    <span className="file-size">{formatFileSize(file.size)}</span>
+                  </div>
+                  {!uploading && (
+                    <button
+                      type="button"
+                      className="remove-file-button"
+                      onClick={() => handleRemoveFile(index)}
+                      title="הסר קובץ"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              <div className="total-size">
+                סה"כ: {formatFileSize(selectedFiles.reduce((sum, f) => sum + f.size, 0))}
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="error-message">
+              ⚠️ {error}
+            </div>
+          )}
+
+          <div className="modal-actions">
             <button
               type="button"
-              className="btn-cancel"
               onClick={onClose}
+              className="cancel-button"
+              disabled={uploading}
             >
               ביטול
             </button>
             <button
               type="submit"
-              className="btn-submit"
-              disabled={!selectedFile}
+              className="upload-button"
+              disabled={uploading || selectedFiles.length === 0}
             >
-              ✓ העלה מסמך
+              {uploading ? (
+                <>
+                  <span className="spinner"></span>
+                  מעלה {selectedFiles.length} קבצים...
+                </>
+              ) : (
+                `העלה ${selectedFiles.length} קבצים`
+              )}
             </button>
           </div>
         </form>

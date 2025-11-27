@@ -182,7 +182,7 @@ const Dashboard = () => {
       
       if (newDocument) {
         setDocuments(prevDocs => [newDocument, ...prevDocs]);
-        showToast('מעלה מסמך...', 'success');
+        // showToast('מעלה מסמך...', 'success');
         console.log('✅ Added placeholder document');
       }
     }
