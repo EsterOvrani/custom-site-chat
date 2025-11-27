@@ -76,37 +76,27 @@ export const authAPI = {
   },
   checkUsername: (username) => api.get(`/auth/check-username/${encodeURIComponent(username)}`),
   checkEmail: (email) => api.get(`/auth/check-email/${encodeURIComponent(email)}`),
-  googleLogin: (credential) => api.post('/auth/google', { credential })
+  googleLogin: (credential) => api.post('/auth/google', { credential }),
+  
+  // 🆕 Forgot Password & Reset Password
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (email, resetCode, newPassword) => api.post('/auth/reset-password', { 
+    email, 
+    resetCode, 
+    newPassword 
+  })
 };
 
 // ==================== Collection API ====================
 export const collectionAPI = {
-  /**
-   * Get or create user collection
-   */
   getCollectionInfo: () => api.get('/collection/info'),
-
-  /**
-   * Regenerate secret key
-   */
   regenerateSecretKey: () => api.post('/collection/regenerate-key'),
-
-  /**
-   * Get embed code
-   */
   getEmbedCode: () => api.get('/collection/embed-code')
 };
 
 // ==================== Document API ====================
 export const documentAPI = {
-  /**
-   * Get all user documents
-   */
   getMyDocuments: () => api.get('/documents/my-documents'),
-
-  /**
-   * Upload new document
-   */
   uploadDocument: (file) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -117,27 +107,11 @@ export const documentAPI = {
       }
     });
   },
-
-  /**
-   * Delete document
-   */
   deleteDocument: (documentId) => api.delete(`/documents/${documentId}`),
-
-  /**
-   * Reorder documents
-   */
   reorderDocuments: (documentIds) => api.put('/documents/reorder', {
     documentIds
   }),
-
-  /**
-   * Get download URL
-   */
   getDownloadUrl: (documentId) => api.get(`/documents/${documentId}/download-url`),
-
-  /**
-   * Download document
-   */
   downloadDocument: (documentId) => {
     return api.get(`/documents/${documentId}/download`, {
       responseType: 'blob'

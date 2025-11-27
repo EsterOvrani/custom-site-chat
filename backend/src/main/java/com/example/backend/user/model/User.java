@@ -1,3 +1,4 @@
+// backend/src/main/java/com/example/backend/user/model/User.java
 package com.example.backend.user.model;
 
 import jakarta.persistence.*;
@@ -71,6 +72,8 @@ public class User implements UserDetails {
     @Column(name = "embed_code", columnDefinition = "TEXT")
     private String embedCode;
 
+    // ==================== Verification Fields ====================
+    
     @Column(name = "enabled")
     @Builder.Default
     private Boolean enabled = true;
@@ -80,6 +83,17 @@ public class User implements UserDetails {
 
     @Column(name = "verification_code_expires_at")
     private LocalDateTime verificationCodeExpiresAt;
+
+    // ==================== 🆕 Password Reset Fields ====================
+    
+    @Column(name = "reset_password_code")
+    private String resetPasswordCode;
+
+    @Column(name = "reset_password_code_expires_at")
+    private LocalDateTime resetPasswordCodeExpiresAt;
+
+    @Column(name = "temp_password")
+    private String tempPassword; // סיסמה זמנית לפני hash (למשתמשי Google)
 
     // ==================== Lifecycle Callbacks ====================
 
@@ -194,6 +208,37 @@ public class User implements UserDetails {
         this.verificationCodeExpiresAt = null;
     }
 
+    // ==================== 🆕 Password Reset Methods ====================
+
+    /**
+     * בדיקה אם קוד איפוס הסיסמה תקף
+     */
+    public boolean isResetPasswordCodeValid(String code) {
+        if (this.resetPasswordCode == null || this.resetPasswordCodeExpiresAt == null) {
+            return false;
+        }
+        
+        if (LocalDateTime.now().isAfter(this.resetPasswordCodeExpiresAt)) {
+            return false;
+        }
+        
+        return this.resetPasswordCode.equals(code);
+    }
+
+    /**
+     * ניקוי קוד איפוס סיסמה
+     */
+    public void clearResetPasswordCode() {
+        this.resetPasswordCode = null;
+        this.resetPasswordCodeExpiresAt = null;
+    }
+
+    /**
+     * ניקוי סיסמה זמנית (אחרי שינוי סיסמה)
+     */
+    public void clearTempPassword() {
+        this.tempPassword = null;
+    }
 
     // ==================== Enum ====================
 

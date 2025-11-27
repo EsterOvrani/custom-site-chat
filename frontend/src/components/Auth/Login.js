@@ -19,6 +19,7 @@ const Login = () => {
     const params = new URLSearchParams(location.search);
     const msg = params.get('msg');
     const verified = params.get('verified');
+    const reset = params.get('reset'); // 🆕 הוספה
     const errorParam = params.get('error');
     
     if (verified === 'true') {
@@ -26,6 +27,9 @@ const Login = () => {
       window.history.replaceState({}, '', '/login');
     } else if (verified === 'false') {
       setError('❌ אימות המייל נכשל: ' + (errorParam || 'קוד לא תקין או פג תוקף'));
+      window.history.replaceState({}, '', '/login');
+    } else if (reset === 'success') { // 🆕 הוספה
+      setSuccessMsg('✅ הסיסמה שונתה בהצלחה! כעת תוכל להתחבר עם הסיסמה החדשה');
       window.history.replaceState({}, '', '/login');
     } else if (msg) {
       setSuccessMsg(msg);
@@ -139,6 +143,25 @@ const Login = () => {
               required
               disabled={loading}
             />
+          </div>
+
+          {/* 🆕 הוספת קישור "שכחתי סיסמה" */}
+          <div style={{ 
+            textAlign: 'left', 
+            marginBottom: '15px',
+            marginTop: '-5px'
+          }}>
+            <span 
+              onClick={() => navigate('/forgot-password')}
+              style={{ 
+                cursor: 'pointer', 
+                color: '#667eea', 
+                fontSize: '14px',
+                textDecoration: 'underline'
+              }}
+            >
+              שכחתי את הסיסמה
+            </span>
           </div>
 
           <button 

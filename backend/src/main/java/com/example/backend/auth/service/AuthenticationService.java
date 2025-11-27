@@ -1,3 +1,4 @@
+// backend/src/main/java/com/example/backend/auth/service/AuthenticationService.java
 package com.example.backend.auth.service;
 
 import com.example.backend.auth.dto.LoginUserDto;
@@ -48,6 +49,8 @@ public class AuthenticationService {
     @Autowired
     private TestConfig testConfig; 
     
+    // ==================== EXISTING: Signup ====================
+    
     public User signup(RegisterUserDto input) {
         User user = new User();
         user.setUsername(input.getUsername());
@@ -58,15 +61,15 @@ public class AuthenticationService {
 
         // ⭐ Test Mode Logic
         if (testConfig.isBypassEmailVerification()) {
-            user.setEnabled(true); // מיד מאומת!
+            user.setEnabled(true);
             user.setVerificationCode(null);
             user.setVerificationCodeExpiresAt(null);
             log.warn("🔶 TEST MODE: User automatically verified!");
         } else {
             user.setVerificationCode(
                 testConfig.isTestModeEnabled() 
-                    ? testConfig.getFixedVerificationCode() // קוד קבוע לבדיקות
-                    : generateVerificationCode() // קוד רנדומלי
+                    ? testConfig.getFixedVerificationCode()
+                    : generateVerificationCode()
             );
             user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
             user.setEnabled(false);
@@ -75,6 +78,9 @@ public class AuthenticationService {
 
         return userRepository.save(user);
     }
+
+    // ==================== EXISTING: Authenticate ====================
+    
     public User authenticate(LoginUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("משתמש", input.getEmail()));
@@ -93,6 +99,8 @@ public class AuthenticationService {
         return user;
     }
 
+    // ==================== EXISTING: Verify User ====================
+    
     public void verifyUser(VerifyUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("משתמש", input.getEmail()));
@@ -123,6 +131,8 @@ public class AuthenticationService {
         userRepository.save(user);
     }
 
+    // ==================== EXISTING: Resend Verification Code ====================
+    
     public void resendVerificationCode(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("משתמש", email));
@@ -137,12 +147,85 @@ public class AuthenticationService {
         userRepository.save(user);
     }
 
+    // ==================== EXISTING: Is Email Verified ====================
+    
     public boolean isEmailVerified(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("משתמש", email));
         return user.isEnabled();
     }
 
+    // ==================== 🆕 FORGOT PASSWORD ====================
+    
+    /**
+     * שליחת קוד איפוס סיסמה למייל
+     */
+    public void forgotPassword(String email) {
+        log.info("🔐 Forgot password request for: {}", email);
+        
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("משתמש", email));
+        
+        // יצירת קוד איפוס (6 ספרות)
+        String resetCode = generateVerificationCode(); // משתמש באותו generator
+        
+        user.setResetPasswordCode(resetCode);
+        user.setResetPasswordCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
+        
+        userRepository.save(user);
+        
+        // שליחת מייל
+        try {
+            emailService.sendPasswordResetEmail(email, resetCode);
+            log.info("✅ Password reset email sent to: {}", email);
+        } catch (MessagingException e) {
+            log.error("❌ Failed to send password reset email", e);
+            throw new RuntimeException("נכשל בשליחת מייל איפוס סיסמה");
+        }
+    }
+
+    // ==================== 🆕 RESET PASSWORD ====================
+    
+    /**
+     * איפוס סיסמה עם קוד
+     */
+    public void resetPassword(String email, String resetCode, String newPassword) {
+        log.info("🔐 Reset password attempt for: {}", email);
+        
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("משתמש", email));
+        
+        // בדיקת קוד
+        if (!user.isResetPasswordCodeValid(resetCode)) {
+            throw new ValidationException("resetCode", "קוד איפוס לא תקין או שפג תוקפו");
+        }
+        
+        // עדכון סיסמה
+        user.setPassword(passwordEncoder.encode(newPassword));
+        
+        // ניקוי קוד איפוס
+        user.clearResetPasswordCode();
+        
+        // ניקוי סיסמה זמנית (אם היתה)
+        user.clearTempPassword();
+        
+        userRepository.save(user);
+        
+        log.info("✅ Password reset successful for: {}", email);
+    }
+
+    // ==================== EXISTING: Username/Email Exists ====================
+    
+    public boolean usernameExists(String username) {
+        return userRepository.findByUsername(username).isPresent();
+    }
+
+    public boolean emailExists(String email) {
+        return userRepository.findByEmail(email).isPresent();
+    }
+
+    // ==================== PRIVATE: Helpers ====================
+    
     private void sendVerificationEmail(User user) {
         String subject = "Account Verification";
         String verificationCode = user.getVerificationCode();
@@ -158,13 +241,5 @@ public class AuthenticationService {
         Random random = new Random();
         int code = random.nextInt(900000) + 100000;
         return String.valueOf(code);
-    }
-
-    public boolean usernameExists(String username) {
-        return userRepository.findByUsername(username).isPresent();
-    }
-
-    public boolean emailExists(String email) {
-        return userRepository.findByEmail(email).isPresent();
     }
 }

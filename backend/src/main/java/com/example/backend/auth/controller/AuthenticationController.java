@@ -1,16 +1,20 @@
+// backend/src/main/java/com/example/backend/auth/controller/AuthenticationController.java
 package com.example.backend.auth.controller;
 
 import com.example.backend.auth.dto.GoogleAuthRequest;
 import com.example.backend.auth.dto.LoginUserDto;
 import com.example.backend.auth.dto.RegisterUserDto;
 import com.example.backend.auth.dto.VerifyUserDto;
+import com.example.backend.auth.dto.ForgotPasswordDto;      // 🆕
+import com.example.backend.auth.dto.ResetPasswordDto;       // 🆕
 import com.example.backend.auth.service.AuthenticationService;
 import com.example.backend.auth.service.GoogleOAuthService;
 import com.example.backend.auth.service.JwtService;
-import com.example.backend.collection.dto.CollectionInfoResponse;  // ✅ הוסף את זה!
+import com.example.backend.collection.dto.CollectionInfoResponse;
 import com.example.backend.collection.service.CollectionService;
 import com.example.backend.user.model.User;
 
+import jakarta.validation.Valid;                            // 🆕
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -21,20 +25,11 @@ import org.springframework.http.HttpStatus;
 
 import java.util.HashMap;
 import java.util.Map;
-import lombok.extern.slf4j.*;
 
-/**
- * Controller for authentication operations
- * 
- * ✅ Updated - Uses centralized error handling system
- * ✅ All try-catch blocks removed
- * ✅ Exceptions are thrown and handled by GlobalExceptionHandler
- */
 @RequestMapping("/auth")
 @RestController
 @RequiredArgsConstructor
 @Slf4j
-
 public class AuthenticationController {
     
     private final JwtService jwtService;
@@ -42,15 +37,15 @@ public class AuthenticationController {
     private final GoogleOAuthService googleOAuthService;
     private final CollectionService collectionService;  
 
+    // ==================== EXISTING: Google Login ====================
+    
     @PostMapping("/google")
     public ResponseEntity<Map<String, Object>> googleLogin(@RequestBody GoogleAuthRequest request) {
         try {
             log.info("Google login attempt");
             
-            // אימות הטוקן ויצירת/מציאת משתמש
             User user = googleOAuthService.authenticateGoogleUser(request.getCredential());
             
-            // יצירת JWT token
             String jwtToken = jwtService.generateToken(user);
             
             Map<String, Object> response = new HashMap<>();
@@ -77,7 +72,7 @@ public class AuthenticationController {
         }
     }
 
-    // ==================== Register ====================
+    // ==================== EXISTING: Register ====================
     
     @PostMapping({"/signup", "/register"})
     public ResponseEntity<Map<String, Object>> register(@RequestBody RegisterUserDto registerUserDto) {
@@ -95,18 +90,16 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
     
-    // ==================== Login ====================
+    // ==================== EXISTING: Login ====================
+    
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> authenticate(
             @RequestBody LoginUserDto loginUserDto) {
         
-        // שלב 1: אימות משתמש (בודק username + password)
         User authenticatedUser = authenticationService.authenticate(loginUserDto);
         
-        // שלב 2: יצירת JWT token
         String jwtToken = jwtService.generateToken(authenticatedUser);
         
-        // ✅ שלב 3: יצירה/קבלת קולקשן למשתמש
         CollectionInfoResponse collectionInfo = null;
         try {
             collectionInfo = collectionService.getOrCreateUserCollection(authenticatedUser);
@@ -114,7 +107,6 @@ public class AuthenticationController {
             log.warn("Could not create collection during login", e);
         }
         
-        // שלב 4: בניית התגובה
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("token", jwtToken);
@@ -125,7 +117,6 @@ public class AuthenticationController {
             "fullName", authenticatedUser.getFirstName() + " " + authenticatedUser.getLastName()
         ));
         
-        // ✅ הוספת מידע על הקולקשן
         if (collectionInfo != null) {
             response.put("collection", Map.of(
                 "hasCollection", true,
@@ -136,7 +127,7 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== Verify ====================
+    // ==================== EXISTING: Verify ====================
 
     @PostMapping("/verify")
     public ResponseEntity<Map<String, Object>> verifyUser(@RequestBody VerifyUserDto verifyUserDto) {
@@ -165,7 +156,7 @@ public class AuthenticationController {
                 .build();
     }
 
-    // ==================== Resend Verification ====================
+    // ==================== EXISTING: Resend Verification ====================
 
     @PostMapping("/resend")
     public ResponseEntity<Map<String, Object>> resendVerificationCode(@RequestParam String email) {
@@ -178,7 +169,45 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== Check Availability ====================
+    // ==================== 🆕 FORGOT PASSWORD ====================
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, Object>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordDto request) {
+        
+        log.info("🔐 Forgot password request for: {}", request.getEmail());
+        
+        authenticationService.forgotPassword(request.getEmail());
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "קוד איפוס סיסמה נשלח למייל שלך");
+        
+        return ResponseEntity.ok(response);
+    }
+
+    // ==================== 🆕 RESET PASSWORD ====================
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Map<String, Object>> resetPassword(
+            @Valid @RequestBody ResetPasswordDto request) {
+        
+        log.info("🔐 Reset password request for: {}", request.getEmail());
+        
+        authenticationService.resetPassword(
+            request.getEmail(), 
+            request.getResetCode(), 
+            request.getNewPassword()
+        );
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "הסיסמה שונתה בהצלחה! כעת תוכל להתחבר עם הסיסמה החדשה");
+        
+        return ResponseEntity.ok(response);
+    }
+
+    // ==================== EXISTING: Check Availability ====================
 
     @GetMapping("/check-username/{username}")
     public ResponseEntity<Map<String, Object>> checkUsername(@PathVariable String username) {
@@ -211,7 +240,7 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== Status ====================
+    // ==================== EXISTING: Status ====================
 
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> checkStatus() {
@@ -242,7 +271,7 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== Logout ====================
+    // ==================== EXISTING: Logout ====================
 
     @PostMapping("/logout")
     public ResponseEntity<Map<String, Object>> logout() {

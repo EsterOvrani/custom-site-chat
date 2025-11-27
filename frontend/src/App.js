@@ -1,9 +1,11 @@
-// src/App.js
+// frontend/src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
 import Verify from './components/Auth/Verify';
+import ForgotPassword from './components/Auth/ForgotPassword';  // 🆕
+import ResetPassword from './components/Auth/ResetPassword';    // 🆕
 import Dashboard from './components/Dashboard/Dashboard';
 import ErrorPage from './components/Error/ErrorPage';
 import './App.css';
@@ -15,6 +17,8 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify" element={<Verify />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />  {/* 🆕 */}
+        <Route path="/reset-password" element={<ResetPassword />} />    {/* 🆕 */}
         <Route path="/" element={<Dashboard />} />
         <Route path="/error" element={<ErrorPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
