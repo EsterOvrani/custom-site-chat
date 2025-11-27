@@ -110,11 +110,6 @@ POSTGRES_DB=customsitechat
 POSTGRES_USER=sitechat_user
 POSTGRES_PASSWORD=sitechat_postgres_password
 
-# ==================== Redis Configuration ====================
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PASSWORD=
-
 # ==================== Qdrant Configuration ====================
 QDRANT_HOST=qdrant
 QDRANT_REST_PORT=6333
@@ -197,7 +192,7 @@ EOF
                     sh '''
                         # הרץ את כל השירותים וחכה שיהיו healthy
                         echo "⏳ Starting services and waiting for health checks..."
-                        docker-compose -f docker-compose.test.yml up -d postgres redis qdrant backend frontend nginx
+                        docker-compose -f docker-compose.test.yml up -d postgres qdrant backend frontend nginx
                         
                         # חכה שהבקנד יהיה healthy (docker-compose עושה את זה בשבילנו!)
                         echo "⏳ Waiting for backend to be healthy..."
@@ -282,10 +277,6 @@ POSTGRES_DB=customsitechat
 POSTGRES_USER=sitechat_user
 POSTGRES_PASSWORD=sitechat_postgres_password
 
-# ==================== Redis Configuration ====================
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PASSWORD=sitechat_redis_password
 
 # ==================== Qdrant Configuration ====================
 QDRANT_HOST=qdrant
@@ -504,7 +495,7 @@ EOF
                 
                 echo "🗑️ Step 2: Removing all project images (preserving jenkins-jenkins)..."
                 # מחק את כל ה-images של הפרויקט (לא jenkins-jenkins!)
-                docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "jenkins-jenkins" | grep -E "backend|frontend|postgres|redis|qdrant|nginx|newman" | xargs -r docker rmi -f 2>/dev/null || true
+                docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "jenkins-jenkins" | grep -E "backend|frontend|postgres|qdrant|nginx|newman" | xargs -r docker rmi -f 2>/dev/null || true
                 
                 # מחק dangling images (לא jenkins-jenkins!)
                 docker images -f "dangling=true" -q | xargs -r docker rmi -f 2>/dev/null || true

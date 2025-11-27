@@ -158,31 +158,6 @@ services:
       - app-network
     restart: unless-stopped
 
-  # ==================== Redis ====================
-  redis:
-    image: redis:7-alpine
-    container_name: redis-custom-site-chat
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    env_file:
-      - .env
-    command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD}
-      --appendonly yes
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    networks:
-      - app-network
-    restart: unless-stopped
-
   # ==================== Qdrant ====================
   qdrant:
     image: qdrant/qdrant:latest
@@ -211,13 +186,10 @@ services:
       - .env 
     environment:
       POSTGRES_HOST: postgres
-      REDIS_HOST: redis
       QDRANT_HOST: qdrant
       FRONTEND_URL: https://custom-site-chat.com
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       qdrant:
         condition: service_started
@@ -266,8 +238,6 @@ networks:
 volumes:
   postgres_data:
     driver: local
-  redis_data:
-    driver: local
   qdrant_storage:
     driver: local
 DOCKERCOMPOSE
@@ -311,11 +281,6 @@ POSTGRES_DB=customsitechat
 POSTGRES_USER=sitechat_user
 POSTGRES_PASSWORD=change-this-password
 
-# ==================== Redis ====================
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=change-this-password
-
 # ==================== Qdrant ====================
 QDRANT_HOST=localhost
 QDRANT_REST_PORT=6333
@@ -357,7 +322,6 @@ chmod -R 755 $PROJECT_DIR
 # ==================== הורדת התמונות מראש ====================
 echo "📥 Pulling Docker images..."
 docker pull postgres:15-alpine
-docker pull redis:7-alpine
 docker pull qdrant/qdrant:latest
 docker pull esterovrani/custom-site-chat-backend:latest
 docker pull esterovrani/custom-site-chat-frontend:latest
