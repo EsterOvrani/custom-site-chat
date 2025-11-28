@@ -5,8 +5,10 @@ import com.example.backend.auth.dto.GoogleAuthRequest;
 import com.example.backend.auth.dto.LoginUserDto;
 import com.example.backend.auth.dto.RegisterUserDto;
 import com.example.backend.auth.dto.VerifyUserDto;
-import com.example.backend.auth.dto.ForgotPasswordDto;      // 🆕
-import com.example.backend.auth.dto.ResetPasswordDto;       // 🆕
+import com.example.backend.auth.dto.ForgotPasswordDto;
+import com.example.backend.auth.dto.ResetPasswordDto;
+import com.example.backend.auth.dto.VerifyResetCodeDto;
+import com.example.backend.auth.dto.SetNewPasswordDto;
 import com.example.backend.auth.service.AuthenticationService;
 import com.example.backend.auth.service.GoogleOAuthService;
 import com.example.backend.auth.service.JwtService;
@@ -14,7 +16,7 @@ import com.example.backend.collection.dto.CollectionInfoResponse;
 import com.example.backend.collection.service.CollectionService;
 import com.example.backend.user.model.User;
 
-import jakarta.validation.Valid;                            // 🆕
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -72,40 +74,77 @@ public class AuthenticationController {
         }
     }
 
-    // ==================== EXISTING: Register ====================
+    // ==================== REGISTER (Step 1 - Creates Pending Registration) ====================
     
     @PostMapping({"/signup", "/register"})
     public ResponseEntity<Map<String, Object>> register(@RequestBody RegisterUserDto registerUserDto) {
-        // 🔍 הוסף את זה בהתחלה
         log.info("========================================");
         log.info("🌐 REGISTER REQUEST RECEIVED");
         log.info("   Email: {}", registerUserDto.getEmail());
         log.info("   Username: {}", registerUserDto.getUsername());
         log.info("========================================");
         
-        User registeredUser = authenticationService.signup(registerUserDto);
+        // 🆕 יוצר רישום ממתין (לא שומר ב-DB עדיין!)
+        String verificationCode = authenticationService.createPendingRegistration(registerUserDto);
         
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("message", "User registered successfully. Please check your email for verification code.");
-        response.put("user", Map.of(
-            "id", registeredUser.getId(),
-            "username", registeredUser.getUsername(),
-            "email", registeredUser.getEmail()
-        ));
+        response.put("message", "קוד אימות נשלח למייל. המשתמש ייווצר רק לאחר אימות הקוד.");
+        response.put("email", registerUserDto.getEmail());
         
-        // 🔍 הוסף את זה לפני ה-return
         log.info("========================================");
-        log.info("📤 SENDING RESPONSE TO FRONTEND");
-        log.info("   Success: true");
-        log.info("   User ID: {}", registeredUser.getId());
-        log.info("   User enabled: {}", registeredUser.isEnabled());
+        log.info("📤 PENDING REGISTRATION CREATED");
+        log.info("   Email: {}", registerUserDto.getEmail());
+        log.info("   Verification code sent (not saved to DB yet)");
         log.info("========================================");
         
         return ResponseEntity.ok(response);
     }
     
-    // ==================== EXISTING: Login ====================
+    // ==================== VERIFY (Step 2 - Creates User in DB) ====================
+
+    @PostMapping("/verify")
+    public ResponseEntity<Map<String, Object>> verifyUser(@RequestBody VerifyUserDto verifyUserDto) {
+        log.info("🔐 Verify registration for: {}", verifyUserDto.getEmail());
+        
+        // 🆕 רק כאן המשתמש באמת נוצר ב-DB!
+        User createdUser = authenticationService.verifyAndCreateUser(verifyUserDto);
+        
+        // 🆕 יצירת טוקן כדי שהמשתמש יוכל להיכנס ישירות לדשבורד
+        String jwtToken = jwtService.generateToken(createdUser);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "החשבון אומת ונוצר בהצלחה!");
+        response.put("token", jwtToken);
+        response.put("expiresIn", jwtService.getExpirationTime());
+        response.put("user", Map.of(
+            "id", createdUser.getId(),
+            "username", createdUser.getUsername(),
+            "email", createdUser.getEmail(),
+            "fullName", createdUser.getFirstName() + " " + createdUser.getLastName()
+        ));
+        
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/verify")
+    public ResponseEntity<String> verifyUserByLink(
+            @RequestParam String email, 
+            @RequestParam String code) {
+        
+        VerifyUserDto verifyUserDto = new VerifyUserDto();
+        verifyUserDto.setEmail(email);
+        verifyUserDto.setVerificationCode(code);
+        
+        authenticationService.verifyAndCreateUser(verifyUserDto);
+        
+        return ResponseEntity.status(302)
+                .header("Location", "/login?verified=true")
+                .build();
+    }
+
+    // ==================== LOGIN ====================
     
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> authenticate(
@@ -142,36 +181,7 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== EXISTING: Verify ====================
-
-    @PostMapping("/verify")
-    public ResponseEntity<Map<String, Object>> verifyUser(@RequestBody VerifyUserDto verifyUserDto) {
-        authenticationService.verifyUser(verifyUserDto);
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "Account verified successfully");
-        
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/verify")
-    public ResponseEntity<String> verifyUserByLink(
-            @RequestParam String email, 
-            @RequestParam String code) {
-        
-        VerifyUserDto verifyUserDto = new VerifyUserDto();
-        verifyUserDto.setEmail(email);
-        verifyUserDto.setVerificationCode(code);
-        
-        authenticationService.verifyUser(verifyUserDto);
-        
-        return ResponseEntity.status(302)
-                .header("Location", "/login?verified=true")
-                .build();
-    }
-
-    // ==================== EXISTING: Resend Verification ====================
+    // ==================== RESEND VERIFICATION ====================
 
     @PostMapping("/resend")
     public ResponseEntity<Map<String, Object>> resendVerificationCode(@RequestParam String email) {
@@ -179,12 +189,12 @@ public class AuthenticationController {
         
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("message", "Verification code sent");
+        response.put("message", "קוד אימות נשלח מחדש");
         
         return ResponseEntity.ok(response);
     }
 
-    // ==================== 🆕 FORGOT PASSWORD ====================
+    // ==================== FORGOT PASSWORD (Step 1) ====================
 
     @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, Object>> forgotPassword(
@@ -201,7 +211,55 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== 🆕 RESET PASSWORD ====================
+    // ==================== VERIFY RESET CODE (Step 2) ====================
+
+    @PostMapping("/verify-reset-code")
+    public ResponseEntity<Map<String, Object>> verifyResetCode(
+            @Valid @RequestBody VerifyResetCodeDto request) {
+        
+        log.info("🔐 Verify reset code request for: {}", request.getEmail());
+        
+        boolean isValid = authenticationService.verifyResetCode(
+            request.getEmail(), 
+            request.getResetCode()
+        );
+        
+        Map<String, Object> response = new HashMap<>();
+        
+        if (isValid) {
+            response.put("success", true);
+            response.put("message", "קוד האיפוס אומת בהצלחה");
+            response.put("verified", true);
+            return ResponseEntity.ok(response);
+        } else {
+            response.put("success", false);
+            response.put("error", "קוד איפוס לא תקין או שפג תוקפו");
+            response.put("verified", false);
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    // ==================== SET NEW PASSWORD (Step 3) ====================
+
+    @PostMapping("/set-new-password")
+    public ResponseEntity<Map<String, Object>> setNewPassword(
+            @Valid @RequestBody SetNewPasswordDto request) {
+        
+        log.info("🔐 Set new password request for: {}", request.getEmail());
+        
+        authenticationService.setNewPassword(
+            request.getEmail(), 
+            request.getNewPassword()
+        );
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "הסיסמה שונתה בהצלחה! כעת תוכל להתחבר עם הסיסמה החדשה");
+        
+        return ResponseEntity.ok(response);
+    }
+
+    // ==================== RESET PASSWORD (Legacy - combines Step 2+3) ====================
 
     @PostMapping("/reset-password")
     public ResponseEntity<Map<String, Object>> resetPassword(
@@ -222,7 +280,7 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== EXISTING: Check Availability ====================
+    // ==================== CHECK AVAILABILITY ====================
 
     @GetMapping("/check-username/{username}")
     public ResponseEntity<Map<String, Object>> checkUsername(@PathVariable String username) {
@@ -255,7 +313,20 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== EXISTING: Status ====================
+    // ==================== CHECK PENDING REGISTRATION ====================
+
+    @GetMapping("/check-pending/{email}")
+    public ResponseEntity<Map<String, Object>> checkPendingRegistration(@PathVariable String email) {
+        boolean hasPending = authenticationService.hasPendingRegistration(email);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("hasPending", hasPending);
+        response.put("email", email);
+        
+        return ResponseEntity.ok(response);
+    }
+
+    // ==================== STATUS ====================
 
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> checkStatus() {
@@ -286,7 +357,7 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== EXISTING: Logout ====================
+    // ==================== LOGOUT ====================
 
     @PostMapping("/logout")
     public ResponseEntity<Map<String, Object>> logout() {

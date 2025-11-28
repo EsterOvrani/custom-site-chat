@@ -116,7 +116,7 @@ const Login = () => {
         <GoogleLoginButton 
           onSuccess={handleGoogleLogin}
           onError={handleGoogleError}
-          disabled={loading}
+          mode="login"  // ← "היכנס באמצעות Google"
         />
 
         {/* ==================== Regular Login Form ==================== */}

@@ -264,7 +264,7 @@ const Register = () => {
         <GoogleLoginButton 
           onSuccess={handleGoogleSignup}
           onError={handleGoogleError}
-          disabled={loading}
+          mode="register"  // ← "הירשם באמצעות Google"
         />
 
         {/* ==================== Regular Registration Form ==================== */}

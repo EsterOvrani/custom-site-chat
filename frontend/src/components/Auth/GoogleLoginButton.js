@@ -1,8 +1,11 @@
 // frontend/src/components/Auth/GoogleLoginButton.js
 import React, { useEffect, useRef } from 'react';
 
-const GoogleLoginButton = ({ onSuccess, onError }) => {
+const GoogleLoginButton = ({ onSuccess, onError, mode = 'login' }) => {
   const googleClientRef = useRef(null);
+
+  // טקסט דינמי לפי המצב
+  const buttonText = mode === 'register' ? 'הירשם באמצעות Google' : 'היכנס באמצעות Google';
 
   useEffect(() => {
     const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -27,7 +30,6 @@ const GoogleLoginButton = ({ onSuccess, onError }) => {
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: handleCredentialResponse,
-          // ⭐ אלה המפתחות - מונעים שמירת חשבון על הכפתור
           auto_select: false,
           cancel_on_tap_outside: true,
         });
@@ -66,12 +68,10 @@ const GoogleLoginButton = ({ onSuccess, onError }) => {
   const handleButtonClick = () => {
     console.log('🔘 Button clicked');
     if (window.google?.accounts?.id) {
-      // ⭐ זה פותח את חלון בחירת החשבון תמיד מחדש
       window.google.accounts.id.prompt((notification) => {
         console.log('Prompt notification:', notification);
         if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
           console.log('Prompt was not displayed, showing manual selection');
-          // אם ה-prompt לא הוצג, נציג רשימת חשבונות באופן ידני
         }
       });
     }
@@ -85,7 +85,7 @@ const GoogleLoginButton = ({ onSuccess, onError }) => {
       gap: '15px',
       margin: '20px 0'
     }}>
-      {/* ✅ כפתור מותאם אישית שלא מציג חשבון עליו */}
+      {/* ✅ כפתור מותאם אישית עם טקסט דינמי */}
       <button
         onClick={handleButtonClick}
         type="button"
@@ -124,7 +124,7 @@ const GoogleLoginButton = ({ onSuccess, onError }) => {
             <path d="M9 3.6c1.3 0 2.5.4 3.4 1.3L15 2.3A9 9 0 0 0 1 5l3 2.4a5.4 5.4 0 0 1 5-3.7z" fill="#EA4335"/>
           </g>
         </svg>
-        <span>היכנס באמצעות Google</span>
+        <span>{buttonText}</span>
       </button>
       
       <div style={{ 
