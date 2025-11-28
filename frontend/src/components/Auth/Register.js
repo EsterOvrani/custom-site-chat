@@ -149,38 +149,22 @@ const Register = () => {
   };
 
   // ==================== Regular Registration ====================
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setAlert({ message: '', type: '' });
 
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      setAlert({ message: 'נא למלא את כל השדות', type: 'error' });
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setAlert({ message: 'הסיסמאות אינן זהות', type: 'error' });
-      return;
-    }
-
-    if (validations.username && !validations.username.valid) {
-      setAlert({ message: 'שם המשתמש לא תקין או תפוס', type: 'error' });
-      return;
-    }
-
-    if (validations.email && !validations.email.valid) {
-      setAlert({ message: 'כתובת המייל לא תקינה או תפוסה', type: 'error' });
-      return;
-    }
-
-    if (validations.password && !validations.password.valid) {
-      setAlert({ message: 'הסיסמה לא עומדת בדרישות', type: 'error' });
-      return;
-    }
-
+    // ולידציות...
+    
     setLoading(true);
 
     try {
+      console.log('========================================');
+      console.log('🔵 SENDING REGISTRATION REQUEST');
+      console.log('   Email:', formData.email);
+      console.log('   Username:', formData.username);
+      console.log('========================================');
+      
       const response = await authAPI.register({
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
@@ -189,17 +173,38 @@ const Register = () => {
         username: formData.username.trim()
       });
 
+      console.log('========================================');
+      console.log('📥 REGISTRATION RESPONSE RECEIVED');
+      console.log('   Full response:', response);
+      console.log('   Response data:', response.data);
+      console.log('   Success:', response.data.success);
+      console.log('   User:', response.data.user);
+      console.log('========================================');
+
       if (response.data.success) {
+        console.log('========================================');
+        console.log('✅ REGISTRATION SUCCESSFUL');
+        console.log('   Navigating to verify page in 1.5 seconds...');
+        console.log('========================================');
+        
         setAlert({ message: 'רישום בוצע בהצלחה! מעביר לדף אימות...', type: 'success' });
         
         setTimeout(() => {
-          navigate('/verify?email=' + encodeURIComponent(formData.email.trim()) + '&mode=wait');
+          const verifyUrl = '/verify?email=' + encodeURIComponent(formData.email.trim()) + '&mode=wait';
+          console.log('🚀 NAVIGATING NOW TO:', verifyUrl);
+          navigate(verifyUrl);
         }, 1500);
       } else {
+        console.error('❌ Registration failed:', response.data.error);
         setAlert({ message: response.data.error || 'שגיאה ברישום המשתמש', type: 'error' });
       }
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('========================================');
+      console.error('❌ REGISTRATION ERROR');
+      console.error('   Error:', error);
+      console.error('   Response:', error.response);
+      console.error('========================================');
+      
       if (error.response?.data?.error) {
         setAlert({ message: error.response.data.error, type: 'error' });
       } else {

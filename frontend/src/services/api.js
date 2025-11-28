@@ -63,23 +63,58 @@ api.interceptors.response.use(
 
 // ==================== Authentication API ====================
 export const authAPI = {
+  // בדיקת סטטוס
   checkStatus: () => api.get('/auth/status'),
+  
+  // התחברות רגילה
   login: (email, password) => api.post('/auth/login', { email, password }),
+  
+  // הרשמה
   register: (userData) => api.post('/auth/signup', userData),
+  
+  // אימות מייל (הרשמה)
   verify: (data) => api.post('/auth/verify', data),
+  
+  // בדיקה אם המשתמש כבר אומת
   checkIfVerified: (email) => api.get(`/auth/check-verified/${encodeURIComponent(email)}`),
+  
+  // שליחת קוד אימות מחדש (הרשמה)
   resendVerificationCode: (email) => api.post('/auth/resend', null, { params: { email } }),
+  
+  // התנתקות
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     return api.post('/auth/logout');
   },
+  
+  // בדיקת זמינות שם משתמש
   checkUsername: (username) => api.get(`/auth/check-username/${encodeURIComponent(username)}`),
+  
+  // בדיקת זמינות אימייל
   checkEmail: (email) => api.get(`/auth/check-email/${encodeURIComponent(email)}`),
+  
+  // התחברות עם Google
   googleLogin: (credential) => api.post('/auth/google', { credential }),
   
-  // 🆕 Forgot Password & Reset Password
+  // ==================== איפוס סיסמה ====================
+  
+  // שלב 1: בקשת קוד איפוס (שולח מייל)
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  
+  // שלב 2: אימות קוד האיפוס
+  verifyResetCode: (email, resetCode) => api.post('/auth/verify-reset-code', { 
+    email, 
+    resetCode 
+  }),
+  
+  // שלב 3: שינוי הסיסמה (אחרי אימות הקוד)
+  setNewPassword: (email, newPassword) => api.post('/auth/set-new-password', { 
+    email, 
+    newPassword 
+  }),
+  
+  // פונקציה ישנה לתאימות לאחור (משלבת שלבים 2+3)
   resetPassword: (email, resetCode, newPassword) => api.post('/auth/reset-password', { 
     email, 
     resetCode, 

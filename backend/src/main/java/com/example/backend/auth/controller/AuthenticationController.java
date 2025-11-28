@@ -76,6 +76,13 @@ public class AuthenticationController {
     
     @PostMapping({"/signup", "/register"})
     public ResponseEntity<Map<String, Object>> register(@RequestBody RegisterUserDto registerUserDto) {
+        // 🔍 הוסף את זה בהתחלה
+        log.info("========================================");
+        log.info("🌐 REGISTER REQUEST RECEIVED");
+        log.info("   Email: {}", registerUserDto.getEmail());
+        log.info("   Username: {}", registerUserDto.getUsername());
+        log.info("========================================");
+        
         User registeredUser = authenticationService.signup(registerUserDto);
         
         Map<String, Object> response = new HashMap<>();
@@ -86,6 +93,14 @@ public class AuthenticationController {
             "username", registeredUser.getUsername(),
             "email", registeredUser.getEmail()
         ));
+        
+        // 🔍 הוסף את זה לפני ה-return
+        log.info("========================================");
+        log.info("📤 SENDING RESPONSE TO FRONTEND");
+        log.info("   Success: true");
+        log.info("   User ID: {}", registeredUser.getId());
+        log.info("   User enabled: {}", registeredUser.isEnabled());
+        log.info("========================================");
         
         return ResponseEntity.ok(response);
     }

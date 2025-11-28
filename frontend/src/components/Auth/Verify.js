@@ -1,329 +1,406 @@
-// src/components/Auth/Verify.js
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+// frontend/src/components/Auth/Register.js
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../../services/api';
-import './Verify.css';
+import GoogleLoginButton from './GoogleLoginButton';
+import './Register.css';
 
-const Verify = () => {
-  const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState('loading'); // loading, waiting, success, error
-  const [message, setMessage] = useState('');
-  const [countdown, setCountdown] = useState(3);
-  const [manualCode, setManualCode] = useState('');
-  const [showManualInput, setShowManualInput] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
+const Register = () => {
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
+  
+  const [validations, setValidations] = useState({});
+  const [passwordStrength, setPasswordStrength] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState({ message: '', type: '' });
   
   const navigate = useNavigate();
-  const pollingIntervalRef = useRef(null);
-  const email = searchParams.get('email');
-  const code = searchParams.get('code');
-  const mode = searchParams.get('mode'); // 'wait' או null (direct verify)
 
-  // טיפול בטעינה ראשונית
-  useEffect(() => {
-    if (mode === 'wait') {
-      // מצב המתנה - אחרי רישום
-      if (!email) {
-        setStatus('error');
-        setMessage('כתובת מייל חסרה');
-        return;
-      }
-      setStatus('waiting');
-      setMessage('בדוק את תיבת המייל שלך');
-      startPolling();
-    } else if (email && code) {
-      // מצב אימות ישיר - לחיצה על קישור במייל
-      verifyEmail(email, code);
-    } else {
-      setStatus('error');
-      setMessage('פרמטרים חסרים');
-    }
-
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, []);
-
-  // ספירה לאחור להעברה אוטומטית
-  useEffect(() => {
-    if (status === 'success' && countdown > 0) {
-      const timer = setTimeout(() => {
-        setCountdown(countdown - 1);
-      }, 1000);
-      
-      return () => clearTimeout(timer);
-    } else if (status === 'success' && countdown === 0) {
-      navigate('/login?verified=true');
-    }
-  }, [status, countdown, navigate]);
-
-  // ספירה לאחור לכפתור שליחה מחדש
-  useEffect(() => {
-    if (resendCooldown > 0) {
-      const timer = setTimeout(() => {
-        setResendCooldown(resendCooldown - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [resendCooldown]);
-
-  // פונקציה לבדיקה תקופתית אם המשתמש אישר
-  const startPolling = () => {
-    // בדוק מיד
-    checkVerificationStatus();
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
     
-    // המשך לבדוק כל 3 שניות
-    pollingIntervalRef.current = setInterval(() => {
-      checkVerificationStatus();
-    }, 3000);
+    if (name === 'username' && value.length >= 3) {
+      validateUsername(value);
+    }
+    if (name === 'email' && value.includes('@')) {
+      validateEmail(value);
+    }
+    if (name === 'password') {
+      validatePassword(value);
+    }
+    if (name === 'confirmPassword' || name === 'password') {
+      validateConfirmPassword(
+        name === 'password' ? value : formData.password,
+        name === 'confirmPassword' ? value : formData.confirmPassword
+      );
+    }
   };
 
-  // בדיקת סטטוס אימות
-  const checkVerificationStatus = async () => {
-    if (!email) return;
+  const validateUsername = async (username) => {
+    const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
     
-    try {
-      const response = await authAPI.checkIfVerified(email);
-      
-      if (response.data.verified) {
-        handleVerificationSuccess();
-      }
-    } catch (error) {
-      // זה בסדר - אנחנו רק בודקים
-      console.log('Polling check...');
-    }
-  };
-
-  // אימות ישיר עם קוד (מקישור או ידני)
-  const verifyEmail = async (emailToVerify, codeToVerify) => {
-    setStatus('loading');
-    
-    try {
-      const response = await authAPI.verify({ 
-        email: emailToVerify, 
-        verificationCode: codeToVerify 
-      });
-      
-      if (response.data.success) {
-        handleVerificationSuccess();
-      } else {
-        setStatus('error');
-        setMessage(response.data.error || 'אימות נכשל');
-      }
-    } catch (error) {
-      console.error('Verification error:', error);
-      setStatus('error');
-      
-      if (error.response?.data?.error) {
-        setMessage(error.response.data.error);
-      } else if (error.response?.status === 400) {
-        setMessage('קוד האימות לא תקין או שפג תוקפו');
-      } else {
-        setMessage('שגיאה באימות המייל');
-      }
-    }
-  };
-
-  // טיפול באימות מצליח
-  const handleVerificationSuccess = () => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
-    setStatus('success');
-    setMessage('המייל אומת בהצלחה!');
-    setCountdown(3);
-  };
-
-  // אימות ידני
-  const handleManualVerify = (e) => {
-    e.preventDefault();
-    if (!manualCode.trim()) {
+    if (!usernameRegex.test(username)) {
+      setValidations(prev => ({
+        ...prev,
+        username: { valid: false, message: '3-20 תווים: אותיות אנגליות, מספרים ו-_ בלבד' }
+      }));
       return;
     }
-    verifyEmail(email, manualCode.trim());
-  };
-
-  // שליחת קוד מחדש
-  const handleResendCode = async () => {
-    if (!email || resendCooldown > 0) return;
 
     try {
-      const response = await authAPI.resendVerificationCode(email);
+      const response = await authAPI.checkUsername(username);
+      if (response.data.available) {
+        setValidations(prev => ({
+          ...prev,
+          username: { valid: true, message: 'שם המשתמש זמין ✓' }
+        }));
+      } else {
+        setValidations(prev => ({
+          ...prev,
+          username: { valid: false, message: 'שם המשתמש כבר תפוס' }
+        }));
+      }
+    } catch (error) {
+      console.error('Error checking username:', error);
+    }
+  };
+
+  const validateEmail = async (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailRegex.test(email)) {
+      setValidations(prev => ({
+        ...prev,
+        email: { valid: false, message: 'פורמט אימייל לא תקין' }
+      }));
+      return;
+    }
+
+    try {
+      const response = await authAPI.checkEmail(email);
+      if (response.data.available) {
+        setValidations(prev => ({
+          ...prev,
+          email: { valid: true, message: 'האימייל זמין ✓' }
+        }));
+      } else {
+        setValidations(prev => ({
+          ...prev,
+          email: { valid: false, message: 'האימייל כבר בשימוש' }
+        }));
+      }
+    } catch (error) {
+      console.error('Error checking email:', error);
+    }
+  };
+
+  const validatePassword = (password) => {
+    if (password.length < 6) {
+      setPasswordStrength('חלשה');
+      setValidations(prev => ({
+        ...prev,
+        password: { valid: false, message: 'סיסמה חייבת להכיל לפחות 6 תווים' }
+      }));
+      return;
+    }
+
+    let strength = 'חלשה';
+    if (password.length >= 8 && /[A-Z]/.test(password) && /[0-9]/.test(password)) {
+      strength = 'חזקה';
+    } else if (password.length >= 6 && (/[A-Z]/.test(password) || /[0-9]/.test(password))) {
+      strength = 'בינונית';
+    }
+
+    setPasswordStrength(strength);
+    setValidations(prev => ({
+      ...prev,
+      password: { valid: true, message: '' }
+    }));
+  };
+
+  const validateConfirmPassword = (password, confirmPassword) => {
+    if (!confirmPassword) {
+      setValidations(prev => ({
+        ...prev,
+        confirmPassword: { valid: false, message: 'אישור סיסמה הוא שדה חובה' }
+      }));
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setValidations(prev => ({
+        ...prev,
+        confirmPassword: { valid: false, message: 'הסיסמאות אינן זהות' }
+      }));
+      return;
+    }
+
+    setValidations(prev => ({
+      ...prev,
+      confirmPassword: { valid: true, message: 'הסיסמאות זהות' }
+    }));
+  };
+
+  // ==================== Regular Registration ====================
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setAlert({ message: '', type: '' });
+
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+      setAlert({ message: 'נא למלא את כל השדות', type: 'error' });
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setAlert({ message: 'הסיסמאות אינן זהות', type: 'error' });
+      return;
+    }
+
+    if (validations.username && !validations.username.valid) {
+      setAlert({ message: 'שם המשתמש לא תקין או תפוס', type: 'error' });
+      return;
+    }
+
+    if (validations.email && !validations.email.valid) {
+      setAlert({ message: 'כתובת המייל לא תקינה או תפוסה', type: 'error' });
+      return;
+    }
+
+    if (validations.password && !validations.password.valid) {
+      setAlert({ message: 'הסיסמה לא עומדת בדרישות', type: 'error' });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await authAPI.register({
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        username: formData.username.trim()
+      });
+
       if (response.data.success) {
-        setResendCooldown(60); // 60 שניות המתנה
-        alert('✅ קוד אימות חדש נשלח למייל שלך');
+        setAlert({ message: 'רישום בוצע בהצלחה! מעביר לדף אימות...', type: 'success' });
+        
+        setTimeout(() => {
+          // ⭐ שינוי: mode=register במקום mode=wait
+          navigate('/verify?email=' + encodeURIComponent(formData.email.trim()) + '&mode=register');
+        }, 1500);
+      } else {
+        setAlert({ message: response.data.error || 'שגיאה ברישום המשתמש', type: 'error' });
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      if (error.response?.data?.error) {
+        setAlert({ message: error.response.data.error, type: 'error' });
+      } else {
+        setAlert({ message: 'שגיאה בחיבור לשרת', type: 'error' });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==================== Google Signup ====================
+  const handleGoogleSignup = async (credential) => {
+    setLoading(true);
+    setAlert({ message: '', type: '' });
+
+    try {
+      console.log('🔵 Google signup attempt...');
+      const response = await authAPI.googleLogin(credential);
+      
+      if (response.data.success) {
+        console.log('✅ Google signup successful');
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        setAlert({ message: 'נרשמת בהצלחה! מעביר לדף הבית...', type: 'success' });
+        setTimeout(() => navigate('/'), 1500);
+      } else {
+        setAlert({ message: response.data.error || 'שגיאה ברישום עם Google', type: 'error' });
       }
     } catch (err) {
-      alert('❌ ' + (err.response?.data?.error || 'שגיאה בשליחת קוד'));
+      console.error('❌ Google signup error:', err);
+      if (err.response?.data?.error) {
+        setAlert({ message: err.response.data.error, type: 'error' });
+      } else {
+        setAlert({ message: 'שגיאה ברישום עם Google', type: 'error' });
+      }
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleGoogleError = (error) => {
+    console.error('Google signup error:', error);
+    setAlert({ message: 'שגיאה ברישום עם Google. אנא נסה שוב.', type: 'error' });
   };
 
   return (
-    <div className="verify-page">
-      <div className="verify-container">
-        <div className="logo">💬 Custom Site Chat</div>      
-        <div className="subtitle">אימות כתובת מייל</div>
+    <div className="register-page">
+      <div className="register-container">
+        <div className="logo">💬 Custom Site Chat</div>       
+        <div className="subtitle">הירשם לבניית צ'אט מותאם אישית</div>
 
-        <div className="verify-status">
-          {/* מצב טעינה */}
-          {status === 'loading' && (
+        {alert.message && (
+          <div className={`alert alert-${alert.type}`}>{alert.message}</div>
+        )}
+
+        {/* ==================== Google Signup Button ==================== */}
+        <GoogleLoginButton 
+          onSuccess={handleGoogleSignup}
+          onError={handleGoogleError}
+          disabled={loading}
+        />
+
+        {/* ==================== Regular Registration Form ==================== */}
+        <form onSubmit={handleSubmit}>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="firstName">שם פרטי:</label>
+              <input
+                type="text"
+                id="firstName"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                required
+                disabled={loading}
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="lastName">שם משפחה:</label>
+              <input
+                type="text"
+                id="lastName"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                required
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="username">שם משתמש:</label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              required
+              disabled={loading}
+            />
+            {validations.username && (
+              <div className={`field-validation ${validations.username.valid ? 'validation-success' : 'validation-error'}`}>
+                {validations.username.message}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="email">כתובת אימייל:</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              required
+              disabled={loading}
+            />
+            {validations.email && (
+              <div className={`field-validation ${validations.email.valid ? 'validation-success' : 'validation-error'}`}>
+                {validations.email.message}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="password">סיסמה:</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              required
+              disabled={loading}
+            />
+            {passwordStrength && (
+              <div className={`password-strength strength-${passwordStrength === 'חזקה' ? 'strong' : passwordStrength === 'בינונית' ? 'medium' : 'weak'}`}>
+                חוזק סיסמה: {passwordStrength}
+              </div>
+            )}
+            {validations.password && !validations.password.valid && (
+              <div className="field-validation validation-error">
+                {validations.password.message}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="confirmPassword">אישור סיסמה:</label>
+            <input
+              type="password"
+              id="confirmPassword"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              required
+              disabled={loading}
+            />
+            {validations.confirmPassword && (
+              <div className={`field-validation ${validations.confirmPassword.valid ? 'validation-success' : 'validation-error'}`}>
+                {validations.confirmPassword.message}
+              </div>
+            )}
+          </div>
+
+          <button 
+            type="submit" 
+            className="register-btn"
+            disabled={loading}
+            style={{ display: loading ? 'none' : 'block' }}
+          >
+            הירשם
+          </button>
+
+          {loading && (
             <div className="loading">
               <div className="spinner"></div>
-              <p>מאמת את המייל שלך...</p>
-              <p style={{ fontSize: '14px', color: '#999', marginTop: '10px' }}>
-                אנא המתן, זה ייקח רק רגע
-              </p>
+              <p>מעבד רישום...</p>
             </div>
           )}
+        </form>
 
-          {/* מצב המתנה - polling */}
-          {status === 'waiting' && (
-            <>
-              <div className="status-icon waiting">📧</div>
-              <div className="alert" style={{ 
-                backgroundColor: '#e3f2fd', 
-                border: '2px solid #2196f3',
-                color: '#1565c0'
-              }}>
-                <h2 style={{ margin: '0 0 15px 0' }}>בדוק את תיבת המייל שלך</h2>
-                <p className="status-message">
-                  שלחנו לך מייל לכתובת:<br />
-                  <strong style={{ fontSize: '1.1em', color: '#667eea' }}>{email}</strong>
-                </p>
-                <p className="status-submessage">
-                  לחץ על הכפתור במייל כדי לאמת את החשבון
-                </p>
-                <div className="loading" style={{ marginTop: '20px' }}>
-                  <div className="spinner"></div>
-                  <p style={{ fontSize: '14px', marginTop: '10px' }}>
-                    ממתין לאימות... (בודק אוטומטית כל 3 שניות)
-                  </p>
-                </div>
-              </div>
-
-              {/* אופציה לאימות ידני */}
-              {!showManualInput ? (
-                <button 
-                  className="verify-btn"
-                  onClick={() => setShowManualInput(true)}
-                  style={{ 
-                    background: 'white', 
-                    color: '#667eea', 
-                    border: '2px solid #667eea',
-                    marginTop: '20px'
-                  }}
-                >
-                  יש לי קוד אימות - הזן ידנית
-                </button>
-              ) : (
-                <form onSubmit={handleManualVerify} style={{ marginTop: '20px', width: '100%' }}>
-                  <div className="form-group">
-                    <input
-                      type="text"
-                      value={manualCode}
-                      onChange={(e) => setManualCode(e.target.value)}
-                      placeholder="הזן קוד בן 6 ספרות"
-                      maxLength="6"
-                      pattern="[0-9]{6}"
-                      style={{ 
-                        textAlign: 'center', 
-                        fontSize: '20px', 
-                        letterSpacing: '5px',
-                        width: '100%',
-                        padding: '12px',
-                        border: '2px solid #e1e8ed',
-                        borderRadius: '8px'
-                      }}
-                      autoFocus
-                    />
-                  </div>
-                  <button 
-                    type="submit" 
-                    className="verify-btn"
-                    style={{ width: '100%', marginTop: '10px' }}
-                  >
-                    אמת
-                  </button>
-                </form>
-              )}
-
-              {/* כפתור שליחה מחדש */}
-              <button 
-                className="verify-btn"
-                onClick={handleResendCode}
-                disabled={resendCooldown > 0}
-                style={{ 
-                  background: 'white', 
-                  color: '#667eea', 
-                  border: '2px solid #667eea',
-                  marginTop: '10px',
-                  opacity: resendCooldown > 0 ? 0.5 : 1
-                }}
-              >
-                {resendCooldown > 0 
-                  ? `שלח קוד מחדש (${resendCooldown}s)` 
-                  : 'שלח קוד מחדש'}
-              </button>
-
-              <p style={{ marginTop: '20px', fontSize: '14px', color: '#999' }}>
-                לא קיבלת מייל? בדוק גם בתיקיית SPAM
-              </p>
-            </>
-          )}
-
-          {/* מצב הצלחה */}
-          {status === 'success' && (
-            <>
-              <div className="status-icon success">✅</div>
-              <div className="alert alert-success">
-                <h2 style={{ margin: '0 0 15px 0' }}>{message}</h2>
-                <p className="status-submessage">
-                  מעביר אותך לדף ההתחברות בעוד {countdown} שניות...
-                </p>
-                <div className="progress-bar">
-                  <div className="progress-fill"></div>
-                </div>
-              </div>
-              <button 
-                className="verify-btn" 
-                onClick={() => navigate('/login?verified=true')}
-              >
-                עבור להתחברות עכשיו
-              </button>
-            </>
-          )}
-
-          {/* מצב שגיאה */}
-          {status === 'error' && (
-            <>
-              <div className="status-icon error">❌</div>
-              <div className="alert alert-error">
-                <h2 style={{ margin: '0 0 15px 0' }}>אימות נכשל</h2>
-                <p className="status-message">{message}</p>
-              </div>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                <button 
-                  className="verify-btn" 
-                  onClick={() => navigate('/login')}
-                >
-                  חזור להתחברות
-                </button>
-                <button 
-                  className="verify-btn" 
-                  onClick={() => navigate('/register')}
-                  style={{ background: 'white', color: '#667eea', border: '2px solid #667eea' }}
-                >
-                  נסה להירשם שוב
-                </button>
-              </div>
-            </>
-          )}
+        <div className="login-link">
+          <p>
+            כבר יש לך חשבון?{' '}
+            <span 
+              onClick={() => navigate('/login')}
+              style={{ cursor: 'pointer', color: '#667eea', fontWeight: 500 }}
+            >
+              התחבר כאן
+            </span>
+          </p>
         </div>
       </div>
     </div>
   );
 };
 
-export default Verify;
+export default Register;

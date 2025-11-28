@@ -7,8 +7,6 @@ import './ResetPassword.css';
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
-    email: searchParams.get('email') || '',
-    resetCode: searchParams.get('code') || '',
     newPassword: '',
     confirmPassword: ''
   });
@@ -20,19 +18,18 @@ const ResetPassword = () => {
   const [countdown, setCountdown] = useState(3);
   
   const navigate = useNavigate();
+  
+  // פרמטרים מה-URL
+  const email = searchParams.get('email');
+  const verified = searchParams.get('verified');
 
-  // אם יש קוד ב-URL, מלא אוטומטית
+  // בדיקה שהגיעו מדף האימות
   useEffect(() => {
-    const emailParam = searchParams.get('email');
-    const codeParam = searchParams.get('code');
-    
-    if (emailParam) {
-      setFormData(prev => ({ ...prev, email: emailParam }));
+    if (!email || verified !== 'true') {
+      // אם לא הגיעו מדף האימות, חזרה לשחזור סיסמה
+      navigate('/forgot-password');
     }
-    if (codeParam) {
-      setFormData(prev => ({ ...prev, resetCode: codeParam }));
-    }
-  }, [searchParams]);
+  }, [email, verified, navigate]);
 
   // ספירה לאחור אחרי הצלחה
   useEffect(() => {
@@ -40,7 +37,6 @@ const ResetPassword = () => {
       const timer = setTimeout(() => {
         setCountdown(countdown - 1);
       }, 1000);
-      
       return () => clearTimeout(timer);
     } else if (success && countdown === 0) {
       navigate('/login?reset=success');
@@ -77,13 +73,8 @@ const ResetPassword = () => {
     setError('');
 
     // ולידציות
-    if (!formData.email || !formData.resetCode || !formData.newPassword) {
-      setError('נא למלא את כל השדות');
-      return;
-    }
-
-    if (formData.resetCode.length !== 6) {
-      setError('קוד האיפוס חייב להכיל 6 ספרות');
+    if (!formData.newPassword) {
+      setError('נא להזין סיסמה חדשה');
       return;
     }
 
@@ -100,25 +91,19 @@ const ResetPassword = () => {
     setLoading(true);
 
     try {
-      const response = await authAPI.resetPassword(
-        formData.email,
-        formData.resetCode,
-        formData.newPassword
-      );
+      const response = await authAPI.setNewPassword(email, formData.newPassword);
 
       if (response.data.success) {
         setSuccess(true);
       } else {
-        setError(response.data.error || 'שגיאה באיפוס הסיסמה');
+        setError(response.data.error || 'שגיאה בשינוי הסיסמה');
       }
     } catch (err) {
       console.error('Reset password error:', err);
       if (err.response?.data?.message) {
         setError(err.response.data.message);
-      } else if (err.response?.data?.fieldErrors) {
-        const fieldErrors = err.response.data.fieldErrors;
-        const firstError = Object.values(fieldErrors)[0];
-        setError(firstError);
+      } else if (err.response?.data?.error) {
+        setError(err.response.data.error);
       } else {
         setError('שגיאה בחיבור לשרת');
       }
@@ -154,111 +139,73 @@ const ResetPassword = () => {
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label htmlFor="email">כתובת אימייל:</label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="הזן את כתובת המייל שלך"
-                required
-                disabled={loading}
-              />
+          <>
+            <div className="email-info">
+              <p>יוצר סיסמה חדשה עבור:</p>
+              <p className="email-address">{email}</p>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="resetCode">קוד איפוס (6 ספרות):</label>
-              <input
-                type="text"
-                id="resetCode"
-                name="resetCode"
-                value={formData.resetCode}
-                onChange={handleChange}
-                placeholder="הזן קוד בן 6 ספרות"
-                maxLength="6"
-                pattern="[0-9]{6}"
-                required
-                disabled={loading}
-                style={{ 
-                  textAlign: 'center', 
-                  fontSize: '20px', 
-                  letterSpacing: '5px',
-                  fontFamily: 'monospace'
-                }}
-              />
-              <div style={{ 
-                fontSize: '13px', 
-                color: '#666', 
-                marginTop: '8px',
-                textAlign: 'center'
-              }}>
-                הקוד נשלח למייל שלך
+            <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label htmlFor="newPassword">סיסמה חדשה:</label>
+                <input
+                  type="password"
+                  id="newPassword"
+                  name="newPassword"
+                  value={formData.newPassword}
+                  onChange={handleChange}
+                  placeholder="הזן סיסמה חדשה"
+                  required
+                  disabled={loading}
+                />
+                {passwordStrength && (
+                  <div className={`password-strength strength-${
+                    passwordStrength === 'חזקה' ? 'strong' : 
+                    passwordStrength === 'בינונית' ? 'medium' : 'weak'
+                  }`}>
+                    חוזק סיסמה: {passwordStrength}
+                  </div>
+                )}
               </div>
-            </div>
 
-            <div className="form-group">
-              <label htmlFor="newPassword">סיסמה חדשה:</label>
-              <input
-                type="password"
-                id="newPassword"
-                name="newPassword"
-                value={formData.newPassword}
-                onChange={handleChange}
-                placeholder="הזן סיסמה חדשה"
-                required
+              <div className="form-group">
+                <label htmlFor="confirmPassword">אישור סיסמה:</label>
+                <input
+                  type="password"
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="הזן שוב את הסיסמה החדשה"
+                  required
+                  disabled={loading}
+                />
+                {formData.confirmPassword && (
+                  <div className={`field-validation ${
+                    formData.newPassword === formData.confirmPassword 
+                      ? 'validation-success' 
+                      : 'validation-error'
+                  }`}>
+                    {formData.newPassword === formData.confirmPassword 
+                      ? 'הסיסמאות זהות ✓' 
+                      : 'הסיסמאות אינן זהות'}
+                  </div>
+                )}
+              </div>
+
+              <button 
+                type="submit" 
+                className="submit-btn"
                 disabled={loading}
-              />
-              {passwordStrength && (
-                <div className={`password-strength strength-${
-                  passwordStrength === 'חזקה' ? 'strong' : 
-                  passwordStrength === 'בינונית' ? 'medium' : 'weak'
-                }`}>
-                  חוזק סיסמה: {passwordStrength}
-                </div>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="confirmPassword">אישור סיסמה:</label>
-              <input
-                type="password"
-                id="confirmPassword"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                placeholder="הזן שוב את הסיסמה החדשה"
-                required
-                disabled={loading}
-              />
-              {formData.confirmPassword && (
-                <div className={`field-validation ${
-                  formData.newPassword === formData.confirmPassword 
-                    ? 'validation-success' 
-                    : 'validation-error'
-                }`}>
-                  {formData.newPassword === formData.confirmPassword 
-                    ? 'הסיסמאות זהות ✓' 
-                    : 'הסיסמאות אינן זהות'}
-                </div>
-              )}
-            </div>
-
-            <button 
-              type="submit" 
-              className="submit-btn"
-              disabled={loading}
-            >
-              {loading ? 'משנה סיסמה...' : 'שנה סיסמה'}
-            </button>
-          </form>
+              >
+                {loading ? 'משנה סיסמה...' : 'שנה סיסמה'}
+              </button>
+            </form>
+          </>
         )}
 
         <div className="back-to-login">
           <p>
-            נזכרת בסיסמה?{' '}
             <span 
               onClick={() => navigate('/login')}
               style={{ cursor: 'pointer', color: '#667eea', fontWeight: 500 }}

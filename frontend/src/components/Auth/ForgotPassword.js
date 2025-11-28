@@ -22,8 +22,9 @@ const ForgotPassword = () => {
       
       if (response.data.success) {
         setSuccess(true);
+        // מעביר לדף אימות עם mode=reset
         setTimeout(() => {
-          navigate('/reset-password?email=' + encodeURIComponent(email));
+          navigate(`/verify?email=${encodeURIComponent(email)}&mode=reset`);
         }, 2000);
       } else {
         setError(response.data.error || 'שגיאה בשליחת קוד איפוס');
@@ -32,6 +33,8 @@ const ForgotPassword = () => {
       console.error('Forgot password error:', err);
       if (err.response?.data?.message) {
         setError(err.response.data.message);
+      } else if (err.response?.data?.error) {
+        setError(err.response.data.error);
       } else {
         setError('שגיאה בחיבור לשרת');
       }
@@ -44,7 +47,7 @@ const ForgotPassword = () => {
     <div className="forgot-password-page">
       <div className="forgot-password-container">
         <div className="logo">🔐 Custom Site Chat</div>
-        <div className="subtitle">איפוס סיסמה</div>
+        <div className="subtitle">שחזור סיסמה</div>
 
         {error && (
           <div className="alert alert-error">{error}</div>
@@ -52,12 +55,12 @@ const ForgotPassword = () => {
 
         {success ? (
           <div className="success-state">
-            <div className="success-icon">✅</div>
+            <div className="success-icon">📧</div>
             <h3>קוד איפוס נשלח!</h3>
             <p>בדוק את תיבת המייל שלך ב:</p>
             <p style={{ fontWeight: 600, color: '#667eea', marginTop: '10px' }}>{email}</p>
             <p style={{ fontSize: '14px', color: '#666', marginTop: '15px' }}>
-              מעביר אותך לעמוד איפוס הסיסמה...
+              מעביר אותך לדף אימות הקוד...
             </p>
           </div>
         ) : (

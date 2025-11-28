@@ -45,13 +45,20 @@ public class AuthenticationService {
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
     }
-
+    
     @Autowired
     private TestConfig testConfig; 
     
     // ==================== EXISTING: Signup ====================
     
     public User signup(RegisterUserDto input) {
+        // 🔍 הוסף את זה בשורה הראשונה של הפונקציה
+        log.info("========================================");
+        log.info("🔵 SIGNUP STARTED");
+        log.info("   Email: {}", input.getEmail());
+        log.info("   Username: {}", input.getUsername());
+        log.info("========================================");
+        
         User user = new User();
         user.setUsername(input.getUsername());
         user.setEmail(input.getEmail());
@@ -59,13 +66,23 @@ public class AuthenticationService {
         user.setFirstName(input.getFirstName());
         user.setLastName(input.getLastName());
 
+        // 🔍 הוסף את זה לפני ה-if
+        log.info("========================================");
+        log.info("🔍 TEST MODE CHECK:");
+        log.info("   testConfig = {}", testConfig);
+        log.info("   isBypassEmailVerification() = {}", testConfig.isBypassEmailVerification());
+        log.info("   isTestModeEnabled() = {}", testConfig.isTestModeEnabled());
+        log.info("========================================");
+
         // ⭐ Test Mode Logic
         if (testConfig.isBypassEmailVerification()) {
+            log.warn("🔶 TEST MODE ACTIVE - BYPASSING EMAIL VERIFICATION!");
             user.setEnabled(true);
             user.setVerificationCode(null);
             user.setVerificationCodeExpiresAt(null);
             log.warn("🔶 TEST MODE: User automatically verified!");
         } else {
+            log.info("✅ NORMAL MODE - Email verification required");
             user.setVerificationCode(
                 testConfig.isTestModeEnabled() 
                     ? testConfig.getFixedVerificationCode()
@@ -73,13 +90,28 @@ public class AuthenticationService {
             );
             user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
             user.setEnabled(false);
+            
+            log.info("📧 Verification code generated: {}", user.getVerificationCode());
+            log.info("📧 Sending verification email to: {}", user.getEmail());
+            
             sendVerificationEmail(user);
         }
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        
+        // 🔍 הוסף את זה בסוף
+        log.info("========================================");
+        log.info("✅ SIGNUP COMPLETED");
+        log.info("   User ID: {}", savedUser.getId());
+        log.info("   Email: {}", savedUser.getEmail());
+        log.info("   Enabled: {}", savedUser.isEnabled());
+        log.info("   Has verification code: {}", savedUser.getVerificationCode() != null);
+        log.info("========================================");
+
+        return savedUser;
     }
 
-    // ==================== EXISTING: Authenticate ====================
+    // ==================== AUTHENTICATE ====================
     
     public User authenticate(LoginUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
@@ -99,13 +131,13 @@ public class AuthenticationService {
         return user;
     }
 
-    // ==================== EXISTING: Verify User ====================
+    // ==================== VERIFY USER ====================
     
     public void verifyUser(VerifyUserDto input) {
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("משתמש", input.getEmail()));
         
-        // ⭐ Test Mode: קוד תמיד נכון
+        // ⭐ Test Mode: קוד קבוע תמיד נכון
         if (testConfig.isTestModeEnabled() && 
             input.getVerificationCode().equals(testConfig.getFixedVerificationCode())) {
             user.setEnabled(true);
@@ -117,7 +149,8 @@ public class AuthenticationService {
         }
         
         // Regular verification logic
-        if (user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
+        if (user.getVerificationCodeExpiresAt() == null ||
+            user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
             throw new ValidationException("verificationCode", "קוד האימות פג תוקף");
         }
         
@@ -129,9 +162,11 @@ public class AuthenticationService {
         user.setVerificationCode(null);
         user.setVerificationCodeExpiresAt(null);
         userRepository.save(user);
+        
+        log.info("✅ User verified: {}", input.getEmail());
     }
 
-    // ==================== EXISTING: Resend Verification Code ====================
+    // ==================== RESEND VERIFICATION CODE ====================
     
     public void resendVerificationCode(String email) {
         User user = userRepository.findByEmail(email)
@@ -141,13 +176,25 @@ public class AuthenticationService {
             throw new ValidationException("email", "החשבון כבר מאומת");
         }
         
-        user.setVerificationCode(generateVerificationCode());
-        user.setVerificationCodeExpiresAt(LocalDateTime.now().plusHours(1));
-        sendVerificationEmail(user);
+        // Use fixed code in test mode, random otherwise
+        String newCode = testConfig.isTestModeEnabled() 
+            ? testConfig.getFixedVerificationCode() 
+            : generateVerificationCode();
+            
+        user.setVerificationCode(newCode);
+        user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
+        
         userRepository.save(user);
+        sendVerificationEmail(user);
+        
+        if (testConfig.isTestModeEnabled()) {
+            log.warn("🔶 TEST MODE: Resent fixed code: {}", newCode);
+        } else {
+            log.info("🔄 Verification code resent to: {}", email);
+        }
     }
 
-    // ==================== EXISTING: Is Email Verified ====================
+    // ==================== IS EMAIL VERIFIED ====================
     
     public boolean isEmailVerified(String email) {
         User user = userRepository.findByEmail(email)
@@ -155,11 +202,8 @@ public class AuthenticationService {
         return user.isEnabled();
     }
 
-    // ==================== 🆕 FORGOT PASSWORD ====================
+    // ==================== FORGOT PASSWORD ====================
     
-    /**
-     * שליחת קוד איפוס סיסמה למייל
-     */
     public void forgotPassword(String email) {
         log.info("🔐 Forgot password request for: {}", email);
         
@@ -167,7 +211,7 @@ public class AuthenticationService {
                 .orElseThrow(() -> new ResourceNotFoundException("משתמש", email));
         
         // יצירת קוד איפוס (6 ספרות)
-        String resetCode = generateVerificationCode(); // משתמש באותו generator
+        String resetCode = generateVerificationCode();
         
         user.setResetPasswordCode(resetCode);
         user.setResetPasswordCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
@@ -184,11 +228,8 @@ public class AuthenticationService {
         }
     }
 
-    // ==================== 🆕 RESET PASSWORD ====================
+    // ==================== RESET PASSWORD ====================
     
-    /**
-     * איפוס סיסמה עם קוד
-     */
     public void resetPassword(String email, String resetCode, String newPassword) {
         log.info("🔐 Reset password attempt for: {}", email);
         
@@ -203,10 +244,8 @@ public class AuthenticationService {
         // עדכון סיסמה
         user.setPassword(passwordEncoder.encode(newPassword));
         
-        // ניקוי קוד איפוס
+        // ניקוי קודים
         user.clearResetPasswordCode();
-        
-        // ניקוי סיסמה זמנית (אם היתה)
         user.clearTempPassword();
         
         userRepository.save(user);
@@ -214,7 +253,7 @@ public class AuthenticationService {
         log.info("✅ Password reset successful for: {}", email);
     }
 
-    // ==================== EXISTING: Username/Email Exists ====================
+    // ==================== USERNAME/EMAIL EXISTS ====================
     
     public boolean usernameExists(String username) {
         return userRepository.findByUsername(username).isPresent();
@@ -224,7 +263,7 @@ public class AuthenticationService {
         return userRepository.findByEmail(email).isPresent();
     }
 
-    // ==================== PRIVATE: Helpers ====================
+    // ==================== PRIVATE HELPERS ====================
     
     private void sendVerificationEmail(User user) {
         String subject = "Account Verification";
@@ -233,13 +272,17 @@ public class AuthenticationService {
         try {
             emailService.sendVerificationEmail(user.getEmail(), subject, verificationCode);
         } catch (MessagingException e) {
-            e.printStackTrace();
+            log.error("❌ Failed to send verification email", e);
+            // בטסט מוד לא זורקים exception
+            if (!testConfig.isTestModeEnabled()) {
+                throw new RuntimeException("נכשל בשליחת מייל אימות");
+            }
         }
     }
     
     private String generateVerificationCode() {
         Random random = new Random();
-        int code = random.nextInt(900000) + 100000;
+        int code = random.nextInt(900000) + 100000; // 100000-999999
         return String.valueOf(code);
     }
 }
