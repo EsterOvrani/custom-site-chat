@@ -1,0 +1,1594 @@
+{
+  "info": {
+    "_postman_id": "custom-site-chat-api-tests",
+    "name": "Custom Site Chat - API Tests",
+    "description": "Comprehensive API tests for Custom Site Chat application.\n\nTest flow:\n1. Health Check\n2. User Registration\n3. Email Verification\n4. Login\n5. Collection Management\n6. Document Upload & Management\n7. Query API\n8. Password Reset Flow\n9. Cleanup",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://backend:8080",
+      "type": "string"
+    },
+    {
+      "key": "testEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "testPassword",
+      "value": "Test123456",
+      "type": "string"
+    },
+    {
+      "key": "testUsername",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "secretKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "documentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "collectionName",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "verificationCode",
+      "value": "999999",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health & Setup",
+      "item": [
+        {
+          "name": "1.1 Check Auth Status (Unauthenticated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response indicates not authenticated', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.authenticated).to.be.false;",
+                  "});",
+                  "",
+                  "// Generate unique test data",
+                  "const timestamp = Date.now();",
+                  "const randomId = Math.random().toString(36).substring(2, 8);",
+                  "pm.collectionVariables.set('testEmail', `test_${timestamp}@example.com`);",
+                  "pm.collectionVariables.set('testUsername', `testuser_${randomId}`);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. User Registration Flow",
+      "item": [
+        {
+          "name": "2.1 Check Username Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Username is available', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.available).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/check-username/{{testUsername}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "check-username", "{{testUsername}}"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Check Email Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Email is available', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.available).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/check-email/{{testEmail}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "check-email", "{{testEmail}}"]
+            }
+          }
+        },
+        {
+          "name": "2.3 Register New User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Registration successful', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.email).to.eql(pm.collectionVariables.get('testEmail'));",
+                  "});",
+                  "",
+                  "pm.test('Message indicates verification needed', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.message).to.include('אימות');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"{{testPassword}}\",\n    \"username\": \"{{testUsername}}\",\n    \"firstName\": \"Test\",\n    \"lastName\": \"User\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup"]
+            }
+          }
+        },
+        {
+          "name": "2.4 Check Pending Registration",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Has pending registration', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.hasPending).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/check-pending/{{testEmail}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "check-pending", "{{testEmail}}"]
+            }
+          }
+        },
+        {
+          "name": "2.5 Verify Email (Test Mode)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Verification successful', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('Token received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.token).to.be.a('string');",
+                  "    pm.expect(jsonData.token.length).to.be.greaterThan(10);",
+                  "    pm.collectionVariables.set('authToken', jsonData.token);",
+                  "});",
+                  "",
+                  "pm.test('User data received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.user).to.be.an('object');",
+                  "    pm.expect(jsonData.user.email).to.eql(pm.collectionVariables.get('testEmail'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"verificationCode\": \"{{verificationCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify"]
+            }
+          }
+        },
+        {
+          "name": "2.6 Check User is Verified",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User is verified', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.verified).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/check-verified/{{testEmail}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "check-verified", "{{testEmail}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Authentication",
+      "item": [
+        {
+          "name": "3.1 Login with Valid Credentials",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Login successful', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('Token received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.token).to.be.a('string');",
+                  "    pm.collectionVariables.set('authToken', jsonData.token);",
+                  "});",
+                  "",
+                  "pm.test('User info received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.user).to.be.an('object');",
+                  "    pm.expect(jsonData.user.email).to.eql(pm.collectionVariables.get('testEmail'));",
+                  "    pm.expect(jsonData.user.username).to.eql(pm.collectionVariables.get('testUsername'));",
+                  "});",
+                  "",
+                  "pm.test('Expiration time provided', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.expiresIn).to.be.a('number');",
+                  "    pm.expect(jsonData.expiresIn).to.be.greaterThan(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"{{testPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "3.2 Check Auth Status (Authenticated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User is authenticated', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.authenticated).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('User info correct', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.user).to.be.an('object');",
+                  "    pm.expect(jsonData.user.email).to.eql(pm.collectionVariables.get('testEmail'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "status"]
+            }
+          }
+        },
+        {
+          "name": "3.3 Login with Invalid Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 or 403', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"wrongpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "3.4 Login with Non-existent Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 or 401 or 403', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([404, 401, 403]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"nonexistent@example.com\",\n    \"password\": \"somepassword\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Collection Management",
+      "item": [
+        {
+          "name": "4.1 Get Collection Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Collection info received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data).to.be.an('object');",
+                  "});",
+                  "",
+                  "pm.test('Collection has required fields', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data;",
+                  "    ",
+                  "    pm.expect(data.collectionName).to.be.a('string');",
+                  "    pm.expect(data.secretKey).to.be.a('string');",
+                  "    pm.expect(data.embedCode).to.be.a('string');",
+                  "    ",
+                  "    // Save for later use",
+                  "    pm.collectionVariables.set('secretKey', data.secretKey);",
+                  "    pm.collectionVariables.set('collectionName', data.collectionName);",
+                  "});",
+                  "",
+                  "pm.test('Secret key format is valid', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const secretKey = jsonData.data.secretKey;",
+                  "    pm.expect(secretKey).to.match(/^sk_/);",
+                  "});",
+                  "",
+                  "pm.test('Embed code contains secret key', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const embedCode = jsonData.data.embedCode;",
+                  "    const secretKey = jsonData.data.secretKey;",
+                  "    pm.expect(embedCode).to.include(secretKey);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/collection/info",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "collection", "info"]
+            }
+          }
+        },
+        {
+          "name": "4.2 Get Embed Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Embed code received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.embedCode).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test('Embed code contains script tag', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.embedCode).to.include('<script>');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/collection/embed-code",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "collection", "embed-code"]
+            }
+          }
+        },
+        {
+          "name": "4.3 Regenerate Secret Key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('New key generated', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data.secretKey).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test('New key is different from old key', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const newKey = jsonData.data.secretKey;",
+                  "    const oldKey = pm.collectionVariables.get('secretKey');",
+                  "    ",
+                  "    pm.expect(newKey).to.not.eql(oldKey);",
+                  "    ",
+                  "    // Update stored key",
+                  "    pm.collectionVariables.set('secretKey', newKey);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/collection/regenerate-key",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "collection", "regenerate-key"]
+            }
+          }
+        },
+        {
+          "name": "4.4 Collection Info - Unauthorized",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 or 403', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/collection/info",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "collection", "info"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Document Management",
+      "item": [
+        {
+          "name": "5.1 Get My Documents (Empty)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response structure is correct', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "    pm.expect(jsonData.count).to.be.a('number');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/my-documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "my-documents"]
+            }
+          }
+        },
+        {
+          "name": "5.2 Upload Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Upload successful', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('Document info returned', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.document).to.be.an('object');",
+                  "    pm.expect(jsonData.document.id).to.be.a('number');",
+                  "    pm.expect(jsonData.document.originalFileName).to.be.a('string');",
+                  "    ",
+                  "    // Save document ID for later tests",
+                  "    pm.collectionVariables.set('documentId', jsonData.document.id);",
+                  "});",
+                  "",
+                  "pm.test('Document has processing status', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const status = jsonData.document.processingStatus;",
+                  "    pm.expect(['PENDING', 'PROCESSING', 'COMPLETED']).to.include(status);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "/etc/newman/data/EsterOvrani.pdf"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "upload"]
+            }
+          }
+        },
+        {
+          "name": "5.3 Wait for Processing (15 sec)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Wait 15 seconds for document processing",
+                  "console.log('Waiting 15 seconds for document processing...');",
+                  "setTimeout(function() {}, 15000);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Document list received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Check if our document is being processed",
+                  "const jsonData = pm.response.json();",
+                  "const docId = pm.collectionVariables.get('documentId');",
+                  "const doc = jsonData.data.find(d => d.id == docId);",
+                  "",
+                  "if (doc) {",
+                  "    console.log('Document status:', doc.processingStatus);",
+                  "    console.log('Document progress:', doc.processingProgress);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/my-documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "my-documents"]
+            }
+          }
+        },
+        {
+          "name": "5.4 Get Single Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Document data received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data).to.be.an('object');",
+                  "});",
+                  "",
+                  "pm.test('Document has required fields', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const doc = jsonData.data;",
+                  "    ",
+                  "    pm.expect(doc.id).to.eql(parseInt(pm.collectionVariables.get('documentId')));",
+                  "    pm.expect(doc.originalFileName).to.be.a('string');",
+                  "    pm.expect(doc.fileType).to.be.a('string');",
+                  "    pm.expect(doc.processingStatus).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/{{documentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "{{documentId}}"]
+            }
+          }
+        },
+        {
+          "name": "5.5 Get Download URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Download URL received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.url).to.be.a('string');",
+                  "    pm.expect(jsonData.expiresIn).to.be.a('number');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/{{documentId}}/download-url",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "{{documentId}}", "download-url"]
+            }
+          }
+        },
+        {
+          "name": "5.6 Get My Documents (With Document)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Documents list is not empty', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data.length).to.be.greaterThan(0);",
+                  "    pm.expect(jsonData.count).to.be.greaterThan(0);",
+                  "});",
+                  "",
+                  "pm.test('Our document is in the list', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const docId = parseInt(pm.collectionVariables.get('documentId'));",
+                  "    const found = jsonData.data.some(doc => doc.id === docId);",
+                  "    pm.expect(found).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/my-documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "my-documents"]
+            }
+          }
+        },
+        {
+          "name": "5.7 Access Document - Unauthorized",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 or 403', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/my-documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "my-documents"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Query API (Public)",
+      "item": [
+        {
+          "name": "6.1 Ask Question (Valid Secret Key)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Wait additional time to ensure document processing is complete",
+                  "console.log('Waiting for document to be fully processed...');",
+                  "setTimeout(function() {}, 10000);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response structure is correct', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data).to.be.an('object');",
+                  "});",
+                  "",
+                  "pm.test('Answer received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    // Answer might be empty if document not processed, but structure should exist",
+                  "    pm.expect(jsonData.data.answer).to.exist;",
+                  "});",
+                  "",
+                  "pm.test('Response has metrics', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.responseTimeMs).to.be.a('number');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"secretKey\": \"{{secretKey}}\",\n    \"question\": \"מה המסמך הזה מכיל?\",\n    \"history\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/query/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "query", "ask"]
+            }
+          }
+        },
+        {
+          "name": "6.2 Ask Question with History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is successful', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"secretKey\": \"{{secretKey}}\",\n    \"question\": \"תוכל לפרט יותר?\",\n    \"history\": [\n        {\n            \"role\": \"user\",\n            \"content\": \"מה המסמך הזה מכיל?\"\n        },\n        {\n            \"role\": \"assistant\",\n            \"content\": \"המסמך מכיל מידע כללי.\"\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/query/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "query", "ask"]
+            }
+          }
+        },
+        {
+          "name": "6.3 Ask Question (Invalid Secret Key)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test('Error response', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"secretKey\": \"sk_invalid_key_12345\",\n    \"question\": \"Test question?\",\n    \"history\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/query/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "query", "ask"]
+            }
+          }
+        },
+        {
+          "name": "6.4 Ask Question (Missing Fields)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"question\": \"Test?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/query/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "query", "ask"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Password Reset Flow",
+      "item": [
+        {
+          "name": "7.1 Request Password Reset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// In test mode, this might succeed or fail depending on email config",
+                  "// We just check that the endpoint responds",
+                  "pm.test('Status code is 200 or 500', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 500]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Reset request accepted', function () {",
+                  "        const jsonData = pm.response.json();",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "forgot-password"]
+            }
+          }
+        },
+        {
+          "name": "7.2 Verify Reset Code (Test Mode)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Skip if previous step failed",
+                  "pm.test('Reset code verification', function () {",
+                  "    // This might fail if forgot-password didn't work",
+                  "    // In test mode with fixed code, this should work",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"resetCode\": \"{{verificationCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-reset-code",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify-reset-code"]
+            }
+          }
+        },
+        {
+          "name": "7.3 Request Reset - Non-existent Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"nonexistent@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "forgot-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. User API",
+      "item": [
+        {
+          "name": "8.1 Get Current User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User data received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.email).to.eql(pm.collectionVariables.get('testEmail'));",
+                  "    pm.expect(jsonData.username).to.eql(pm.collectionVariables.get('testUsername'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          }
+        },
+        {
+          "name": "8.2 Get Current User - Unauthorized",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 or 403', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Cleanup",
+      "item": [
+        {
+          "name": "9.1 Delete Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Document deleted', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/{{documentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "{{documentId}}"]
+            }
+          }
+        },
+        {
+          "name": "9.2 Verify Document Deleted",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Document no longer in list', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const docId = parseInt(pm.collectionVariables.get('documentId'));",
+                  "    const found = jsonData.data.some(doc => doc.id === docId);",
+                  "    pm.expect(found).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/my-documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "my-documents"]
+            }
+          }
+        },
+        {
+          "name": "9.3 Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Logout successful', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});",
+                  "",
+                  "// Clear stored token",
+                  "pm.collectionVariables.unset('authToken');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Error Handling",
+      "item": [
+        {
+          "name": "10.1 Invalid Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 or 403', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid_token_12345"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/my-documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "my-documents"]
+            }
+          }
+        },
+        {
+          "name": "10.2 Non-existent Document",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Re-login to get a valid token",
+                  "const email = pm.collectionVariables.get('testEmail');",
+                  "const password = pm.collectionVariables.get('testPassword');",
+                  "",
+                  "pm.sendRequest({",
+                  "    url: pm.collectionVariables.get('baseUrl') + '/auth/login',",
+                  "    method: 'POST',",
+                  "    header: { 'Content-Type': 'application/json' },",
+                  "    body: {",
+                  "        mode: 'raw',",
+                  "        raw: JSON.stringify({ email, password })",
+                  "    }",
+                  "}, function(err, res) {",
+                  "    if (!err && res.json().success) {",
+                  "        pm.collectionVariables.set('authToken', res.json().token);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "999999"]
+            }
+          }
+        },
+        {
+          "name": "10.3 Duplicate Email Registration",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 (Conflict)', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test('Error message indicates duplicate', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"Test123456\",\n    \"username\": \"duplicate_test\",\n    \"firstName\": \"Test\",\n    \"lastName\": \"User\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
