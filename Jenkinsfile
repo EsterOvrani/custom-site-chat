@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        // הוספה חדשה - תקן את בעיית ה-API version
+        // תיקון בעיית ה-API version
         DOCKER_API_VERSION = '1.41'
 
         // Docker Registry
@@ -86,87 +86,32 @@ pipeline {
         stage('🔐 Create TEST .env') {
             steps {
                 script {
-                    echo '🔐 Creating GLOBAL TEST .env file with TEST_MODE enabled...'
+                    echo '🔐 Copying TEST .env file from secret file credential...'
                     
-                    withCredentials([
-                        string(credentialsId: 'OPENAI_API_KEY', variable: 'OPENAI_API_KEY'),
-                        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-                        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-                        string(credentialsId: 'AWS_S3_BUCKET', variable: 'AWS_S3_BUCKET'),
-                        string(credentialsId: 'MAIL_USERNAME', variable: 'MAIL_USERNAME'),
-                        string(credentialsId: 'MAIL_PASSWORD', variable: 'MAIL_PASSWORD'),
-                        string(credentialsId: 'JWT_SECRET_KEY', variable: 'JWT_SECRET_KEY'),
-                        string(credentialsId: 'GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
-                        string(credentialsId: 'GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET')
-                    ]) {
+                    // שימוש ב-Secret File במקום Secret Text מרובים
+                    withCredentials([file(credentialsId: 'env-file-test', variable: 'ENV_FILE')]) {
                         sh '''
-                            # יצירת .env גלובלי בתיקייה הראשית
-                            cat > .env << EOF
-# ==================== Shared Infrastructure ====================
-# ==================== Database Configuration ====================
-POSTGRES_HOST=postgres
-POSTGRES_PORT=5432
-POSTGRES_DB=customsitechat
-POSTGRES_USER=sitechat_user
-POSTGRES_PASSWORD=sitechat_postgres_password
-
-# ==================== Qdrant Configuration ====================
-QDRANT_HOST=qdrant
-QDRANT_REST_PORT=6333
-QDRANT_GRPC_PORT=6334
-QDRANT_API_KEY=
-
-# ==================== Ports ====================
-NGINX_PORT=80
-
-# ==================== Backend-Specific Configuration ====================
-# ==================== Server ====================
-SERVER_PORT=8080
-
-# ==================== Security - JWT ====================
-JWT_SECRET_KEY=${JWT_SECRET_KEY}
-JWT_EXPIRATION_MS=3600000
-
-# ==================== Email Configuration ====================
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USERNAME=${MAIL_USERNAME}
-MAIL_PASSWORD=${MAIL_PASSWORD}
-
-# ==================== OpenAI ====================
-OPENAI_API_KEY=${OPENAI_API_KEY}
-
-# ==================== AWS S3 ====================
-AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-AWS_REGION=eu-west-1
-AWS_S3_BUCKET=${AWS_S3_BUCKET}
-
-# ==================== Google OAuth2 ====================
-GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-
-# ==================== Frontend URL ====================
-FRONTEND_URL=http://localhost
-
-# ==================== Test Mode (FOR TESTING ONLY!) ====================
-TEST_MODE_ENABLED=true
-BYPASS_EMAIL_VERIFICATION=true
-FIXED_VERIFICATION_CODE=999999
-
-# ==================== Qdrant Embeddings ====================
-QDRANT_DIMENSION=3072
-QDRANT_DISTANCE=Cosine
-QDRANT_DEFAULT_MAX_RESULTS=5
-QDRANT_DEFAULT_MIN_SCORE=0.75
-QDRANT_HNSW_M=16
-QDRANT_HNSW_EF_CONSTRUCT=200
-QDRANT_HNSW_EF=128
-
-# ==================== Frontend-Specific Configuration ====================
-REACT_APP_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-EOF
-                            echo "✅ GLOBAL TEST .env created in project root with TEST_MODE=true"
+                            # העתק את קובץ ה-.env מה-credential
+                            cp "${ENV_FILE}" .env
+                            
+                            # וודא שהקובץ הועתק
+                            if [ -f .env ]; then
+                                echo "✅ TEST .env copied successfully from secret file"
+                                echo "📋 Environment variables loaded:"
+                                grep -E "^[A-Z_]+=" .env | cut -d'=' -f1 | while read var; do
+                                    echo "   - $var"
+                                done
+                            else
+                                echo "❌ ERROR: Failed to copy .env file"
+                                exit 1
+                            fi
+                            
+                            # וודא ש-TEST_MODE מופעל
+                            if grep -q "TEST_MODE_ENABLED=true" .env; then
+                                echo "✅ Confirmed: TEST_MODE_ENABLED=true"
+                            else
+                                echo "⚠️ WARNING: TEST_MODE_ENABLED=true not found in .env"
+                            fi
                         '''
                     }
                 }
@@ -250,94 +195,40 @@ EOF
         stage('🔐 Create PRODUCTION .env') {
             steps {
                 script {
-                    echo '🔐 Creating GLOBAL PRODUCTION .env file WITHOUT TEST_MODE...'
+                    echo '🔐 Copying PRODUCTION .env file from secret file credential...'
                     
-                    withCredentials([
-                        string(credentialsId: 'OPENAI_API_KEY', variable: 'OPENAI_API_KEY'),
-                        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-                        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-                        string(credentialsId: 'AWS_S3_BUCKET', variable: 'AWS_S3_BUCKET'),
-                        string(credentialsId: 'MAIL_USERNAME', variable: 'MAIL_USERNAME'),
-                        string(credentialsId: 'MAIL_PASSWORD', variable: 'MAIL_PASSWORD'),
-                        string(credentialsId: 'JWT_SECRET_KEY', variable: 'JWT_SECRET_KEY'),
-                        string(credentialsId: 'GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
-                        string(credentialsId: 'GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET')
-                    ]) {
+                    // שימוש ב-Secret File לפרודקשן (ללא TEST_MODE)
+                    withCredentials([file(credentialsId: 'env-file-prod', variable: 'ENV_FILE')]) {
                         sh '''
-                            # מחק את .env הישן
+                            # מחק את .env הישן (של הטסט)
                             rm -f .env
                             
-                            # צור PRODUCTION .env גלובלי ללא TEST_MODE
-                            cat > .env << EOF
-# ==================== Shared Infrastructure ====================
-# ==================== Database Configuration ====================
-POSTGRES_HOST=postgres
-POSTGRES_PORT=5432
-POSTGRES_DB=customsitechat
-POSTGRES_USER=sitechat_user
-POSTGRES_PASSWORD=sitechat_postgres_password
-
-
-# ==================== Qdrant Configuration ====================
-QDRANT_HOST=qdrant
-QDRANT_REST_PORT=6333
-QDRANT_GRPC_PORT=6334
-QDRANT_API_KEY=
-
-# ==================== Ports ====================
-NGINX_PORT=80
-
-# ==================== Backend-Specific Configuration ====================
-# ==================== Server ====================
-SERVER_PORT=8080
-
-# ==================== Security - JWT ====================
-JWT_SECRET_KEY=${JWT_SECRET_KEY}
-JWT_EXPIRATION_MS=3600000
-
-# ==================== Email Configuration ====================
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USERNAME=${MAIL_USERNAME}
-MAIL_PASSWORD=${MAIL_PASSWORD}
-
-# ==================== OpenAI ====================
-OPENAI_API_KEY=${OPENAI_API_KEY}
-
-# ==================== AWS S3 ====================
-AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-AWS_REGION=eu-west-1
-AWS_S3_BUCKET=${AWS_S3_BUCKET}
-
-# ==================== Google OAuth2 ====================
-GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-
-# ==================== Frontend URL ====================
-FRONTEND_URL=http://localhost
-
-# ==================== Qdrant Embeddings ====================
-QDRANT_DIMENSION=3072
-QDRANT_DISTANCE=Cosine
-QDRANT_DEFAULT_MAX_RESULTS=5
-QDRANT_DEFAULT_MIN_SCORE=0.75
-QDRANT_HNSW_M=16
-QDRANT_HNSW_EF_CONSTRUCT=200
-QDRANT_HNSW_EF=128
-
-# ==================== Frontend-Specific Configuration ====================
-REACT_APP_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-EOF
+                            # העתק את קובץ ה-.env של פרודקשן
+                            cp "${ENV_FILE}" .env
                             
-                            echo "✅ GLOBAL PRODUCTION .env created in project root WITHOUT TEST_MODE"
+                            # וודא שהקובץ הועתק
+                            if [ -f .env ]; then
+                                echo "✅ PRODUCTION .env copied successfully from secret file"
+                            else
+                                echo "❌ ERROR: Failed to copy .env file"
+                                exit 1
+                            fi
                             
-                            # וודא שTEST_MODE מוגדר כ-false
+                            # וודא ש-TEST_MODE לא מופעל בפרודקשן!
                             if grep -q "TEST_MODE_ENABLED=true" .env; then
-                                echo "❌ ERROR: TEST_MODE_ENABLED=true found in production .env!"
+                                echo "❌ CRITICAL ERROR: TEST_MODE_ENABLED=true found in PRODUCTION .env!"
+                                echo "❌ This is a security risk! Please fix the env-file-prod credential."
                                 exit 1
                             else
-                                echo "✅ Confirmed: TEST_MODE_ENABLED=false in production .env"
+                                echo "✅ Confirmed: TEST_MODE_ENABLED is NOT true in production .env"
+                            fi
+                            
+                            # וודא ש-BYPASS_EMAIL_VERIFICATION לא מופעל
+                            if grep -q "BYPASS_EMAIL_VERIFICATION=true" .env; then
+                                echo "❌ CRITICAL ERROR: BYPASS_EMAIL_VERIFICATION=true found in PRODUCTION .env!"
+                                exit 1
+                            else
+                                echo "✅ Confirmed: Email verification is enabled in production"
                             fi
                         '''
                     }
