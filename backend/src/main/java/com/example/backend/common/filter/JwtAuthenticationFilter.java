@@ -71,7 +71,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             filterChain.doFilter(request, response);
         } catch (Exception exception) {
-            handlerExceptionResolver.resolveException(request, response, null, exception);
+            // ✅ החזר 401 לטוקן לא תקין במקום לזרוק exception
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write(
+                "{\"success\":false,\"errorCode\":\"INVALID_TOKEN\",\"message\":\"טוקן לא תקין או שפג תוקפו\"}"
+            );
+            return; // לא להמשיך את ה-filter chain
         }
     }
 }
