@@ -64,60 +64,36 @@ server {
     listen 443 ssl;
     server_name custom-site-chat.com;
 
-    # SSL Certificates
     ssl_certificate /etc/letsencrypt/live/custom-site-chat.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/custom-site-chat.com/privkey.pem;
     
-    # SSL Settings
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
 
-    # Timeout
     proxy_read_timeout 300s;
     proxy_connect_timeout 300s;
     proxy_send_timeout 300s;
     client_max_body_size 50M;
 
-    # Auth
     location ~ ^/api/auth/(.*)$ {
         proxy_pass http://backend:8080/auth/$1$is_args$args;
         proxy_http_version 1.1;
-        
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        add_header 'Access-Control-Allow-Origin' '*' always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS, PATCH' always;
-        add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept, Authorization' always;
-        
-        if ($request_method = 'OPTIONS') {
-            return 204;
-        }
     }
 
-    # API
     location /api/ {
         proxy_pass http://backend:8080/api/;
         proxy_http_version 1.1;
-        
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        add_header 'Access-Control-Allow-Origin' '*' always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS, PATCH' always;
-        add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept, Authorization' always;
-        
-        if ($request_method = 'OPTIONS') {
-            return 204;
-        }
     }
 
-    # Frontend
     location / {
         proxy_pass http://frontend:3000;
         proxy_http_version 1.1;
