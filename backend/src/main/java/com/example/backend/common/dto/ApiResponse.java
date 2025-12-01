@@ -1,5 +1,3 @@
-// backend/src/main/java/com/example/backend/common/dto/ApiResponse.java
-
 package com.example.backend.common.dto;
 
 import lombok.AllArgsConstructor;
@@ -15,7 +13,7 @@ public class ApiResponse<T> {
     private T data;
     private String error;
 
-    // ✅ Static factory methods
+    // Static factory methods
     public static <T> ApiResponse<T> success(T data) {
         return new ApiResponse<>(true, null, data, null);
     }

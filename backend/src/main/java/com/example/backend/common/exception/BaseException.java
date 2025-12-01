@@ -4,7 +4,7 @@ import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
 /**
- * בסיס לכל החריגים המותאמים אישית במערכת
+ * Base class for custom exceptions
  */
 @Getter
 public abstract class BaseException extends RuntimeException {

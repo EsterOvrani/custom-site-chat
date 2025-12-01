@@ -24,9 +24,7 @@ public class CollectionController {
 
     private final CollectionService collectionService;
 
-    /**
-     * קבלת פרטי הקולקשן של המשתמש
-     */
+    // Get user's Qdrant collection details
     @GetMapping("/info")
     public ResponseEntity<Map<String, Object>> getCollectionInfo() {
         User currentUser = getCurrentUser();
@@ -41,9 +39,7 @@ public class CollectionController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * יצירת מפתח חדש
-     */
+    // Generate new API key for collection
     @PostMapping("/regenerate-key")
     public ResponseEntity<Map<String, Object>> regenerateSecretKey() {
         User currentUser = getCurrentUser();
@@ -59,9 +55,7 @@ public class CollectionController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * קבלת קוד הטמעה
-     */
+    // Get widget embed code snippet
     @GetMapping("/embed-code")
     public ResponseEntity<Map<String, Object>> getEmbedCode() {
         User currentUser = getCurrentUser();
@@ -76,6 +70,7 @@ public class CollectionController {
         return ResponseEntity.ok(response);
     }
 
+    // Extract user from security context
     private User getCurrentUser() {
         Authentication authentication = 
             SecurityContextHolder.getContext().getAuthentication();

@@ -17,16 +17,14 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DocumentChunkingService {
 
-    /**
-     * פיצול מסמך ל-chunks עם overlap לשמירת קונטקסט
-     */
+    // Split document into overlapping chunks
     public List<TextSegment> chunkDocument(String content, String fileName, Long documentId) {
         log.info("Chunking document: {} (length: {})", fileName, content.length());
 
-        // ⭐ פיצול עם overlap - חשוב מאוד לדיוק!
+        // Splitting with overlap
         DocumentSplitter splitter = DocumentSplitters.recursive(
-            500,  // גודל chunk (התאם לפי הצורך)
-            50    // overlap - שומר על קונטקסט בין chunks
+            500,  // chunk size
+            50   // overlap - maintains context between chunks
         );
 
         Document document = Document.from(

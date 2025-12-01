@@ -5,8 +5,9 @@ import java.util.Map;
 import java.util.HashMap;
 
 /**
- * נזרק כאשר יש בעיית ולידציה בנתונים
- */
+* Thrown when there is a data validation problem
+*/
+
 public class ValidationException extends BaseException {
     
     private static final String ERROR_CODE = "VALIDATION_ERROR";

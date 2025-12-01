@@ -1,4 +1,3 @@
-// backend/src/main/java/com/example/backend/user/model/User.java
 package com.example.backend.user.model;
 
 import jakarta.persistence.*;
@@ -22,6 +21,8 @@ import java.util.UUID;
 @AllArgsConstructor
 public class User implements UserDetails {
 
+    // ==================== Basic Info ====================
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -44,13 +45,17 @@ public class User implements UserDetails {
     @Column(name = "profile_picture_url")
     private String profilePictureUrl;
 
-    @Column(name = "auth_provider")
+    // ==================== Auth Provider ====================
+
     @Enumerated(EnumType.STRING)
+    @Column(name = "auth_provider")
     @Builder.Default
     private AuthProvider authProvider = AuthProvider.LOCAL;
 
     @Column(name = "google_id")
     private String googleId;
+
+    // ==================== Timestamps ====================
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -59,7 +64,7 @@ public class User implements UserDetails {
     private LocalDateTime updatedAt;
 
     // ==================== Collection Fields ====================
-    
+
     @Column(name = "collection_name", unique = true)
     private String collectionName;
 
@@ -73,9 +78,9 @@ public class User implements UserDetails {
     private String embedCode;
 
     // ==================== Verification Fields ====================
-    
-    @Column(name = "enabled")
+
     @Builder.Default
+    @Column(name = "enabled")
     private Boolean enabled = true;
 
     @Column(name = "verification_code")
@@ -84,8 +89,8 @@ public class User implements UserDetails {
     @Column(name = "verification_code_expires_at")
     private LocalDateTime verificationCodeExpiresAt;
 
-    // ==================== 🆕 Password Reset Fields ====================
-    
+    // ==================== Password Reset Fields ====================
+
     @Column(name = "reset_password_code")
     private String resetPasswordCode;
 
@@ -93,14 +98,15 @@ public class User implements UserDetails {
     private LocalDateTime resetPasswordCodeExpiresAt;
 
     @Column(name = "temp_password")
-    private String tempPassword; // סיסמה זמנית לפני hash (למשתמשי Google)
+    private String tempPassword;
 
-    // ==================== Lifecycle Callbacks ====================
+    // ==================== Lifecycle ====================
 
     @PrePersist
     protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
+        this.createdAt = now;
+        this.updatedAt = now;
     }
 
     @PreUpdate
@@ -122,21 +128,11 @@ public class User implements UserDetails {
         return "sk_" + UUID.randomUUID().toString().replace("-", "");
     }
 
-    // ==================== UserDetails Implementation ====================
+    // ==================== UserDetails ====================
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return Collections.emptyList();
-    }
-
-    @Override
-    public String getPassword() {
-        return this.password;
-    }
-
-    @Override
-    public String getUsername() {
-        return this.username;
     }
 
     @Override
@@ -154,89 +150,36 @@ public class User implements UserDetails {
         return true;
     }
 
-
     @Override
     public boolean isEnabled() {
         return enabled;
     }
 
-    // ==================== Verification Methods ====================
+    // ==================== Verification ====================
 
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
-
-    public void setVerificationCode(String verificationCode) {
-        this.verificationCode = verificationCode;
-    }
-
-    public void setVerificationCodeExpiresAt(LocalDateTime verificationCodeExpiresAt) {
-        this.verificationCodeExpiresAt = verificationCodeExpiresAt;
-    }
-
-    public String getVerificationCode() {
-        return this.verificationCode;
-    }
-
-    public LocalDateTime getVerificationCodeExpiresAt() {
-        return this.verificationCodeExpiresAt;
-    }
-
-    public Boolean getEnabled() {
-        return this.enabled;
-    }
-
-    /**
-     * בדיקה אם קוד האימות תקף
-     */
     public boolean isVerificationCodeValid(String code) {
-        if (this.verificationCode == null || this.verificationCodeExpiresAt == null) {
+        if (verificationCode == null || verificationCodeExpiresAt == null) 
             return false;
-        }
-        
-        if (LocalDateTime.now().isAfter(this.verificationCodeExpiresAt)) {
+        if (LocalDateTime.now().isAfter(verificationCodeExpiresAt)) 
             return false;
-        }
-        
-        return this.verificationCode.equals(code);
+        return verificationCode.equals(code);
     }
 
-    /**
-     * ניקוי קוד אימות
-     */
     public void clearVerificationCode() {
         this.verificationCode = null;
         this.verificationCodeExpiresAt = null;
     }
 
-    // ==================== 🆕 Password Reset Methods ====================
+    // ==================== Password Reset ====================
 
-    /**
-     * בדיקה אם קוד איפוס הסיסמה תקף
-     */
     public boolean isResetPasswordCodeValid(String code) {
-        if (this.resetPasswordCode == null || this.resetPasswordCodeExpiresAt == null) {
+        if (resetPasswordCode == null || resetPasswordCodeExpiresAt == null) 
             return false;
-        }
-        
-        if (LocalDateTime.now().isAfter(this.resetPasswordCodeExpiresAt)) {
+        if (LocalDateTime.now().isAfter(resetPasswordCodeExpiresAt)) 
             return false;
-        }
-        
-        return this.resetPasswordCode.equals(code);
+        return resetPasswordCode.equals(code);
     }
 
-    /**
-     * ניקוי קוד איפוס סיסמה
-     */
-    public void clearResetPasswordCode() {
-        this.resetPasswordCode = null;
-        this.resetPasswordCodeExpiresAt = null;
-    }
-
-    /**
-     * ניקוי סיסמה זמנית (אחרי שינוי סיסמה)
-     */
     public void clearTempPassword() {
         this.tempPassword = null;
     }

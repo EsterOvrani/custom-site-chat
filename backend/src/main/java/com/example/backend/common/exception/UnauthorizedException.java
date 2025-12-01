@@ -3,8 +3,9 @@ package com.example.backend.common.exception;
 import org.springframework.http.HttpStatus;
 
 /**
- * נזרק כאשר משתמש מנסה לגשת למשאב שאין לו הרשאה אליו
- */
+* Thrown when a user attempts to access a resource they do not have permission to
+*/
+
 public class UnauthorizedException extends BaseException {
     
     private static final String ERROR_CODE = "UNAUTHORIZED";

@@ -30,6 +30,7 @@ public class QdrantVectorService {
     private String qdrantUrl;
     private final Map<String, EmbeddingStore<TextSegment>> collectionStoreMap = new ConcurrentHashMap<>();
 
+    // Connect to Qdrant on startup
     @PostConstruct
     public void initialize() {
         try {
@@ -56,6 +57,7 @@ public class QdrantVectorService {
         }
     }
 
+    // Create new Qdrant collection for user
     public String createUserCollection(String userId, String collectionName) {
         try {
             log.info("Creating collection for user {}: {}", userId, collectionName);
@@ -87,6 +89,7 @@ public class QdrantVectorService {
         }
     }
 
+    // Poll until collection is ready
     private boolean waitForCollectionReady(String collectionName, int maxWaitSeconds) {
         String checkUrl = qdrantUrl + "/collections/" + collectionName;
 
@@ -122,6 +125,7 @@ public class QdrantVectorService {
         return false;
     }
 
+    // Create collection with HNSW config
     private void createCollectionIfNotExists(String collectionName) {
         try {
             String getUrl = qdrantUrl + "/collections/" + collectionName;
@@ -173,9 +177,7 @@ public class QdrantVectorService {
         }
     }
 
-    /**
-     * מחיקת embeddings של מסמך ספציפי לפי document_id
-     */
+    // Delete embeddings by document ID
     public void deleteDocumentEmbeddings(String collectionName, Long documentId) {
         try {
             log.info("🗑️ Deleting embeddings for document {} from collection {}", 
@@ -219,6 +221,7 @@ public class QdrantVectorService {
         }
     }
 
+    // Get or create embedding store
     public EmbeddingStore<TextSegment> getEmbeddingStoreForCollection(String collectionName) {
         log.info("🔍 Looking for collection: {}", collectionName);
         log.info("📊 Available collections: {}", collectionStoreMap.keySet());
@@ -241,11 +244,13 @@ public class QdrantVectorService {
         return store;
     }
 
+    // Remove from local cache
     public void removeCollectionFromCache(String collectionName) {
         collectionStoreMap.remove(collectionName);
         log.info("Collection removed from cache: {}", collectionName);
     }
-
+    
+    // Delete collection from Qdrant
     public void deleteCollection(String collectionName) {
         if (collectionName == null || collectionName.isEmpty()) {
             log.warn("⚠️ Cannot delete collection - name is null or empty");

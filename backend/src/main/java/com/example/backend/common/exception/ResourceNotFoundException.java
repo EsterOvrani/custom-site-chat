@@ -3,8 +3,9 @@ package com.example.backend.common.exception;
 import org.springframework.http.HttpStatus;
 
 /**
- * נזרק כאשר משאב לא נמצא במערכת (שיחה, מסמך, משתמש וכו')
- */
+* Thrown when a resource is not in the system (conversation, document, user, etc.)
+*/
+
 public class ResourceNotFoundException extends BaseException {
     
     private static final String ERROR_CODE = "RESOURCE_NOT_FOUND";

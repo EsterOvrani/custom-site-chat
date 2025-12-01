@@ -9,49 +9,33 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 @Data
-@Builder  // ⬅️ זה יוצר את builder()
+@Builder  
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ErrorResponse {
 
-    /**
-     * האם הפעולה הצליחה
-     */
+    // if the action succsid
     private boolean success;
     
-    /**
-     * קוד השגיאה (לזיהוי בצד לקוח)
-     */
+    // error code (to client side)
     private String errorCode;
     
-    /**
-     * הודעת השגיאה (בעברית)
-     */
+    // error message
     private String message;
     
-    /**
-     * פרטים נוספים על השגיאה
-     */
+    // additional details on the error
     private String details;
     
-    /**
-     * זמן התרחשות השגיאה
-     */
+    // time of the error ocore
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime timestamp;
     
-    /**
-     * הנתיב שבו התרחשה השגיאה
-     */
+    // path of ocore error
     private String path;
     
-    /**
-     * שגיאות ולידציה לפי שדה (אם קיימות)
-     */
+    // error validation by fields
     private Map<String, String> fieldErrors;
     
-    /**
-     * יוצר תגובת שגיאה פשוטה
-     */
+    // create a simple response
     public static ErrorResponse of(String errorCode, String message) {
         return ErrorResponse.builder()
                 .success(false)
@@ -61,9 +45,7 @@ public class ErrorResponse {
                 .build();
     }
     
-    /**
-     * יוצר תגובת שגיאה עם פרטים
-     */
+    // create error with details
     public static ErrorResponse of(String errorCode, String message, String details) {
         return ErrorResponse.builder()
                 .success(false)
@@ -74,9 +56,7 @@ public class ErrorResponse {
                 .build();
     }
     
-    /**
-     * יוצר תגובת שגיאה עם שגיאות ולידציה
-     */
+    // create error resonse with error validation details 
     public static ErrorResponse withFieldErrors(
             String errorCode, 
             String message, 

@@ -3,7 +3,7 @@ package com.example.backend.common.exception;
 import org.springframework.http.HttpStatus;
 
 /**
- * נזרק כאשר מנסים ליצור משאב שכבר קיים (דוא"ל כפול, שם משתמש כפול וכו')
+ * Thrown when trying to create a resource that already exists (duplicate email, duplicate username, etc.)
  */
 public class DuplicateResourceException extends BaseException {
     

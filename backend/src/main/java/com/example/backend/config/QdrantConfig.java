@@ -22,7 +22,7 @@ public class QdrantConfig {
     private String openaiApiKey;
 
     /**
-     * יצירת EmbeddingModel של OpenAI
+     * create EmbeddingModel of OpenAI
      */
     @Bean
     public EmbeddingModel embeddingModel() {
@@ -34,7 +34,7 @@ public class QdrantConfig {
     }
 
     /**
-     * יצירת OpenAiChatModel
+     * create OpenAiChatModel
      */
     @Bean
     public OpenAiChatModel openAiChatModel() {

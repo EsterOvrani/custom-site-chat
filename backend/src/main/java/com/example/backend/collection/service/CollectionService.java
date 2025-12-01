@@ -20,60 +20,52 @@ public class CollectionService {
     private final UserRepository userRepository;
     private final QdrantVectorService qdrantVectorService;
 
-    /**
-     * יצירה או קבלת קולקשן של משתמש
-     */
+    // Get existing or create new collection
     public CollectionInfoResponse getOrCreateUserCollection(User user) {
         
-        // ✅ בדיקה: האם למשתמש כבר יש קולקשן?
+        // Check: Does the user already have a collection
         if (user.hasCollection()) {
-            // יש לו קולקשן - פשוט תחזיר את הפרטים
+            // if yes:return the details.
             log.info("User {} already has collection: {}", 
                 user.getId(), user.getCollectionName());
             return buildCollectionResponse(user);
         }
         
-        // אין לו קולקשן - צור חדש
+        // if not: create a new collection
         log.info("User {} doesn't have collection - creating new one", user.getId());
         return createNewCollection(user);
     }
 
-    /**
-     * יצירת קולקשן חדש למשתמש
-     */
+    // Create Qdrant collection and save to user
     private CollectionInfoResponse createNewCollection(User user) {
         log.info("Creating new collection for user: {}", user.getId());
 
-        // שלב 1: צור שם קולקשן ייחודי
+        // Create a unique collection name
         String collectionName = user.generateCollectionName();
-        // תוצאה: "user_123_a7b3f2e1"
         
-        // שלב 2: צור secret key ייחודי
+        // Create a unique secret key
         String secretKey = user.generateSecretKey();
-        // תוצאה: "sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
-
-        // ✅ שלב 3: יצירת הקולקשן בפועל ב-Qdrant
+        
+        // Creating the actual collection in Qdrant
         qdrantVectorService.createUserCollection(user.getId().toString(), collectionName);
 
-        // שלב 4: שמירת הפרטים במשתמש (בDB)
+        // Saving the details to the user (in the DB)
         user.setCollectionName(collectionName);
         user.setCollectionSecretKey(secretKey);
         user.setCollectionCreatedAt(LocalDateTime.now());
 
-        // שלב 5: יצירת קוד הטמעה (נעשה בשלב הבא)
+        // Create implementation code (done in the next step)
         String embedCode = generateEmbedCode(secretKey);
         user.setEmbedCode(embedCode);
 
-        // שלב 6: שמירה ב-DB
+        // Save user to DB
         userRepository.save(user);
 
         log.info("Collection created: {}", collectionName);
         return buildCollectionResponse(user);
     }
 
-    /**
-     * יצירת מפתח חדש
-     */
+    // Generate new secret key and update embed code
     public CollectionInfoResponse regenerateSecretKey(User user) {
         log.info("Regenerating secret key for user: {}", user.getId());
 
@@ -88,17 +80,13 @@ public class CollectionService {
         return buildCollectionResponse(user);
     }
 
-    /**
-     * אימות secret key
-     */
+    // Find user by secret key or throw
     public User validateSecretKey(String secretKey) {
         return userRepository.findByCollectionSecretKey(secretKey)
             .orElseThrow(() -> new UnauthorizedException("Invalid secret key"));
     }
 
-    /**
-     * בניית תגובה
-     */
+    // Map user fields to response DTO
     private CollectionInfoResponse buildCollectionResponse(User user) {
         return CollectionInfoResponse.builder()
             .collectionName(user.getCollectionName())
@@ -108,9 +96,7 @@ public class CollectionService {
             .build();
     }
 
-    /**
-     * יצירת קוד הטמעה
-     */
+    // Generate JavaScript widget snippet
     private String generateEmbedCode(String secretKey) {
         return String.format(
             "<!-- Custom Site Chat Widget -->\n" +
@@ -119,10 +105,10 @@ public class CollectionService {
             "  window.CHAT_WIDGET_API_URL = 'http://localhost:8080';\n" +
             "  \n" +
             "  // ⭐ התאמה אישית (אופציונלי)\n" +
-            "  window.CHAT_WIDGET_TITLE = 'צ\\'אט עם שירות הלקוחות';\n" +
-            "  window.CHAT_WIDGET_BOT_NAME = 'עוזר';\n" +
-            "  window.CHAT_WIDGET_BOT_AVATAR = 'https://example.com/bot-avatar.png'; // או null\n" +
-            "  window.CHAT_WIDGET_USER_AVATAR = null; // או קישור לתמונה\n" +
+            "  window.CHAT_WIDGET_TITLE = 'ENTER TITEL OF THE CHAT LIKE: COMPENY NAME'; \n" +
+            "  window.CHAT_WIDGET_BOT_NAME = 'ENTER NAME OF THE BOT USER';\n" +
+            "  window.CHAT_WIDGET_BOT_AVATAR = 'ENTER BOT PROFILE IMAGE OR NULL'; \n" +
+            "  window.CHAT_WIDGET_USER_AVATAR = 'ENTER LINK OF USER PROFILE IMAGE OR NULL'; \n" +
             "</script>\n" +
             "<script src=\"http://localhost:3000/chat-widget.js\"></script>\n" +
             "<!-- End Chat Widget -->",

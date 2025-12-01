@@ -3,7 +3,7 @@ package com.example.backend.common.exception;
 import org.springframework.http.HttpStatus;
 
 /**
- * נזרק כאשר יש בעיה באימות המשתמש
+ * Authentication failures
  */
 public class AuthenticationException extends BaseException {
     

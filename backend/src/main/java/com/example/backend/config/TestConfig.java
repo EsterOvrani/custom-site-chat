@@ -20,7 +20,7 @@ public class TestConfig {
     @Value("${app.test-mode.fixed-verification-code:999999}")
     private String fixedVerificationCode;
     
-    // 🔍 הוסף את זה
+    
     @PostConstruct
     public void logConfig() {
         System.out.println("========================================");

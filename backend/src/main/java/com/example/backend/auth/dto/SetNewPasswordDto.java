@@ -1,4 +1,3 @@
-// backend/src/main/java/com/example/backend/auth/dto/SetNewPasswordDto.java
 package com.example.backend.auth.dto;
 
 import jakarta.validation.constraints.Email;

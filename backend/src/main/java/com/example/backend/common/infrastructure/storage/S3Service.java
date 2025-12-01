@@ -49,6 +49,8 @@ public class S3Service {
     private S3Client s3Client;
     private S3Presigner presigner;
 
+    
+    // Initialize S3 client on startup
     @PostConstruct
     public void init() {
         try {
@@ -111,9 +113,7 @@ public class S3Service {
         }
     }
 
-    /**
-     * Validate configuration
-     */
+    // Validate AWS credentials
     private void validateConfiguration() {
         List<String> errors = new ArrayList<>();
 
@@ -148,6 +148,7 @@ public class S3Service {
         }
     }
 
+    // Close S3 client on shutdown
     @PreDestroy
     public void cleanup() {
         if (s3Client != null) {
@@ -159,6 +160,7 @@ public class S3Service {
         log.info("S3 client closed");
     }
 
+    // Create bucket if missing
     private void createBucketIfNotExists() {
         try {
             s3Client.headBucket(HeadBucketRequest.builder()
@@ -182,6 +184,7 @@ public class S3Service {
         }
     }
 
+    // Upload file to S3
     public void uploadFile(
             InputStream inputStream,
             String objectKey,
@@ -209,6 +212,7 @@ public class S3Service {
         }
     }
 
+    // Download file from S3
     public InputStream downloadFile(String objectKey) {
         try {
             log.info("📥 Downloading file from S3: {}", objectKey);
@@ -229,6 +233,7 @@ public class S3Service {
         }
     }
 
+    // Delete file from S3
     public void deleteFile(String objectKey) {
         try {
             log.info("🗑️ Deleting file from S3: {}", objectKey);
@@ -248,6 +253,7 @@ public class S3Service {
         }
     }
 
+    // Check if file exists in S3
     public boolean fileExists(String objectKey) {
         try {
             s3Client.headObject(
@@ -267,6 +273,7 @@ public class S3Service {
         }
     }
 
+    // Get file metadata from S3
     public FileInfo getFileInfo(String objectKey) {
         try {
             var response = s3Client.headObject(
@@ -291,6 +298,7 @@ public class S3Service {
         }
     }
 
+    // List files with prefix
     public List<String> listFiles(String prefix) {
         try {
             log.info("📋 Listing files with prefix: {}", prefix);
@@ -327,6 +335,7 @@ public class S3Service {
         }
     }
 
+    // Delete all files with prefix
     public void deleteFolder(String prefix) {
         try {
             log.info("🗑️ Deleting folder: {}", prefix);
@@ -370,6 +379,7 @@ public class S3Service {
         );
     }
 
+    // Generate temporary download URL
     public String getPresignedUrl(String objectKey, int expirySeconds) {
         try {
             log.info("🔗 Generating presigned URL for: {} (expiry: {}s)",

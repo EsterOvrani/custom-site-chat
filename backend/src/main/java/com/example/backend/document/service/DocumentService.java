@@ -31,11 +31,11 @@ public class DocumentService {
     private final DocumentMapper documentMapper;
     private final S3Service s3Service;
     private final QdrantVectorService qdrantVectorService;
-    
-    // ⭐ Inject את ה-Service החדש
     private final DocumentProcessingService documentProcessingService;
 
+    // Save document and trigger async processing
     public DocumentResponse processDocument(MultipartFile file, User user) {
+
         log.info("🔵 processDocument() CALLED - preparing file for async processing");
         
         try {
@@ -44,12 +44,12 @@ public class DocumentService {
             String contentType = file.getContentType();
             long fileSize = file.getSize();
             
-            log.info("✅ File read to memory: {} bytes", fileBytes.length);
+            log.info("File read to memory: {} bytes", fileBytes.length);
             
-            // יצירת filePath
+            // create filePath
             String filePath = generateFilePath(user, originalFilename);
             
-            // יצירת Document
+            // create Document
             Document document = createDocumentEntity(originalFilename, fileSize, user, filePath, fileBytes);
             
             Integer maxOrder = documentRepository.getMaxDisplayOrderByUser(user);
@@ -58,14 +58,14 @@ public class DocumentService {
             document.setProcessingStage(ProcessingStage.UPLOADING);
             document.setProcessingProgress(5);
             
-            // שמירה ב-DB
+            // save document to DB
             document = documentRepository.save(document);
             log.info("✅ Document entity created with ID: {} - RETURNING IMMEDIATELY", document.getId());
             
-            // המר ל-DTO
+            // convert to DTO object
             DocumentResponse response = documentMapper.toResponse(document);
             
-            // ⭐ קריאה ל-Service החדש (לא self-invocation!)
+            // processing document async
             documentProcessingService.processDocumentAsync(
                 document.getId(), 
                 fileBytes, 
@@ -77,7 +77,7 @@ public class DocumentService {
                 user.getCollectionName()
             );
             
-            // החזר מיד
+            // Returns the response immediately 
             return response;
             
         } catch (IOException e) {
@@ -86,6 +86,7 @@ public class DocumentService {
         }
     }
 
+    // Create S3 path for document
     private String generateFilePath(User user, String originalFilename) {
         return String.format("users/%d/documents/%s_%s",
             user.getId(),
@@ -94,6 +95,7 @@ public class DocumentService {
         );
     }
 
+    // Build document entity with metadata
     private Document createDocumentEntity(
             String originalFilename, 
             long fileSize, 
@@ -122,6 +124,7 @@ public class DocumentService {
         return document;
     }
 
+    // Calculate SHA-256 hash of file
     private String calculateHash(byte[] data) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -141,14 +144,14 @@ public class DocumentService {
         }
     }
 
-    // ... שאר הפונקציות נשארות אותו דבר (getDocument, deleteDocument, וכו')
-    
+    // Get all active documents for user
     public List<DocumentResponse> getDocumentsByUser(User user) {
         List<Document> documents = documentRepository
             .findByUserAndActiveTrueOrderByDisplayOrderAsc(user);
         return documentMapper.toResponseList(documents);
     }
 
+    // Get document with ownership check
     public DocumentResponse getDocument(Long documentId, User user) {
         Document document = documentRepository.findByIdAndActiveTrue(documentId)
             .orElseThrow(() -> new ResourceNotFoundException("מסמך", documentId));
@@ -160,6 +163,7 @@ public class DocumentService {
         return documentMapper.toResponse(document);
     }
 
+    // delete with S3 and Qdrant cleanup
     public void deleteDocument(Long documentId, User user) {
         Document document = documentRepository.findByIdAndActiveTrue(documentId)
             .orElseThrow(() -> new ResourceNotFoundException("מסמך", documentId));
@@ -187,6 +191,7 @@ public class DocumentService {
         }
     }
 
+    // Delete all documents and reset collection
     @Transactional
     public int deleteAllDocumentsByUser(User user) {
         List<Document> documents = documentRepository
@@ -225,6 +230,7 @@ public class DocumentService {
         return documents.size();
     }
 
+    // Update display order with validation
     public void reorderDocuments(User user, List<Long> documentIds) {
         if (documentIds == null || documentIds.isEmpty()) {
             throw new ValidationException("documentIds", "רשימת מסמכים ריקה");

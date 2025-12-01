@@ -32,9 +32,10 @@ public class GoogleOAuthService {
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
 
-    /**
-     * אימות ויצירת/מציאת משתמש מטוקן Google
-     */
+
+    // ==================== Authentication ====================
+    
+    // Verify Google token and get/create user
     public User authenticateGoogleUser(String idTokenString) {
         try {
             GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
@@ -86,9 +87,9 @@ public class GoogleOAuthService {
         }
     }
 
-    /**
-     * יצירת משתמש חדש מחשבון Google
-     */
+    // ==================== Registration ======================
+
+    // Create new user from Google profile
     private User createGoogleUser(String email, String googleId, 
                                 String firstName, String lastName, 
                                 boolean emailVerified) {
@@ -131,9 +132,9 @@ public class GoogleOAuthService {
         return user;
     }
 
-    /**
-     * 🆕 יצירת סיסמה קריאה (8 תווים: אותיות גדולות+קטנות+מספרים)
-     */
+    // ==================== Private Helpers ====================
+
+    // Generate 8-char password with mixed characters
     private String generateReadablePassword() {
         String upperCase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         String lowerCase = "abcdefghijklmnopqrstuvwxyz";

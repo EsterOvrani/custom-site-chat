@@ -3,8 +3,8 @@ package com.example.backend.common.exception;
 import org.springframework.http.HttpStatus;
 
 /**
- * נזרק כאשר יש בעיה בעיבוד קבצים (העלאה, קריאה, מחיקה)
- */
+* Thrown when there is a problem processing files (upload, read, delete)
+*/
 public class FileProcessingException extends BaseException {
     
     private static final String ERROR_CODE = "FILE_PROCESSING_ERROR";

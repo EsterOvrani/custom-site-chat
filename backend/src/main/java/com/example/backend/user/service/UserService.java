@@ -14,6 +14,7 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
+    // Fetch all users from DB
     public List<User> allUsers() {
         List<User> users = new ArrayList<>();
         userRepository.findAll().forEach(users::add);

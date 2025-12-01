@@ -34,25 +34,25 @@ public class DocumentController {
     private final DocumentService documentService;
     private final S3Service s3Service;
 
-    // A. העלאת מסמך חדש - מחזיר מיד עם פרטי המסמך
+    // Upload PDF file/s and start async processing
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> uploadDocument(
             @RequestParam("file") MultipartFile file) {
         
         User currentUser = getCurrentUser();
         
-        // ⭐ הפונקציה הזו תיצור את המסמך ב-DB ותחזיר אותו מיד
+        // This function will create the document in the DB and return it immediately
         DocumentResponse document = documentService.processDocument(file, currentUser);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", "המסמך הועלה ומעובד ברקע");
-        response.put("document", document); // ⭐ מחזיר את המסמך מיד!
+        response.put("document", document); 
 
         return ResponseEntity.ok(response);
     }
 
-    // C. קבלת כל המסמכים של המשתמש
+   // Get all documents for current user
     @GetMapping("/my-documents")
     public ResponseEntity<Map<String, Object>> getMyDocuments() {
         User currentUser = getCurrentUser();
@@ -68,7 +68,7 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
-    // G. קבלת מסמך ספציפי
+    // Get single document by ID
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getDocument(@PathVariable Long id) {
         User currentUser = getCurrentUser();
@@ -82,7 +82,7 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
-    // F. הורדת מסמך
+    // Download document as attachment
     @GetMapping("/{id}/download")
     public ResponseEntity<?> downloadDocument(@PathVariable Long id) {
         User currentUser = getCurrentUser();
@@ -103,7 +103,7 @@ public class DocumentController {
             .body(new InputStreamResource(fileStream));
     }
 
-    // E. פתיחת מסמך בטאב חדש
+    // View document inline in browser
     @GetMapping("/{id}/view")
     public ResponseEntity<?> viewDocument(@PathVariable Long id) {
         User currentUser = getCurrentUser();
@@ -124,6 +124,7 @@ public class DocumentController {
             .body(new InputStreamResource(fileStream));
     }
 
+    // Get presigned S3 URL
     @GetMapping("/{id}/download-url")
     public ResponseEntity<Map<String, Object>> getDownloadUrl(@PathVariable Long id) {
         User currentUser = getCurrentUser();
@@ -143,7 +144,7 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
-    // B. מחיקת מסמך בודד
+    // Soft delete single document
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deleteDocument(@PathVariable Long id) {
         User currentUser = getCurrentUser();
@@ -156,7 +157,7 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
-    // D. מחיקת כל המסמכים של המשתמש
+    // Soft delete all user documents
     @DeleteMapping("/delete-all")
     public ResponseEntity<Map<String, Object>> deleteAllDocuments() {
         User currentUser = getCurrentUser();
@@ -171,6 +172,7 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
+    // Update display order of documents
     @PutMapping("/reorder")
     public ResponseEntity<Map<String, Object>> reorderDocuments(
             @RequestBody Map<String, List<Long>> requestBody) {
@@ -191,6 +193,7 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
+    // Extract user from security context
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 

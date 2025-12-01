@@ -1,10 +1,8 @@
-// backend/src/main/java/com/example/backend/query/service/QueryService.java
-
 package com.example.backend.query.service;
 
 import com.example.backend.collection.service.CollectionService;
 import com.example.backend.query.dto.PublicQueryRequest;
-import com.example.backend.query.dto.QueryResponse;  // ⭐ שונה מ-AnswerResponse
+import com.example.backend.query.dto.QueryResponse;  
 import com.example.backend.user.model.User;
 import com.example.backend.common.infrastructure.vectordb.QdrantVectorService;
 import com.example.backend.common.exception.UnauthorizedException;
@@ -43,19 +41,16 @@ public class QueryService {
     private static final int MAX_RELEVANT_CHUNKS = 5;
     private static final int MAX_HISTORY_MESSAGES = 10;
 
-    // ⭐ הוספנו את ה-method הזה!
-    public QueryResponse askQuestion(
-            String secretKey,
-            String question,
-            List<PublicQueryRequest.HistoryMessage> history) {
+    // Search documents and generate AI answer
+    public QueryResponse askQuestion(String secretKey, String question, List<PublicQueryRequest.HistoryMessage> history) {
         
         long startTime = System.currentTimeMillis();
 
         try {
-            // 1. אימות secretKey
+            // 1. Verify secretKey
             User user = collectionService.validateSecretKey(secretKey);
             
-            // 2. הגבלת היסטוריה ל-10 הודעות
+            // 2. Limit history messages
             List<PublicQueryRequest.HistoryMessage> validatedHistory = 
                 validateAndLimitHistory(history);
             
@@ -63,7 +58,7 @@ public class QueryService {
                 user.getId(), 
                 validatedHistory.size());
 
-            // 3. חיפוש מסמכים רלוונטיים (עם הקשר מההיסטוריה)
+            // 3. Search for relevant documents (with context from history)
             List<RelevantDocument> relevantDocs = searchRelevantDocuments(
                 user.getCollectionName(),
                 question,
@@ -74,25 +69,25 @@ public class QueryService {
                 return createNoResultsResponse(question, startTime);
             }
 
-            // 4. בניית messages ל-GPT (עם היסטוריה!)
+            // 4. Building messages for GPT (with history!)
             List<ChatMessage> messages = buildMessagesWithHistory(
                 question,
                 relevantDocs,
                 validatedHistory
             );
 
-            // 5. שליחה ל-GPT
+            // 5. Sending to GPT
             Response<AiMessage> response = chatModel.generate(messages);
             String answer = response.content().text();
 
-            // 6. חישוב מטריקות
+            // 6. Calculating metrics
             long responseTime = System.currentTimeMillis() - startTime;
             Double confidence = calculateConfidence(relevantDocs);
             
             OpenAiTokenizer tokenizer = new OpenAiTokenizer("gpt-4");
             int tokensUsed = tokenizer.estimateTokenCountInMessage(response.content());
 
-            // 7. בניית sources
+            // 7. Building sources
             List<QueryResponse.Source> sources = buildSources(relevantDocs);
 
             return QueryResponse.builder()
@@ -111,15 +106,14 @@ public class QueryService {
         }
     }
 
-    // ✅ ולידציה והגבלת היסטוריה
-    private List<PublicQueryRequest.HistoryMessage> validateAndLimitHistory(
-            List<PublicQueryRequest.HistoryMessage> history) {
+    // Limit history messages
+    private List<PublicQueryRequest.HistoryMessage> validateAndLimitHistory(List<PublicQueryRequest.HistoryMessage> history) {
         
         if (history == null || history.isEmpty()) {
             return Collections.emptyList();
         }
         
-        // הגבלה ל-10 הודעות אחרונות
+        // Limit to MAX_HISTORY_MESSAGES latest messages
         if (history.size() > MAX_HISTORY_MESSAGES) {
             log.warn("History too long: {} messages, limiting to {}", 
                 history.size(), MAX_HISTORY_MESSAGES);
@@ -133,7 +127,7 @@ public class QueryService {
         return history;
     }
 
-    // ✅ חיפוש משופר עם הקשר
+    // Find relevant chunks in Qdrant
     private List<RelevantDocument> searchRelevantDocuments(
             String collectionName,
             String question,
@@ -148,14 +142,14 @@ public class QueryService {
                 return new ArrayList<>();
             }
 
-            // בנה שאילתא משופרת עם הקשר
+            // Build an improved query with the context
             String enhancedQuery = buildEnhancedQuery(question, history);
             log.info("Enhanced query: {}", enhancedQuery);
 
-            // המרה לווקטור (זמני!)
+            // Convert to vector (temporary!)
             Embedding queryEmbedding = embeddingModel.embed(enhancedQuery).content();
 
-            // חיפוש
+            // search
             EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
                 .queryEmbedding(queryEmbedding)
                 .maxResults(MAX_RELEVANT_CHUNKS)
@@ -165,7 +159,7 @@ public class QueryService {
             EmbeddingSearchResult<TextSegment> searchResult = 
                 embeddingStore.search(searchRequest);
 
-            // המרה לרשימת מסמכים
+            // Convert to a list of documents
             List<RelevantDocument> relevantDocs = new ArrayList<>();
             for (EmbeddingMatch<TextSegment> match : searchResult.matches()) {
                 RelevantDocument doc = new RelevantDocument();
@@ -190,16 +184,14 @@ public class QueryService {
         }
     }
 
-    // ✅ בניית שאילתא משופרת עם הקשר מההיסטוריה
-    private String buildEnhancedQuery(
-            String question,
-            List<PublicQueryRequest.HistoryMessage> history) {
+    // Add context from history to query
+    private String buildEnhancedQuery(String question, List<PublicQueryRequest.HistoryMessage> history) {
         
         if (history == null || history.isEmpty()) {
             return question;
         }
         
-        // קח את 2 ההודעות האחרונות של המשתמש (אם יש)
+        // Get the user's last messages (if any)
         StringBuilder contextBuilder = new StringBuilder();
         int userMessagesAdded = 0;
         
@@ -211,17 +203,14 @@ public class QueryService {
             }
         }
         
-        // הוסף את השאלה הנוכחית
+        // Add the current question
         contextBuilder.append(question);
         
         return contextBuilder.toString();
     }
 
-    // ✅ בניית messages עם היסטוריה
-    private List<ChatMessage> buildMessagesWithHistory(
-            String question,
-            List<RelevantDocument> relevantDocs,
-            List<PublicQueryRequest.HistoryMessage> history) {
+    // Build chat messages for GPT
+    private List<ChatMessage> buildMessagesWithHistory(String question, List<RelevantDocument> relevantDocs, List<PublicQueryRequest.HistoryMessage> history) {
         
         List<ChatMessage> messages = new ArrayList<>();
 
@@ -236,7 +225,7 @@ public class QueryService {
             "Be natural and conversational.\n"
         ));
 
-        // 2. הוספת היסטוריה (טקסט פשוט!)
+        // 2. Adding history (plain text!)
         if (history != null && !history.isEmpty()) {
             log.info("Adding {} history messages", history.size());
             
@@ -249,7 +238,7 @@ public class QueryService {
             }
         }
 
-        // 3. הקונטקסט מהמסמכים + השאלה החדשה
+        // 3. The context from the documents + the new question
         StringBuilder context = new StringBuilder();
         context.append("Relevant information from documents:\n\n");
         
@@ -270,7 +259,7 @@ public class QueryService {
         return messages;
     }
 
-    // ✅ זיהוי שפה
+    // Detect Hebrew or English
     private String detectLanguage(String text) {
         if (text == null || text.trim().isEmpty()) {
             return "en";
@@ -295,9 +284,8 @@ public class QueryService {
         return "en";
     }
 
-    // ✅ בניית sources
-    private List<QueryResponse.Source> buildSources(
-            List<RelevantDocument> relevantDocs) {
+   // Convert results to source DTOs
+    private List<QueryResponse.Source> buildSources(List<RelevantDocument> relevantDocs) {
         
         List<QueryResponse.Source> sources = new ArrayList<>();
         for (int i = 0; i < relevantDocs.size(); i++) {
@@ -313,7 +301,7 @@ public class QueryService {
         return sources;
     }
 
-    // ✅ חישוב confidence
+    // Average relevance scores
     private Double calculateConfidence(List<RelevantDocument> results) {
         if (results.isEmpty()) {
             return 0.0;
@@ -325,7 +313,7 @@ public class QueryService {
         return Math.min(avgScore, 1.0);
     }
 
-    // ✅ קיצור טקסט
+    // Truncate text to max length
     private String truncateText(String text, int maxLength) {
         if (text == null || text.length() <= maxLength) {
             return text;
@@ -333,7 +321,7 @@ public class QueryService {
         return text.substring(0, maxLength) + "...";
     }
 
-    // ✅ תגובה "לא נמצאו תוצאות"
+    // Response when no documents found
     private QueryResponse createNoResultsResponse(String question, long startTime) {
         String detectedLanguage = detectLanguage(question);
         String message = detectedLanguage.equals("he") 

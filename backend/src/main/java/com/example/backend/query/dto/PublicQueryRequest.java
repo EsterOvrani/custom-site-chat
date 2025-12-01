@@ -20,15 +20,14 @@ public class PublicQueryRequest {
     @Size(min = 1, max = 2000)
     private String question;
     
-    // 🆕 היסטוריה מהלקוח (מקסימום 10 הודעות)
     private List<HistoryMessage> history;
     
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     public static class HistoryMessage {
-        private String role;     // "user" או "assistant"
-        private String content;  // הטקסט (לא ווקטור!)
+        private String role;     // "user" or "assistant"
+        private String content;  
         
         public boolean isUser() {
             return "user".equalsIgnoreCase(role);

@@ -19,8 +19,7 @@ public class EmailService {
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
-    // ==================== Verification Email (קיים) ====================
-    
+    // Send account verification email
     public void sendVerificationEmail(String to, String subject, String verificationCode) throws MessagingException {
         try {
             MimeMessage message = emailSender.createMimeMessage();
@@ -88,8 +87,7 @@ public class EmailService {
         }
     }
 
-    // ==================== 🆕 Password Reset Email ====================
-    
+    // Send password reset email
     public void sendPasswordResetEmail(String to, String resetCode) throws MessagingException {
         try {
             MimeMessage message = emailSender.createMimeMessage();
@@ -157,8 +155,7 @@ public class EmailService {
         }
     }
 
-    // ==================== 🆕 Google User Credentials Email ====================
-    
+    // Send credentials to new Google users
     public void sendGoogleUserCredentials(String to, String username, String tempPassword) throws MessagingException {
         try {
             MimeMessage message = emailSender.createMimeMessage();

@@ -1,5 +1,9 @@
 package com.example.backend.common.exception;
 
+/**
+* Thrown when a the timeout of the action finished (as in upload file...)
+*/
+
 import org.springframework.http.HttpStatus;
 
 public class TimeoutException extends BaseException {

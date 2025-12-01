@@ -13,18 +13,15 @@ import java.util.List;
 @Builder
 public class QueryResponse {
     
-    // התשובה עצמה
     private String answer;
     
-    // מקורות (מסמכים רלוונטיים)
     private List<Source> sources;
-    
-    // מטריקות
+
     private Long responseTimeMs;
     private Double confidence;
     private Integer tokensUsed;
     
-    // Inner class למקור
+    // Inner class
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

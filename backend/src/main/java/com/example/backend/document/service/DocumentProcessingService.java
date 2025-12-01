@@ -34,10 +34,8 @@ public class DocumentProcessingService {
     private final EmbeddingModel embeddingModel;
     private final DocumentChunkingService chunkingService;
 
-    /**
-     * ⭐ עיבוד מסמך אסינכרוני - רץ ברקע!
-     */
-    @Async("documentProcessingExecutor")  // ⭐ שימוש ב-Thread Pool שהגדרנו
+    // Async: upload, extract, embed, store
+    @Async("documentProcessingExecutor") 
     public void processDocumentAsync(
             Long documentId,
             byte[] fileBytes,
@@ -49,24 +47,24 @@ public class DocumentProcessingService {
             String collectionName) {
         
         log.info("====================================================");
-        log.info("🔵 [Thread: {}] Starting async processing for document ID: {}", 
+        log.info("[Thread: {}] Starting async processing for document ID: {}", 
             Thread.currentThread().getName(), documentId);
         log.info("====================================================");
 
         try {
-            // ==================== טעינת Document מה-DB ====================
+            // ==================== load document from DB ====================
             Document document = documentRepository.findById(documentId)
                     .orElseThrow(() -> new ResourceNotFoundException("מסמך", documentId));
             
-            log.info("📍 [{}] Stage 1: Document loaded from DB", documentId);
+            log.info("[{}] Stage 1: Document loaded from DB", documentId);
 
-            // ==================== שלב 1: העלאה ל-S3 ====================
-            log.info("📍 [{}] Stage 2: Uploading to S3", documentId);
+            // ===================== Upload to S3 ======================
+            log.info("[{}] Stage 2: Uploading to S3", documentId);
             document.updateStage(ProcessingStage.UPLOADING, 10);
             documentRepository.save(document);
-            log.info("✅ [{}] Progress updated: 10%", documentId);
+            log.info("[{}] Progress updated: 10%", documentId);
             
-            Thread.sleep(500); // ⭐ השהייה קטנה כדי לראות את העדכון
+            Thread.sleep(500); // Small delay to see the update 
             
             s3Service.uploadFile(
                 new ByteArrayInputStream(fileBytes),
@@ -79,15 +77,16 @@ public class DocumentProcessingService {
             documentRepository.save(document);
             log.info("✅ [{}] File uploaded to S3 - Progress: 20%", documentId);
 
-            Thread.sleep(500);
+            Thread.sleep(500); // Small delay to see the update
 
-            // ==================== שלב 2: חילוץ טקסט ====================
+            // ================= Extract text from PDF =================
+            
             log.info("📍 [{}] Stage 3: Extracting text from PDF", documentId);
             document.updateStage(ProcessingStage.EXTRACTING_TEXT, 30);
             documentRepository.save(document);
             log.info("✅ [{}] Progress updated: 30%", documentId);
             
-            Thread.sleep(500);
+            Thread.sleep(500); // Small delay to see the update
             
             DocumentParser parser = new ApachePdfBoxDocumentParser();
             dev.langchain4j.data.document.Document langchainDoc =
@@ -102,9 +101,10 @@ public class DocumentProcessingService {
             log.info("✅ [{}] Extracted {} characters - Progress: 45%", 
                 documentId, characterCount);
 
-            Thread.sleep(500);
+            Thread.sleep(500); // Small delay to see the update
 
-            // ==================== שלב 3: חלוקה ל-chunks ====================
+            // ================ Split into chunks ==================
+
             log.info("📍 [{}] Stage 4: Splitting into chunks", documentId);
             document.updateStage(ProcessingStage.CREATING_CHUNKS, 50);
             documentRepository.save(document);
@@ -126,9 +126,9 @@ public class DocumentProcessingService {
             log.info("✅ [{}] Split into {} chunks - Progress: 60%", 
                 documentId, chunkCount);
 
-            Thread.sleep(500);
+            Thread.sleep(500); // Small delay to see the update
 
-            // ==================== שלב 4: יצירת embeddings ====================
+            // ==================== Create embeddings ====================
             log.info("📍 [{}] Stage 5: Creating embeddings and storing", documentId);
             document.updateStage(ProcessingStage.CREATING_EMBEDDINGS, 65);
             documentRepository.save(document);
@@ -143,27 +143,27 @@ public class DocumentProcessingService {
                 );
             }
 
-            // עיבוד embeddings עם התקדמות
+            // Processing embeddings with progress
             int processed = 0;
             int baseProgress = 65;
             int maxProgress = 95;
             
             for (TextSegment segment : segments) {
-                // יצירת embedding
+                // create embedding
                 Embedding embedding = embeddingModel.embed(segment).content();
                 
-                // הוספת metadata
+                // add metadata
                 segment.metadata().put("document_id", document.getId().toString());
                 segment.metadata().put("document_name", originalFilename);
                 segment.metadata().put("chunk_index", String.valueOf(processed));
                 segment.metadata().put("user_id", userId.toString());
                 
-                // שמירה ב-Qdrant
+                // Store in Qdrant
                 embeddingStore.add(embedding, segment);
                 
                 processed++;
                 
-                // עדכון התקדמות כל 5 chunks
+                // Progress update every 5 chunks
                 if (processed % 5 == 0 || processed == segments.size()) {
                     int progress = baseProgress + 
                         ((maxProgress - baseProgress) * processed / segments.size());
@@ -174,11 +174,11 @@ public class DocumentProcessingService {
                     log.info("✅ [{}] Progress: {}/{} chunks ({}%)", 
                         documentId, processed, segments.size(), progress);
                     
-                    Thread.sleep(200); // השהייה קטנה לראות את העדכון
+                    Thread.sleep(200); // Small delay to see the update
                 }
             }
 
-            // ==================== שלב 5: סיום ====================
+            // ==================== Mark as completed ====================
             log.info("📍 [{}] Stage 6: Finalizing", documentId);
             document.markAsCompleted(characterCount, chunkCount);
             documentRepository.save(document);

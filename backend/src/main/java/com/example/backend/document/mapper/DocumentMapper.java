@@ -16,9 +16,7 @@ import java.util.List;
 )
 public interface DocumentMapper {
 
-    /**
-     * המרה מ-Document Entity ל-DocumentResponse DTO
-     */
+    // Map Document entity to DTO
     @Mapping(source = "id", target = "id")
     @Mapping(source = "user.id", target = "userId")
     @Mapping(target = "fileSizeFormatted", expression = "java(formatFileSize(document.getFileSize()))")
@@ -26,16 +24,12 @@ public interface DocumentMapper {
     @Mapping(target = "statistics", ignore = true)
     DocumentResponse toResponse(Document document);
 
-    /**
-     * המרה של רשימה
-     */
+    // Map list of documents
     List<DocumentResponse> toResponseList(List<Document> documents);
 
     // ==================== Helper Methods ====================
 
-    /**
-     * פורמט גודל קובץ קריא
-     */
+    // Format bytes to human readable
     default String formatFileSize(Long fileSize) {
         if (fileSize == null) {
             return "לא ידוע";
@@ -52,9 +46,7 @@ public interface DocumentMapper {
         }
     }
 
-    /**
-     * תיאור שלב עיבוד
-     */
+    // Get processing stage description
     default String getStageDescription(Document document) {
         if (document.getProcessingStage() == null) {
             return "";
@@ -71,9 +63,7 @@ public interface DocumentMapper {
         };
     }
 
-    /**
-     * חישוב סטטיסטיקות עיבוד
-     */
+    // Calculate processing statistics
     default DocumentResponse.ProcessingStatistics buildStatistics(Document document) {
         if (document.getCreatedAt() == null || document.getProcessedAt() == null) {
             return null;
@@ -90,9 +80,7 @@ public interface DocumentMapper {
                 .build();
     }
 
-    /**
-     * פורמט משך זמן
-     */
+    // Format milliseconds to readable time
     default String formatDuration(long millis) {
         if (millis < 1000) {
             return millis + " ms";
@@ -112,32 +100,27 @@ public interface DocumentMapper {
         return hours + " שעות";
     }
 
-    /**
-     * חישוב עלות embeddings
-     * OpenAI text-embedding-3-large: ~$0.13 per 1M tokens
-     */
+    // Estimate OpenAI embedding cost
     default Double calculateEmbeddingCost(Integer characterCount) {
         if (characterCount == null) {
             return 0.0;
         }
 
-        // הערכה: 1 token ≈ 4 characters
+        // Estimate: 1 token ≈ 4 characters
         int estimatedTokens = characterCount / 4;
         return estimatedTokens * 0.00000013;
     }
 
-
-    /**
-     * העשרת התגובה אחרי המרה
-     */
+    // Add statistics after mapping
     @AfterMapping
     default void enrichDocumentResponse(@MappingTarget DocumentResponse response, Document document) {
-        // הוסף סטטיסטיקות אם המסמך הושלם
+
+        // Add statistics if the document is complete
         if (document.isProcessed()) {
             response.setStatistics(buildStatistics(document));
         }
 
-        // וודא שיש fileSizeFormatted
+        // Make sure there is fileSizeFormatted
         if (response.getFileSizeFormatted() == null) {
             response.setFileSizeFormatted(formatFileSize(document.getFileSize()));
         }

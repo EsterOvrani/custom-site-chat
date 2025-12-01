@@ -21,19 +21,17 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * טיפול ריכוזי בכל שגיאות המערכת
- * 
- * מטפל בכל החריגים שנזרקים מה-Controllers ומחזיר תגובות אחידות
- */
+* Centralized handling of all system errors
+*
+* Handles all exceptions thrown by Controllers and returns uniform responses
+*/
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
 
     // ==================== Custom Exceptions ====================
     
-    /**
-     * טיפול בחריגים מותאמים אישית שלנו (BaseException)
-     */
+    // Handling our custom exceptions (BaseException)
     @ExceptionHandler(BaseException.class)
     public ResponseEntity<ErrorResponse> handleBaseException(
             BaseException ex,
@@ -49,7 +47,7 @@ public class GlobalExceptionHandler {
                 .path(request.getRequestURI())
                 .build();
         
-        // אם זו ValidationException, נוסיף גם את שגיאות השדות
+        // If this is a ValidationException, we'll also add the field errors
         if (ex instanceof ValidationException validationEx) {
             errorResponse.setFieldErrors(validationEx.getFieldErrors());
         }
@@ -61,9 +59,7 @@ public class GlobalExceptionHandler {
 
     // ==================== Spring Validation Errors ====================
     
-    /**
-     * טיפול בשגיאות @Valid (Bean Validation)
-     */
+    // Error handling @Valid (Bean Validation)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(
             MethodArgumentNotValidException ex,
@@ -95,9 +91,7 @@ public class GlobalExceptionHandler {
                 .body(errorResponse);
     }
     
-    /**
-     * טיפול בשגיאות @Validated (Constraint Validation)
-     */
+    // Error handling @Valid (Bean Validation)
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolation(
             ConstraintViolationException ex,
@@ -129,9 +123,7 @@ public class GlobalExceptionHandler {
 
     // ==================== Security Exceptions ====================
     
-    /**
-     * טיפול בשגיאות אימות (Spring Security)
-     */
+    // Error handling @Validated (Constraint Validation)
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleAuthenticationException(
             AuthenticationException ex,
@@ -152,9 +144,7 @@ public class GlobalExceptionHandler {
                 .body(errorResponse);
     }
     
-    /**
-     * טיפול בשגיאות הרשאה (Spring Security)
-     */
+    // Handling authentication errors (Spring Security)
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDeniedException(
             AccessDeniedException ex,
@@ -177,9 +167,7 @@ public class GlobalExceptionHandler {
 
     // ==================== File Upload Exceptions ====================
     
-    /**
-     * טיפול בקבצים גדולים מדי
-     */
+    // Handling files that are too large
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(
             MaxUploadSizeExceededException ex,
@@ -203,9 +191,7 @@ public class GlobalExceptionHandler {
 
     // ==================== IllegalArgumentException ====================
     
-    /**
-     * טיפול בארגומנטים לא חוקיים
-     */
+    // Handling of illegal arguments
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
             IllegalArgumentException ex,
@@ -228,9 +214,7 @@ public class GlobalExceptionHandler {
 
     // ==================== Generic Exception ====================
     
-    /**
-     * טיפול בכל השגיאות האחרות (Fallback)
-     */
+    // Treatment of all other errors (Fallback)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex,

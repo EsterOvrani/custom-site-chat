@@ -3,7 +3,7 @@ package com.example.backend.common.exception;
 import org.springframework.http.HttpStatus;
 
 /**
- * נזרק כאשר יש בעיה בשירות חיצוני (AI, S3, Email וכו')
+ * Thrown when trying to create a resource that already exists (duplicate email, duplicate username, etc.)
  */
 public class ExternalServiceException extends BaseException {
     

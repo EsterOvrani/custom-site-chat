@@ -1,14 +1,14 @@
 package com.example.backend.query.controller;
 
 import com.example.backend.common.dto.ApiResponse;
-import com.example.backend.common.exception.UnauthorizedException;  // ⭐ חסר!
+import com.example.backend.common.exception.UnauthorizedException;  
 import com.example.backend.query.dto.PublicQueryRequest;
 import com.example.backend.query.dto.QueryResponse;
 import com.example.backend.query.service.QueryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;  // ⭐ חסר!
+import org.springframework.http.HttpStatus;  
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +21,7 @@ public class QueryController {
 
     private final QueryService queryService;
 
+    // Public API: answer question using documents
     @PostMapping("/ask")
     public ResponseEntity<ApiResponse<QueryResponse>> askQuestion(
             @Valid @RequestBody PublicQueryRequest request) {
