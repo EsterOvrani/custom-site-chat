@@ -397,46 +397,6 @@ public class S3Service {
         }
     }
 
-    public void copyFile(String sourceKey, String destinationKey) {
-        try {
-            log.info("📋 Copying file from {} to {}", sourceKey, destinationKey);
-
-            s3Client.copyObject(
-                CopyObjectRequest.builder()
-                    .sourceBucket(bucketName)
-                    .sourceKey(sourceKey)
-                    .destinationBucket(bucketName)
-                    .destinationKey(destinationKey)
-                    .build()
-            );
-
-            log.info("✅ File copied successfully");
-
-        } catch (Exception e) {
-            log.error("❌ Failed to copy file", e);
-            throw ExternalServiceException.storageServiceError("Failed to copy file in S3" + e);
-        }
-    }
-
-    public long getFolderSize(String prefix) {
-        try {
-            List<String> files = listFiles(prefix);
-            long totalSize = 0;
-
-            for (String key : files) {
-                FileInfo info = getFileInfo(key);
-                totalSize += info.getSize();
-            }
-
-            log.info("📊 Total size of folder {}: {} bytes", prefix, totalSize);
-            return totalSize;
-
-        } catch (Exception e) {
-            log.error("❌ Failed to calculate folder size: {}", prefix, e);
-            throw new RuntimeException("Failed to calculate folder size", e);
-        }
-    }
-
     @Data
     public static class FileInfo {
         private String objectName;

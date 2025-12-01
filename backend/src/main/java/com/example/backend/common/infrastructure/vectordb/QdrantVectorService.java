@@ -17,9 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import jakarta.annotation.PostConstruct;
 import java.util.List;
-
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
@@ -32,7 +29,6 @@ public class QdrantVectorService {
 
     private String qdrantUrl;
     private final Map<String, EmbeddingStore<TextSegment>> collectionStoreMap = new ConcurrentHashMap<>();
-    private String currentActiveCollectionName;
 
     @PostConstruct
     public void initialize() {
@@ -223,18 +219,6 @@ public class QdrantVectorService {
         }
     }
 
-    public EmbeddingStore<TextSegment> getCurrentEmbeddingStore() {
-        if (currentActiveCollectionName == null) {
-            log.warn("⚠️ No active collection found");
-            return null;
-        }
-        EmbeddingStore<TextSegment> store = collectionStoreMap.get(currentActiveCollectionName);
-        if (store == null) {
-            log.warn("⚠️ Store not found for collection: {}", currentActiveCollectionName);
-        }
-        return store;
-    }
-
     public EmbeddingStore<TextSegment> getEmbeddingStoreForCollection(String collectionName) {
         log.info("🔍 Looking for collection: {}", collectionName);
         log.info("📊 Available collections: {}", collectionStoreMap.keySet());
@@ -257,35 +241,9 @@ public class QdrantVectorService {
         return store;
     }
 
-    public String getCurrentCollectionName() {
-        return currentActiveCollectionName;
-    }
-
-    public boolean isCollectionActive(String collectionName) {
-        return collectionStoreMap.containsKey(collectionName);
-    }
-
     public void removeCollectionFromCache(String collectionName) {
         collectionStoreMap.remove(collectionName);
-
-        if (currentActiveCollectionName != null &&
-                currentActiveCollectionName.equals(collectionName)) {
-            currentActiveCollectionName = null;
-        }
-
         log.info("Collection removed from cache: {}", collectionName);
-    }
-
-    public String getCollectionInfo() {
-        return String.format("Current Collection: %s, Host: %s, REST API: %s, Active Collections: %d",
-                currentActiveCollectionName != null ? currentActiveCollectionName : "None",
-                qdrantProperties.getHost(),
-                qdrantUrl,
-                collectionStoreMap.size());
-    }
-
-    public boolean isReady() {
-        return qdrantProperties != null;
     }
 
     public void deleteCollection(String collectionName) {

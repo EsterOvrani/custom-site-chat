@@ -126,17 +126,6 @@ public interface DocumentMapper {
         return estimatedTokens * 0.00000013;
     }
 
-    /**
-     * עדכון Document מ-DTO
-     */
-    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "user", ignore = true)
-    @Mapping(target = "contentHash", ignore = true)
-    @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "displayOrder", ignore = true)
-    void updateDocumentFromResponse(DocumentResponse response, @MappingTarget Document document);
 
     /**
      * העשרת התגובה אחרי המרה

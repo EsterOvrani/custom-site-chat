@@ -480,20 +480,4 @@ public class AuthenticationService {
         int code = random.nextInt(900000) + 100000; // 100000-999999
         return String.valueOf(code);
     }
-
-    // ==================== CLEANUP (Optional - can be called periodically) ====================
-    
-    public void cleanupExpiredPendingRegistrations() {
-        int removed = 0;
-        for (String email : pendingRegistrations.keySet()) {
-            PendingRegistration pending = pendingRegistrations.get(email);
-            if (pending != null && pending.isExpired()) {
-                pendingRegistrations.remove(email);
-                removed++;
-            }
-        }
-        if (removed > 0) {
-            log.info("🧹 Cleaned up {} expired pending registrations", removed);
-        }
-    }
 }
