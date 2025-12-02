@@ -209,13 +209,7 @@ backend/
 │
 ├── src/main/resources/
 │   └── application.properties
-│
-└── docs/                       # API Documentation
-    ├── AUTH_API.md
-    ├── USER_API.md
-    ├── COLLECTION_API.md
-    ├── DOCUMENT_API.md
-    └── QUERY_API.md
+|_
 ```
 
 ---
