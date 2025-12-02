@@ -33,7 +33,7 @@
 
 ### 🔐 User Management
 
-Multiple Authentication Methods:** Email/password and Google OAuth 2.0.
+- **Multiple Authentication Methods:** Email/password and Google OAuth 2.0.
 - **Email Verification:** Secure account activation with 6-digit verification codes.
 - **Password Recovery:** Complete password reset flow with email verification.
 - **JWT-Based Sessions:** Secure, stateless authentication.
