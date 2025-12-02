@@ -1,0 +1,36 @@
+# Screenshots Directory
+
+Add your application screenshots here.
+
+## Required Screenshots:
+
+### Authentication
+- login-page.png
+- register-page.png
+- verify-email.png
+- google-oauth.png
+
+### Dashboard
+- dashboard-empty.png
+- dashboard-with-documents.png
+- upload-modal.png
+- processing-status.png
+
+### Settings
+- settings-page.png
+- secret-key-shown.png
+- embed-code.png
+- copy-confirmation.png
+
+### Chat Widget
+- chat-widget-closed.png
+- chat-widget-open.png
+- chat-conversation.png
+- widget-loading.png
+
+### Responsive
+- mobile-view.png
+- tablet-view.png
+- desktop-view.png
+
+See HOW_TO_ADD_SCREENSHOTS.md for guide.
