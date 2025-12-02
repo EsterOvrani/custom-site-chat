@@ -42,11 +42,11 @@
 
 - **PDF Upload & Processing:** Asynchronous document handling with real-time progress tracking
 - **Multi-Stage Processing Pipeline:**
-      - File upload to AWS S3
-      - Text extraction using Apache PDFBox
-      - Intelligent chunking (500 characters with 50-character overlap)
-      - AI embeddings generation using OpenAI's text-embedding-3-large
-      - Vector storage in Qdrant database
+   - File upload to AWS S3
+   - Text extraction using Apache PDFBox
+   - Intelligent chunking (500 characters with 50-character overlap)
+   - AI embeddings generation using OpenAI's text-embedding-3-large
+   - Vector storage in Qdrant database
 - **Progress Monitoring:** 7-stage processing with live progress updates
 - **Multiple Documents:** Support for unlimited document uploads per user
 
