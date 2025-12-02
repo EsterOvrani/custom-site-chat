@@ -32,73 +32,67 @@
 ## ✨ Key Features
 
 ### 🔐 User Management
-
-- **Multiple Authentication Methods:** Email/password and Google OAuth 2.0.
-- **Email Verification:** Secure account activation with 6-digit verification codes.
-- **Password Recovery:** Complete password reset flow with email verification.
-- **JWT-Based Sessions:** Secure, stateless authentication.
+- **Multiple Authentication Methods**: Email/password and Google OAuth 2.0
+- **Email Verification**: Secure account activation with 6-digit verification codes
+- **Password Recovery**: Complete password reset flow with email verification
+- **JWT-Based Sessions**: Secure, stateless authentication
 
 ### 📄 Document Processing
-
-- **PDF Upload & Processing:** Asynchronous document handling with real-time progress tracking
-- **Multi-Stage Processing Pipeline:**
-   - File upload to AWS S3
-   - Text extraction using Apache PDFBox
-   - Intelligent chunking (500 characters with 50-character overlap)
-   - AI embeddings generation using OpenAI's text-embedding-3-large
-   - Vector storage in Qdrant database
-- **Progress Monitoring:** 7-stage processing with live progress updates
-- **Multiple Documents:** Support for unlimited document uploads per user
+- **PDF Upload & Processing**: Asynchronous document handling with real-time progress tracking
+- **Multi-Stage Processing Pipeline**:
+  - File upload to AWS S3
+  - Text extraction using Apache PDFBox
+  - Intelligent chunking (500 characters with 50-character overlap)
+  - AI embeddings generation using OpenAI's text-embedding-3-large
+  - Vector storage in Qdrant database
+- **Progress Monitoring**: 7-stage processing with live progress updates
+- **Multiple Documents**: Support for unlimited document uploads per user
 
 ### 💬 AI-Powered Chat Widget
-
-- **Natural Language Queries:** Ask questions in Hebrew or English
-- **Context-Aware Responses:** Maintains conversation history (up to 10 messages)
-- **Source Citations:** Provides relevant document excerpts with relevance scores
-- **Easy Integration:** Simple copy-paste JavaScript embed code
-- **Customizable UI:** Configure widget title, bot name, and avatars
+- **Natural Language Queries**: Ask questions in Hebrew or English
+- **Context-Aware Responses**: Maintains conversation history (up to 10 messages)
+- **Source Citations**: Provides relevant document excerpts with relevance scores
+- **Easy Integration**: Simple copy-paste JavaScript embed code
+- **Customizable UI**: Configure widget title, bot name, and avatars
 
 ### ⚙️ Collection Management
-
-- **Isolated User Collections:** Each user gets a dedicated Qdrant collection
-- **Secure API Access:** Secret key-based authentication for widget API
-- **Embeddable Widget:** Pre-generated, customizable embed code
-- **Key Regeneration:** Security-focused secret key rotation
-
----
+- **Isolated User Collections**: Each user gets a dedicated Qdrant collection
+- **Secure API Access**: Secret key-based authentication for widget API
+- **Embeddable Widget**: Pre-generated, customizable embed code
+- **Key Regeneration**: Security-focused secret key rotation
 
 ## 🚀 Technologies
 
 ### Backend
-- **Spring Boot 3.3.4** - Main framework
+- **Spring Boot 3.3.4** - Main framework for building REST APIs
 - **Java 21** - Programming language
 - **Spring Security + JWT** - Authentication and authorization
-- **Spring Data JPA** - Database management
-- **PostgreSQL** - Relational database
-- **LangChain4j** - Integration with OpenAI and NLP
-- **Qdrant** - Vector Database for semantic search
-- **AWS S3** - Cloud document storage
-- **Apache PDFBox** - PDF file processing
-- **MapStruct** - Automatic object mapping
-- **Lombok** - Reduce boilerplate code
+- **Spring Data JPA** - Database management with ORM
+- **PostgreSQL** - Relational database for user accounts and metadata
+- **Qdrant** - Vector database for storing and searching document embeddings
+- **OpenAI API** - AI models for generating embeddings (text-embedding-3-large) and chat responses (GPT-4)
+- **AWS S3** - Cloud object storage for uploaded PDF files
+- **BCrypt** - Password hashing algorithm
+- **Apache PDFBox** - PDF text extraction library
+- **Maven** - Dependency management and build automation
 
 ### Frontend
-- **React 18.2** - JavaScript library for building UI
-- **React Router** - Navigation between pages
-- **Axios** - HTTP communication with Backend
+- **React 18.2.0** - JavaScript library for building user interfaces
+- **React Router DOM 6.20.0** - Client-side routing for SPA navigation
+- **Axios 1.12.2** - Promise-based HTTP client for API requests
 - **CSS3** - Modern and responsive design
 
 ### DevOps & Infrastructure
-- **Docker & Docker Compose** - Containerization
-- **Jenkins** - Automated CI/CD
-- **Nginx** - Reverse proxy and Load balancing
-- **Let's Encrypt** - SSL certificates
-- **AWS EC2** - Cloud servers
-- **Newman** - Automated API testing
+- **Docker** - Containerization platform for consistent deployment
+- **Docker Compose** - Multi-container orchestration for development and production
+- **Jenkins** - CI/CD automation server for building, testing, and deploying
+- **Nginx** - Reverse proxy server and static file serving
+- **AWS EC2** - Cloud compute service for hosting the application
+- **Newman** - Automated API testing using Postman collections
 
 ### Authentication & Integration
-- **Google OAuth 2.0** - Google account login
-- **JavaMail** - Email sending (user verification)
+- **Google OAuth 2.0** - Third-party authentication via Google accounts
+- **SMTP (Gmail)** - Email service for verification codes and password reset
 
 ---
 
