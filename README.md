@@ -38,8 +38,6 @@ Simply choose your preferred method and click the corresponding button.
 2. Enter email and password
 3. Click **"Register"**
 
----
-
 ### 2.2 Email Verification
 
 After registration, you'll see this verification code entry page.
@@ -56,8 +54,6 @@ After registration, you'll see this verification code entry page.
 3. Choose one of two verification methods:
    - **Option A**: Enter the 6-digit code manually in the verification page
    - **Option B**: Click the verification link/button in the email
-
----
 
 **Didn't receive the code?**
 
@@ -87,8 +83,6 @@ After registration, you'll see this verification code entry page.
 2. You'll see two main tabs:
    - **My Documents (0)** - Upload and manage PDFs
    - **Collection Settings & Embed Code** - Get embed code
-
----
 
 ### 3.2 Dashboard After Upload
 
@@ -122,8 +116,6 @@ After registration, you'll see this verification code entry page.
 2. This upload dialog window opens
 3. Click **"Choose File"** or drag and drop a PDF
 
----
-
 ![File Selection](./screenshots/11-file-selection.png)
 
 ![Upload Dialog With Docs](./screenshots/12-upload-dialog-with-docs.png)
@@ -138,8 +130,6 @@ After registration, you'll see this verification code entry page.
 - Format: PDF only
 - Text-based (not scanned images)
 - No password protection
-
----
 
 ### 4.2 Processing
 
@@ -165,8 +155,6 @@ Your document will go through 5 processing stages:
 
 ![Embed Code](./screenshots/16-embed-code-section.png)
 
----
-
 ### How to Embed the Chat Widget
 
 **Steps:**
@@ -178,8 +166,6 @@ Your document will go through 5 processing stages:
 **Example embed code:**
 
 ![Example Code](./screenshots/‏‏17-example-code-section.png)
-
----
 
 ### Secret Key Management
 
@@ -209,8 +195,6 @@ Your **Secret Key** (orange rectangle) is required for the widget to work.
    
 ![Success Email Send](./screenshots/19-mesage-send-verify-code-succssfuly.png)
 
----
-
 ### 6.2 Verification Email
 
 ![Email Verification](./screenshots/03-verify-page.png)
@@ -223,11 +207,7 @@ Your **Secret Key** (orange rectangle) is required for the widget to work.
 3. Copy the code
 4. Enter the 6-digit code from email in the field
 
----
-
 ![Verification Success](./screenshots/22-verify-code-to-change-password-sucsses.png)
-
----
 
 ### 6.3 New Password
 
@@ -237,8 +217,6 @@ Your **Secret Key** (orange rectangle) is required for the widget to work.
 1. Enter your new password in the second field
 2. Confirm the new password in the third field
 4. Click **"Reset Password"** button
-
----
 
 ### 6.4 Password Reset Success
 
@@ -258,8 +236,6 @@ Your **Secret Key** (orange rectangle) is required for the widget to work.
 1. Look for the floating chat button in the bottom-right corner (red circle highlights it)
 2. This is how the widget appears on your website to visitors
 
----
-
 ### 7.2 Opening Chat
 
 ![Opened Chat](./screenshots/25-chat-button.png)
@@ -268,8 +244,6 @@ Your **Secret Key** (orange rectangle) is required for the widget to work.
 1. Click the chat button
 2. Chat window opens and expands
 3. You'll see the welcome message and chat interface
-
----
 
 ### 7.3 Asking Questions
 
@@ -282,15 +256,11 @@ Your **Secret Key** (orange rectangle) is required for the widget to work.
 4. Click the send button (green arrow points to it)
 5. Or simply press Enter on your keyboard
 
----
-
 ### 7.3 Bot Response
 
 ![Bot Response](./screenshots/28-respone-AI.png)
 
 The bot responds with an AI-generated answer based on your uploaded documents.
-
----
 
 ![Multiple Sources](./screenshots/29-second-respones.png)
 ![Multiple Sources](./screenshots/30-third-respones.png)
@@ -299,8 +269,6 @@ The bot responds with an AI-generated answer based on your uploaded documents.
 1. AI-generated answer at the top
 2. Source excerpts from your documents (blue rectangles highlight each source)
 3. Relevance scores showing how relevant each source is
-
----
 
 ### 7.4 Chat Features
 
@@ -314,8 +282,6 @@ You can continue to ask after you press on the button **התחלת שיחה חד
 - Automatic language detection (Hebrew/English)
 - Source citations with every answer
 - Natural follow-up questions
-
----
 
 ### 7.5 Closing Chat
 
