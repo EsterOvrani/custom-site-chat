@@ -343,7 +343,7 @@ This project is licensed under the MIT License.
 For questions or issues:
 - 📖 Check the [detailed API documentation](./docs/)
 - 🐛 Open an issue on GitHub
-- 💬 Contact: your-email@example.com
+- 💬 Contact: Ester.Ovrani@gmail.com
 
 ---
 
