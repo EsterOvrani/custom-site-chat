@@ -100,7 +100,7 @@
 
 ### CI/CD Architecture
 
-![CI/CD Architecture](resorces/architecture/cicd-architecture.png)
+![CI/CD Architecture](resorces/arcitecture/cicd-architecture.png)
 
 **CI/CD Process:**
 1. **Push to GitHub** - Developer uploads new code
