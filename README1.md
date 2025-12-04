@@ -95,6 +95,222 @@
 - **SMTP (Gmail)** - Email service for verification codes and password reset
 
 ---
+## 🏗️ System Architecture
+
+```mermaid
+graph TB
+    subgraph "Client Side"
+        Browser[User Browser]
+        Widget[Chat Widget JS]
+    end
+    
+    subgraph "Frontend - React"
+        Dashboard[Dashboard UI<br/>Port 3000]
+        Auth[Auth Pages]
+        Upload[Upload Component]
+        Settings[Settings Page]
+    end
+    
+    subgraph "Infrastructure"
+        Nginx[Nginx Reverse Proxy<br/>Port 80/443]
+    end
+    
+    subgraph "Backend - Spring Boot"
+        API[REST API<br/>Port 8080]
+        
+        subgraph "Controllers"
+            AuthAPI[Auth Controller]
+            DocsAPI[Documents Controller]
+            QueryAPI[Query Controller]
+            CollAPI[Collections Controller]
+        end
+        
+        subgraph "Services"
+            AuthService[Authentication Service]
+            DocService[Document Service]
+            EmbedService[Embedding Service]
+            QueryService[Query Service]
+        end
+        
+        Security[Spring Security<br/>JWT Filter]
+    end
+    
+    subgraph "Data Layer"
+        PostgreSQL[(PostgreSQL<br/>Port 5432<br/>Users, Documents,<br/>Collections, Conversations)]
+        Qdrant[(Qdrant Vector DB<br/>Port 6333<br/>Embeddings + Metadata)]
+        S3[AWS S3<br/>PDF Storage]
+    end
+    
+    subgraph "External Services"
+        OpenAI[OpenAI API<br/>GPT-4 + Embeddings]
+        EmailSvc[Email Service<br/>SMTP]
+    end
+    
+    Browser --> Dashboard
+    Browser --> Widget
+    Dashboard --> Nginx
+    Widget --> Nginx
+    
+    Nginx --> API
+    
+    API --> AuthAPI
+    API --> DocsAPI
+    API --> QueryAPI
+    API --> CollAPI
+    
+    AuthAPI --> AuthService
+    DocsAPI --> DocService
+    QueryAPI --> QueryService
+    
+    AuthService --> Security
+    DocService --> Security
+    QueryService --> Security
+    
+    AuthService --> PostgreSQL
+    AuthService --> EmailSvc
+    
+    DocService --> PostgreSQL
+    DocService --> S3
+    DocService --> EmbedService
+    
+    EmbedService --> OpenAI
+    EmbedService --> Qdrant
+    
+    QueryService --> PostgreSQL
+    QueryService --> Qdrant
+    QueryService --> OpenAI
+    
+    style Browser fill:#e1f5ff
+    style Widget fill:#e1f5ff
+    style Dashboard fill:#fff4e6
+    style Nginx fill:#f3e5f5
+    style API fill:#e8f5e9
+    style PostgreSQL fill:#fce4ec
+    style Qdrant fill:#fce4ec
+    style S3 fill:#fce4ec
+    style OpenAI fill:#fff9c4
+    style EmailSvc fill:#fff9c4
+```
+
+---
+
+## 🔄 Key Flows
+
+### 1. User Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend
+    participant DB as PostgreSQL
+    participant Email as Email Service
+
+    Note over U,Email: Registration & Verification
+    U->>F: Enter Email & Password
+    F->>B: POST /api/auth/register
+    B->>DB: Create User (UNVERIFIED)
+    B->>Email: Send 6-digit Code
+    Email-->>U: Verification Email
+    
+    U->>F: Enter Code
+    F->>B: POST /api/auth/verify-email
+    B->>DB: Update Status (VERIFIED)
+    B-->>F: Success + JWT Token
+    
+    Note over U,Email: Login
+    U->>F: Enter Credentials
+    F->>B: POST /api/auth/login
+    B->>DB: Validate User
+    B->>B: Generate JWT
+    B-->>F: Return JWT + User Info
+    F->>F: Store JWT & Redirect
+    
+    Note over U,Email: Password Reset
+    U->>F: Click "Forgot Password"
+    F->>B: POST /api/auth/forgot-password
+    B->>Email: Send Reset Code
+    U->>F: Enter Code + New Password
+    F->>B: POST /api/auth/reset-password
+    B->>DB: Update Password
+    B-->>F: Success
+```
+
+---
+
+### 2. Document Processing Pipeline
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend
+    participant DB as PostgreSQL
+    participant S3 as AWS S3
+    participant Q as Qdrant
+    participant AI as OpenAI
+
+    U->>F: Upload PDF
+    F->>B: POST /api/documents/upload
+    B->>DB: Save Metadata (PENDING)
+    B-->>F: Return Document ID
+    
+    Note over B,AI: Async Processing
+    B->>S3: Upload PDF
+    B->>B: Extract Text (PDFBox)
+    B->>DB: Update Status (EXTRACTING)
+    
+    B->>B: Create Chunks (500 chars)
+    B->>DB: Update Status (CHUNKING)
+    
+    loop For Each Chunk
+        B->>AI: Generate Embedding
+        AI-->>B: Return 3072-dim Vector
+        B->>Q: Store Vector + Metadata
+    end
+    
+    B->>DB: Update Status (COMPLETED)
+    B-->>F: WebSocket: Complete
+    F->>F: Show "✓ Processed"
+```
+
+---
+
+### 3. Chat Widget Query Flow
+
+```mermaid
+sequenceDiagram
+    participant U as Visitor
+    participant W as Chat Widget
+    participant B as Backend
+    participant DB as PostgreSQL
+    participant Q as Qdrant
+    participant AI as OpenAI
+
+    U->>W: Ask Question
+    W->>B: POST /api/query/ask
+    Note over W: Headers: {secretKey}
+    
+    B->>DB: Validate Secret Key
+    B->>AI: Generate Query Embedding
+    AI-->>B: Return Vector
+    
+    B->>Q: Semantic Search (top 5)
+    Q-->>B: Return Relevant Chunks
+    
+    B->>DB: Get Conversation History
+    B->>AI: Generate Answer (GPT-4)
+    Note over B: Context: Retrieved chunks<br/>+ Last 10 messages
+    AI-->>B: Return Answer
+    
+    B->>DB: Save Q&A to Conversation
+    B-->>W: Return Answer + Sources
+    W->>W: Display Answer & Citations
+```
+
+---
+
+
 
 ## 🏗️ Architecture
 
