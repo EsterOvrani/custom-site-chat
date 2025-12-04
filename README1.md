@@ -137,49 +137,64 @@
 ---
 
 ### System Flow
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant F as Frontend
-    participant N as Nginx
-    participant B as Backend
-    participant DB as PostgreSQL
-    participant S3 as AWS S3
-    participant Q as Qdrant
-    participant AI as OpenAI
-
-    U->>F: Upload PDF Document
-    F->>N: POST /api/documents/upload
-    N->>B: Forward Request
-    B->>DB: Save Document Metadata (PENDING)
-    B-->>F: Return Document ID
-    
-    Note over B,S3: Async Processing Begins
-    B->>S3: Upload PDF File
-    B->>B: Extract Text with PDFBox
-    B->>B: Create Text Chunks (500 chars)
-    
-    loop For Each Chunk
-        B->>AI: Generate Embedding (3072 dims)
-        AI-->>B: Return Embedding Vector
-        B->>Q: Store Embedding + Metadata
+graph TD
+    subgraph 🔑 שכבת אימות (AUTH)
+        U_Auth[User: Register/Login] -->|1. Request| F(Frontend: React)
+        F -->|2. POST /api/auth/*| N(Nginx)
+        N -->|3. Forward| B_Auth(Backend: Spring Boot)
+        
+        B_Auth -->|4a. Check/Update| DB(PostgreSQL)
+        B_Auth -->|4b. Send Code| Email(Email Service)
+        B_Auth -->|4c. Google Flow| OAuth(Google OAuth)
+        
+        DB --o|User Data| B_Auth
+        B_Auth -->|5. Return JWT| F
+        F --> U_Auth
     end
     
-    B->>DB: Update Status to COMPLETED
+    subgraph ⬆️ שכבת עיבוד מסמכים (PROCESSING)
+        U_Upload[User: Upload Document] -->|6. POST /api/doc/upload (JWT)| F
+        F --> N
+        N -->|7. Forward| B_Process(Backend: Spring Boot)
+        
+        B_Process -->|8a. Save Metadata| DB
+        B_Process -->|8b. Store PDF| S3(AWS S3)
+        
+        B_Process --o|9. Extract Text & Chunk| B_Process
+        B_Process -->|10. Generate Embedding| AI_Embed(OpenAI: text-embedding)
+        AI_Embed -->|11. Vector| Q(Qdrant Vector DB)
+        Q --o|Store Vector/Chunk| B_Process
+        
+        B_Process -->|12. Update Status| DB
+    end
     
-    Note over U,AI: Query Flow
-    U->>F: Ask Question via Widget
-    F->>N: POST /api/query/ask
-    N->>B: Forward with Secret Key
-    B->>DB: Validate Secret Key
-    B->>AI: Generate Query Embedding
-    B->>Q: Semantic Search (top 5)
-    Q-->>B: Return Relevant Chunks
-    B->>AI: Generate Answer with GPT-4
-    AI-->>B: Return Answer
-    B-->>F: Return Answer + Sources
-    F-->>U: Display Answer
+    subgraph 💬 שכבת שאילתה (QUERY)
+        U_Query[User: Ask Question] -->|13. POST /api/query/ask (Key)| F
+        F --> N
+        N -->|14. Forward| B_Query(Backend: Spring Boot)
+        
+        B_Query -->|15. Validate Key| DB
+        B_Query -->|16. Generate Query Embed| AI_Embed
+        
+        AI_Embed -->|17. Query Vector| Q
+        Q -->|18. Top 5 Chunks| B_Query
+        
+        B_Query -->|19. RAG (Context)| AI_GPT(OpenAI: GPT-4)
+        AI_GPT -->|20. Generated Answer| B_Query
+        
+        B_Query -->|21. Log Query| DB
+        B_Query -->|22. Answer + Sources| F
+        F --> U_Query
+    end
+    
+    style B_Auth fill:#e6e6fa,stroke:#4b0082
+    style B_Process fill:#f0fff0,stroke:#228b22
+    style B_Query fill:#fff5e6,stroke:#ff8c00
+    style DB fill:#add8e6,stroke:#0000ff
+    style S3 fill:#fffacd,stroke:#daa520
+    style Q fill:#e0b0ff,stroke:#8a2be2
+    style AI_Embed fill:#ffb6c1,stroke:#ff69b4
+    style AI_GPT fill:#ffb6c1,stroke:#ff69b4
 
 ```
 
