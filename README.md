@@ -58,6 +58,8 @@ Try it live! Upload your PDFs and create an intelligent chatbot in minutes.
 
 ## 🏗️ System Architecture
 
+```mermaid
+
 %%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#E3F2FD','primaryTextColor':'#424242','primaryBorderColor':'#90CAF9','lineColor':'#BBDEFB','fontSize':'18px'}}}%%
 flowchart TD
     Start([👤 Start]) --> Register[📝 Register]
