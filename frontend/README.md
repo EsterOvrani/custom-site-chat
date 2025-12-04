@@ -1,6 +1,6 @@
-# Frontend - Smart Document Chat
+# Frontend - Custom Site Chat
 
-React-based user interface for document chat platform.
+React-based user interface for custom site chat platform.
 
 ## 🚀 Quick Start
 ```bash
