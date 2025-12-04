@@ -59,7 +59,6 @@ Try it live! Upload your PDFs and create an intelligent chatbot in minutes.
 ## 🏗️ System Architecture
 
 ```mermaid
-
 %%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#E3F2FD','primaryTextColor':'#424242','primaryBorderColor':'#90CAF9','lineColor':'#BBDEFB','fontSize':'18px'}}}%%
 flowchart TD
     Start([👤 Start]) --> Register[📝 Register]
@@ -116,7 +115,7 @@ flowchart TD
     style Search fill:#F8BBD0,stroke:#F48FB1,stroke-width:3px
     style Generate fill:#D1C4E9,stroke:#9575CD,stroke-width:3px
     style ShowAnswer fill:#E1BEE7,stroke:#BA68C8,stroke-width:3px
-
+```
 ---
 
 ## 🧠 How RAG Works
