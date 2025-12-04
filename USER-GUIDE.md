@@ -327,7 +327,7 @@ You can continue to ask after you press on the button **התחלת שיחה חד
 
 ## 📧 Support
 
-**Email**: support@customsitechat.com  
+**Email**: Ester.Ovrani@gmail.com  
 **Documentation**: [API Docs](../backend/docs/)
 
 ---
