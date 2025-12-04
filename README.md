@@ -58,54 +58,62 @@ Try it live! Upload your PDFs and create an intelligent chatbot in minutes.
 
 ## 🏗️ System Architecture
 
-```mermaid
-graph TB
-    subgraph Frontend[⚛️ Frontend Layer]
-        Dashboard[📊 React Dashboard<br/>Document Management]
-        Widget[💬 Chat Widget<br/>User Interface]
-    end
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#E3F2FD','primaryTextColor':'#424242','primaryBorderColor':'#90CAF9','lineColor':'#BBDEFB','fontSize':'18px'}}}%%
+flowchart TD
+    Start([👤 Start]) --> Register[📝 Register]
     
-    subgraph Backend[🚀 Backend API]
-        Auth[🔐 Authentication<br/>JWT Tokens]
-        DocService[📄 Document Service<br/>PDF Processing]
-        QueryService[🔍 Query Service<br/>RAG Pipeline]
-    end
+    Register --> Verify[📧 Email Verification]
+    Verify --> Login{🔐 Login}
     
-    subgraph Storage[💾 Storage Layer]
-        DB[(🗄️ PostgreSQL<br/>Users & Metadata)]
-        S3[(☁️ AWS S3<br/>PDF Files)]
-        Vector[(🧠 Qdrant<br/>Vector Search)]
-    end
+    Login --> LoginEmail[Login with<br/>Email & Password]
+    Login --> LoginGoogle[Login with<br/>Google OAuth]
     
-    subgraph AI[🤖 AI Services]
-        EmbedAPI[OpenAI API<br/>text-embedding-3-large]
-        GPT[OpenAI GPT-4<br/>Answer Generation]
-    end
+    LoginEmail --> Dashboard[📊 Dashboard]
+    LoginGoogle --> Dashboard
     
-    Dashboard --> Auth
-    Dashboard --> DocService
-    Widget --> QueryService
+    Dashboard --> Actions{Choose Action}
     
-    Auth --> DB
-    DocService --> DB
-    DocService --> S3
-    DocService --> EmbedAPI
-    DocService --> Vector
+    Actions --> Upload[📄 Upload PDFs]
+    Actions --> View[👁️ View Documents]
+    Actions --> Download[⬇️ Download Documents]
+    Actions --> Delete[🗑️ Delete Documents]
+    Actions --> GetCode[📋 Get Embed Code]
+    Actions --> Logout[🚪 Logout]
     
-    QueryService --> DB
-    QueryService --> EmbedAPI
-    QueryService --> Vector
-    QueryService --> GPT
+    Upload --> Processing[⚙️ Processing]
+    Processing --> Embeddings[🧠 Create Embeddings]
+    Embeddings --> Ready[✅ Ready]
     
-    style Frontend fill:#dbeafe,stroke:#1e40af,stroke-width:3px
-    style Backend fill:#dcfce7,stroke:#10b981,stroke-width:3px
-    style Storage fill:#fef3c7,stroke:#f59e0b,stroke-width:3px
-    style AI fill:#fce7f3,stroke:#ec4899,stroke-width:3px
+    Ready --> GetCode
+    GetCode --> AddToSite[🌐 Add Code to Website]
     
-    style DB fill:#e0e7ff,stroke:#6366f1,stroke-width:3px
-    style Vector fill:#fce7f3,stroke:#ec4899,stroke-width:4px
-    style S3 fill:#dbeafe,stroke:#0ea5e9,stroke-width:3px
-```
+    AddToSite --> WidgetLive[💬 Chat Widget Live!]
+    
+    WidgetLive --> VisitorAsk[🌐 Visitor Asks Question]
+    VisitorAsk --> Search[🔍 Semantic Search]
+    Search --> Generate[🤖 Generate AI Answer]
+    Generate --> ShowAnswer[💬 Display Answer + Sources]
+    
+    style Start fill:#E3F2FD,stroke:#90CAF9,stroke-width:3px
+    style Register fill:#FFF9C4,stroke:#FFF176,stroke-width:3px
+    style Verify fill:#FFE0B2,stroke:#FFB74D,stroke-width:3px
+    style LoginEmail fill:#E8F5E9,stroke:#81C784,stroke-width:3px
+    style LoginGoogle fill:#E8F5E9,stroke:#81C784,stroke-width:3px
+    style Dashboard fill:#EDE7F6,stroke:#CE93D8,stroke-width:3px
+    style Upload fill:#FCE4EC,stroke:#F48FB1,stroke-width:3px
+    style View fill:#E0F2F1,stroke:#4DB6AC,stroke-width:3px
+    style Download fill:#E0F2F1,stroke:#4DB6AC,stroke-width:3px
+    style Delete fill:#FFEBEE,stroke:#EF9A9A,stroke-width:3px
+    style GetCode fill:#F3E5F5,stroke:#CE93D8,stroke-width:3px
+    style Processing fill:#FFF3E0,stroke:#FFB74D,stroke-width:3px
+    style Embeddings fill:#E1BEE7,stroke:#BA68C8,stroke-width:3px
+    style Ready fill:#C8E6C9,stroke:#66BB6A,stroke-width:3px
+    style AddToSite fill:#BBDEFB,stroke:#64B5F6,stroke-width:3px
+    style WidgetLive fill:#B2DFDB,stroke:#4DB6AC,stroke-width:4px
+    style VisitorAsk fill:#E3F2FD,stroke:#90CAF9,stroke-width:3px
+    style Search fill:#F8BBD0,stroke:#F48FB1,stroke-width:3px
+    style Generate fill:#D1C4E9,stroke:#9575CD,stroke-width:3px
+    style ShowAnswer fill:#E1BEE7,stroke:#BA68C8,stroke-width:3px
 
 ---
 
@@ -113,61 +121,7 @@ graph TB
 
 **RAG (Retrieval-Augmented Generation)** combines document search with AI generation for accurate, source-based answers.
 
-```mermaid
-flowchart LR
-    subgraph Phase1[📥 Phase 1: Data Ingestion]
-        PDF[📄 Upload PDF]
-        S3[☁️ AWS S3<br/>File Storage]
-        Text[📝 Extract Text]
-        Chunks[✂️ Text Chunks]
-        Embed1[🤖 OpenAI<br/>Embeddings]
-        Qdrant1[(🧠 Qdrant<br/>Vector DB)]
-        DB1[(🗄️ PostgreSQL<br/>Metadata)]
-        
-        PDF --> S3
-        PDF --> Text
-        Text --> Chunks
-        Chunks --> Embed1
-        Embed1 --> Qdrant1
-        S3 --> DB1
-        Chunks --> DB1
-    end
-    
-    subgraph Phase2[🔍 Phase 2: Semantic Search]
-        Question[❓ User Question]
-        Embed2[🤖 OpenAI<br/>Query Embedding]
-        Qdrant2[(🧠 Qdrant<br/>Search Vectors)]
-        Top5[📊 Top 5 Results]
-        
-        Question --> Embed2
-        Embed2 --> Qdrant2
-        Qdrant2 --> Top5
-    end
-    
-    subgraph Phase3[🤖 Phase 3: Answer Generation]
-        Context[📝 Context Chunks]
-        GPT4[🤖 OpenAI GPT-4<br/>Generate Answer]
-        Answer[💬 AI Response]
-        DB3[(🗄️ PostgreSQL<br/>Query Log)]
-        
-        Context --> GPT4
-        GPT4 --> Answer
-        Answer --> DB3
-    end
-    
-    Phase1 --> Phase2
-    Phase2 --> Phase3
-    Top5 --> Context
-    
-    style Phase1 fill:#fef3c7,stroke:#f59e0b,stroke-width:4px
-    style Phase2 fill:#dcfce7,stroke:#10b981,stroke-width:4px
-    style Phase3 fill:#dbeafe,stroke:#1e40af,stroke-width:4px
-    
-    style Qdrant1 fill:#fce7f3,stroke:#ec4899,stroke-width:3px
-    style Qdrant2 fill:#fce7f3,stroke:#ec4899,stroke-width:3px
-    style DB1 fill:#e0e7ff,stroke:#6366f1,stroke-width:3px
-    style DB3 fill:#e0e7ff,stroke:#6366f1,stroke-width:3px
-```
+![RAG Architecture](resorces/arcitecture/rag-architecture.png)
 
 **How it works:**
 1. **Ingestion**: PDFs are uploaded, text is extracted, split into chunks, and converted to vector embeddings
@@ -216,13 +170,16 @@ flowchart LR
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Java 21
-- Node.js 18+
-- Docker & Docker Compose
-- PostgreSQL
-- Qdrant
-- OpenAI API key
-- AWS S3 bucket
+
+- **Docker** & **Docker Compose**
+- **Git**
+- **OpenAI API Key**
+- **AWS S3** (Access Key, Secret Key, Bucket)
+- **JWT Secret Key**
+- **PostgreSQL Password**
+- **Gmail SMTP** (optional - for email verification)
+- **Google OAuth** (optional - for social login)
+
 
 ### Installation
 
@@ -234,26 +191,18 @@ cd custom-site-chat
 
 2. **Configure environment**
 ```bash
-# Backend
-cd backend
 cp .env.example .env
-# Edit .env with your credentials
-
-# Frontend
-cd ../frontend
-cp .env.example .env
-# Edit .env with your credentials
 ```
 
 3. **Start services with Docker**
 ```bash
+docker-compose build --no-cache
 docker-compose up -d
 ```
 
 4. **Access the application**
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8080
-- API Docs: http://localhost:8080/swagger-ui.html
 
 ---
 
