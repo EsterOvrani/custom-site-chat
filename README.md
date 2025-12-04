@@ -230,7 +230,7 @@ Your **Secret Key** (orange rectangle) is required for the widget to work.
 
 ### 7.1 Chat Widget Button
 
-![Chat Button](./screenshots/30-chat-widget-button.png)
+![Chat Button](./screenshots/26-chat-button.png)
 
 **Steps:**
 1. Look for the floating chat button in the bottom-right corner (red circle highlights it)
@@ -238,7 +238,7 @@ Your **Secret Key** (orange rectangle) is required for the widget to work.
 
 ### 7.2 Opening Chat
 
-![Opened Chat](./screenshots/25-chat-button.png)
+![Opened Chat](./screenshots/27-open-window-chat.png)
 
 **Steps:**
 1. Click the chat button
@@ -247,7 +247,7 @@ Your **Secret Key** (orange rectangle) is required for the widget to work.
 
 ### 7.3 Asking Questions
 
-![Typing Question](./screenshots/27-type-question.png)
+![Typing Question](./screenshots/28-type-question.png)
 
 **Steps:**
 1. Click in the input field at the bottom (blue arrow points to it)
@@ -258,12 +258,12 @@ Your **Secret Key** (orange rectangle) is required for the widget to work.
 
 ### 7.3 Bot Response
 
-![Bot Response](./screenshots/28-respone-AI.png)
+![Bot Response](./screenshots/29-respone-AI.png)
 
 The bot responds with an AI-generated answer based on your uploaded documents.
 
-![Multiple Sources](./screenshots/29-second-respones.png)
-![Multiple Sources](./screenshots/30-third-respones.png)
+![Multiple Sources](./screenshots/30-second-respones.png)
+![Multiple Sources](./screenshots/31-third-respones.png)
 
 **Response includes:**
 1. AI-generated answer at the top
@@ -272,7 +272,7 @@ The bot responds with an AI-generated answer based on your uploaded documents.
 
 ### 7.4 Chat Features
 
-![Context](./screenshots/31-max-message)
+![Context](./screenshots/32-max-message)
 
 The chat is context-aware and remembers your last 10 messages for follow-up questions.
 You can continue to ask after you press on the button **התחלת שיחה חדשה**.
