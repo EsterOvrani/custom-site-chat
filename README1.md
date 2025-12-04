@@ -100,7 +100,7 @@
 
 ### CI/CD Architecture
 
-![CI/CD Architecture](resources/architecture/cicd-architecture.png)
+![CI/CD Architecture](resorces/architecture/cicd-architecture.png)
 
 **CI/CD Process:**
 1. **Push to GitHub** - Developer uploads new code
@@ -136,36 +136,52 @@
 
 ---
 
-### System Flow Diagram
+### Component Interaction Flow
 
-![System Flow Chart](resources/architecture/system-flow.png)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant N as Nginx
+    participant B as Backend
+    participant DB as PostgreSQL
+    participant S3 as AWS S3
+    participant Q as Qdrant
+    participant AI as OpenAI
 
-**Flow Description:**
+    U->>F: Upload PDF Document
+    F->>N: POST /api/documents/upload
+    N->>B: Forward Request
+    B->>DB: Save Document Metadata (PENDING)
+    B-->>F: Return Document ID
+    
+    Note over B,S3: Async Processing Begins
+    B->>S3: Upload PDF File
+    B->>B: Extract Text with PDFBox
+    B->>B: Create Text Chunks (500 chars)
+    
+    loop For Each Chunk
+        B->>AI: Generate Embedding (3072 dims)
+        AI-->>B: Return Embedding Vector
+        B->>Q: Store Embedding + Metadata
+    end
+    
+    B->>DB: Update Status to COMPLETED
+    
+    Note over U,AI: Query Flow
+    U->>F: Ask Question via Widget
+    F->>N: POST /api/query/ask
+    N->>B: Forward with Secret Key
+    B->>DB: Validate Secret Key
+    B->>AI: Generate Query Embedding
+    B->>Q: Semantic Search (top 5)
+    Q-->>B: Return Relevant Chunks
+    B->>AI: Generate Answer with GPT-4
+    AI-->>B: Return Answer
+    B-->>F: Return Answer + Sources
+    F-->>U: Display Answer
 
-1. **Registration and Verification:**
-   - User registers and receives verification code via email
-   - Code verification enables login
-
-2. **Login:**
-   - Username/Password or Google OAuth
-   - Receive JWT Token for future authentication
-
-3. **Upload Documents:**
-   - Upload PDF files (up to 50MB each)
-   - Automatic background processing with 7 stages
-   - Real-time progress tracking
-
-4. **Questions and Answers:**
-   - Ask questions from documents
-   - Semantic search in Qdrant
-   - Receive AI-generated answers with sources
-
-5. **Document Management:**
-   - View documents
-   - Download documents
-   - Delete documents
-
----
+```
 
 ## 🚀 Quick Start
 
