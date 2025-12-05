@@ -29,7 +29,7 @@ Deep dive into Retrieval-Augmented Generation (RAG) implementation in Custom Sit
 
 ## 🏗️ RAG Architecture Overview
 
-![RAG Architecture](resorces/arcitecture/rag-architecture.png)
+![RAG Architecture](../resorces/arcitecture/rag-architecture.png)
 
 ---
 
