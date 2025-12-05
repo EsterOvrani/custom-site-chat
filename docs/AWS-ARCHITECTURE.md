@@ -6,7 +6,7 @@ Complete AWS infrastructure and deployment guide for Custom Site Chat.
 
 ## 📊 Architecture Overview
 
-![AWS Architecture](resorces/arcitecture/aws-architecture.png)
+![AWS Architecture](../resorces/arcitecture/aws-architecture.png)
 
 ---
 

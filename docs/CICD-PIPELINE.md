@@ -24,7 +24,7 @@ Developer → GitHub → Jenkins → Tests → Build → Docker Hub → AWS EC2
 
 ## 🏗️ Pipeline Architecture
 
-![CICD Architecture](resorces/arcitecture/cicd-architecture.png)
+![CICD Architecture](../resorces/arcitecture/cicd-architecture.png)
 
 ---
 
