@@ -2,25 +2,25 @@ pipeline {
     agent any
     
     environment {
-        // תיקון בעיית ה-API version
+        // Fix for the API version issue
         DOCKER_API_VERSION = '1.41'
 
         // Docker Registry
         DOCKER_REGISTRY = 'esterovrani'
         
-        // Git commit message (מנוקה מתווים מיוחדים)
+        // Git commit message (sanitized from special characters)
         GIT_COMMIT_MESSAGE = sh(
             script: "git log -1 --pretty=format:'%s' | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-\$//' | cut -c1-50",
             returnStdout: true
         ).trim()
         
-        // Git commit hash קצר (לשילוב)
+        // Short Git commit hash (for combining)
         GIT_COMMIT_SHORT = sh(
             script: "git rev-parse --short=7 HEAD",
             returnStdout: true
         ).trim()
         
-        // Tag format: commit-message-hash (לייחודיות)
+        // Tag format: commit-message-hash (for uniqueness)
         IMAGE_TAG = "${GIT_COMMIT_MESSAGE}-${GIT_COMMIT_SHORT}"
         
         // Temporary build directory
@@ -51,23 +51,23 @@ pipeline {
                 script {
                     echo '🧹 Cleaning up old containers and images (preserving Jenkins)...'
                     sh '''
-                        # שמור את ID של קונטיינר Jenkins
+                        # Save Jenkins container ID
                         JENKINS_CONTAINER_ID=$(hostname)
                         
                         echo "Jenkins Container ID: $JENKINS_CONTAINER_ID (will be preserved)"
                         
-                        # עצור docker-compose containers (אם יש)
+                        # Stop docker-compose containers (if any)
                         docker-compose -f docker-compose.test.yml down -v 2>/dev/null || true
                         docker-compose down -v 2>/dev/null || true
                         
-                        # עצור כל הcontainers חוץ מJenkins
+                        # Stop all containers except Jenkins
                         docker ps -aq | grep -v ${JENKINS_CONTAINER_ID} | xargs -r docker stop 2>/dev/null || true
                         docker ps -aq | grep -v ${JENKINS_CONTAINER_ID} | xargs -r docker rm -f 2>/dev/null || true
                         
-                        # נקה images ישנים (לא של Jenkins!)
+                        # Clean old images (not Jenkins!)
                         docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" | grep -v "jenkins-jenkins" | awk '{print $2}' | xargs -r docker rmi -f 2>/dev/null || true
                         
-                        # נקה volumes
+                        # Clean volumes
                         docker volume prune -f || true
                         
                         echo "✅ Cleanup completed (Jenkins container preserved)"
@@ -88,13 +88,13 @@ pipeline {
                 script {
                     echo '🔐 Copying TEST .env file from secret file credential...'
                     
-                    // שימוש ב-Secret File במקום Secret Text מרובים
+                    // Using Secret File instead of multiple Secret Texts
                     withCredentials([file(credentialsId: 'env-file-test', variable: 'ENV_FILE')]) {
                         sh '''
-                            # העתק את קובץ ה-.env מה-credential
+                            # Copy the .env file from the credential
                             cp "${ENV_FILE}" .env
                             
-                            # וודא שהקובץ הועתק
+                            # Verify the file was copied
                             if [ -f .env ]; then
                                 echo "✅ TEST .env copied successfully from secret file"
                                 echo "📋 Environment variables loaded:"
@@ -106,7 +106,7 @@ pipeline {
                                 exit 1
                             fi
                             
-                            # וודא ש-TEST_MODE מופעל
+                            # Verify TEST_MODE is enabled
                             if grep -q "TEST_MODE_ENABLED=true" .env; then
                                 echo "✅ Confirmed: TEST_MODE_ENABLED=true"
                             else
@@ -122,7 +122,7 @@ pipeline {
             steps {
                 echo '🏗️ Building TEST docker-compose images...'
                 sh '''
-                    # בנה את כל הimages (כולל Newman)
+                    # Build all images (including Newman)
                     docker-compose -f docker-compose.test.yml build --no-cache
                     
                     echo "✅ TEST environment images built"
@@ -135,11 +135,11 @@ pipeline {
                 script {
                     echo '🚀 Starting TEST environment...'
                     sh '''
-                        # הרץ את כל השירותים וחכה שיהיו healthy
+                        # Start all services and wait for them to be healthy
                         echo "⏳ Starting services and waiting for health checks..."
                         docker-compose -f docker-compose.test.yml up -d postgres qdrant backend frontend nginx
                         
-                        # חכה שהבקנד יהיה healthy (docker-compose עושה את זה בשבילנו!)
+                        # Wait for backend to be healthy (docker-compose does this for us!)
                         echo "⏳ Waiting for backend to be healthy..."
                         docker-compose -f docker-compose.test.yml up -d --wait backend
                         
@@ -152,10 +152,10 @@ pipeline {
                         fi
                         
                         echo "🧪 Running Newman tests..."
-                        # הרץ את Newman service
+                        # Run Newman service
                         docker-compose -f docker-compose.test.yml up newman
                         
-                        # בדוק exit code של Newman
+                        # Check Newman exit code
                         NEWMAN_EXIT_CODE=$(docker inspect newman-tests --format='{{.State.ExitCode}}')
                         
                         echo "Newman exit code: $NEWMAN_EXIT_CODE"
@@ -183,7 +183,7 @@ pipeline {
                 script {
                     echo '🗑️ Stopping and removing TEST containers...'
                     sh '''
-                        # עצור והסר את כל containers של הטסט כולל volumes
+                        # Stop and remove all test containers including volumes
                         docker-compose -f docker-compose.test.yml down -v
                         
                         echo "✅ TEST environment cleaned up"
@@ -197,16 +197,16 @@ pipeline {
                 script {
                     echo '🔐 Copying PRODUCTION .env file from secret file credential...'
                     
-                    // שימוש ב-Secret File לפרודקשן (ללא TEST_MODE)
+                    // Using Secret File for production (without TEST_MODE)
                     withCredentials([file(credentialsId: 'env-file-prod', variable: 'ENV_FILE')]) {
                         sh '''
-                            # מחק את .env הישן (של הטסט)
+                            # Delete the old .env (from test)
                             rm -f .env
                             
-                            # העתק את קובץ ה-.env של פרודקשן
+                            # Copy the production .env file
                             cp "${ENV_FILE}" .env
                             
-                            # וודא שהקובץ הועתק
+                            # Verify the file was copied
                             if [ -f .env ]; then
                                 echo "✅ PRODUCTION .env copied successfully from secret file"
                             else
@@ -214,7 +214,7 @@ pipeline {
                                 exit 1
                             fi
                             
-                            # וודא ש-TEST_MODE לא מופעל בפרודקשן!
+                            # Verify TEST_MODE is NOT enabled in production!
                             if grep -q "TEST_MODE_ENABLED=true" .env; then
                                 echo "❌ CRITICAL ERROR: TEST_MODE_ENABLED=true found in PRODUCTION .env!"
                                 echo "❌ This is a security risk! Please fix the env-file-prod credential."
@@ -223,7 +223,7 @@ pipeline {
                                 echo "✅ Confirmed: TEST_MODE_ENABLED is NOT true in production .env"
                             fi
                             
-                            # וודא ש-BYPASS_EMAIL_VERIFICATION לא מופעל
+                            # Verify BYPASS_EMAIL_VERIFICATION is not enabled
                             if grep -q "BYPASS_EMAIL_VERIFICATION=true" .env; then
                                 echo "❌ CRITICAL ERROR: BYPASS_EMAIL_VERIFICATION=true found in PRODUCTION .env!"
                                 exit 1
@@ -240,12 +240,12 @@ pipeline {
             steps {
                 echo '🏗️ Building PRODUCTION images (WITHOUT TEST_MODE)...'
                 sh '''
-                    # בנה רק backend ו-frontend (לא nginx או newman)
+                    # Build only backend and frontend (not nginx or newman)
                     docker-compose build --no-cache backend frontend
                     
                     echo "✅ PRODUCTION images built successfully"
                     
-                    # רשימת images
+                    # List images
                     docker images | grep -E "backend|frontend"
                 '''
             }
@@ -256,7 +256,7 @@ pipeline {
                 script {
                     echo '🔍 Verifying production images do NOT contain TEST_MODE=true...'
                     sh '''
-                        # בדוק שbackend-prod image לא מכיל TEST_MODE=true
+                        # Check that backend-prod image does not contain TEST_MODE=true
                         docker run --rm --entrypoint env backend-prod:latest > /tmp/backend-env.txt || true
                         
                         if grep -q "TEST_MODE_ENABLED=true" /tmp/backend-env.txt; then
@@ -385,10 +385,10 @@ pipeline {
                 docker-compose down -v 2>/dev/null || true
                 
                 echo "🗑️ Step 2: Removing all project images (preserving jenkins-jenkins)..."
-                # מחק את כל ה-images של הפרויקט (לא jenkins-jenkins!)
+                # Delete all project images (not jenkins-jenkins!)
                 docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "jenkins-jenkins" | grep -E "backend|frontend|postgres|qdrant|nginx|newman" | xargs -r docker rmi -f 2>/dev/null || true
                 
-                # מחק dangling images (לא jenkins-jenkins!)
+                # Delete dangling images (not jenkins-jenkins!)
                 docker images -f "dangling=true" -q | xargs -r docker rmi -f 2>/dev/null || true
                 
                 echo "🧹 Step 3: Cleaning Docker builder cache..."
