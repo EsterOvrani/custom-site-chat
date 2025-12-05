@@ -122,7 +122,7 @@ flowchart TD
 
 **RAG (Retrieval-Augmented Generation)** combines document search with AI generation for accurate, source-based answers.
 
-![RAG Architecture](resorces/arcitecture/rag-architecture.png)
+![RAG Architecture](./resorces/arcitecture/rag-architecture.png)
 
 **How it works:**
 1. **Ingestion**: PDFs are uploaded, text is extracted, split into chunks, and converted to vector embeddings
