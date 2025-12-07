@@ -2,11 +2,6 @@
 
 ### AI-powered chatbot platform for websites using RAG technology
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
-![License](https://img.shields.io/badge/license-Portfolio-green)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.4-brightgreen)
-![React](https://img.shields.io/badge/React-18.2-blue)
-
 ---
 
 ## 🌐 Live Demo
