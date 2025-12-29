@@ -114,7 +114,7 @@ public class AuthenticationController {
     // Create pending registration and send verification email
     @PostMapping({"/signup", "/register"})
     public ResponseEntity<Map<String, Object>> register(@RequestBody RegisterUserDto registerUserDto) {
-        String verificationCode = authenticationService.createPendingRegistration(registerUserDto);
+        User user = authenticationService.register(registerUserDto);
         
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);

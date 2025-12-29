@@ -180,6 +180,11 @@ public class User implements UserDetails {
         return resetPasswordCode.equals(code);
     }
 
+    public void clearResetPasswordCode() {
+        this.resetPasswordCode = null;
+        this.resetPasswordCodeExpiresAt = null;
+    }
+
     public void clearTempPassword() {
         this.tempPassword = null;
     }
