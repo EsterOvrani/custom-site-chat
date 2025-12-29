@@ -130,16 +130,16 @@ public class AuthenticationService {
         return savedUser;
     }
 
-    // Check if username is available (only verified users count)
+    // Check if username exists (including unverified users)
     public boolean usernameExists(String username) {
         Optional<User> user = userRepository.findByUsername(username);
-        return user.isPresent() && user.get().isEnabled();
+        return user.isPresent();
     }
 
-    // Check if email is available (only verified users count) 
+    // Check if email exists (including unverified users)
     public boolean emailExists(String email) {
         Optional<User> user = userRepository.findByEmail(email);
-        return user.isPresent() && user.get().isEnabled();
+        return user.isPresent();
     }
 
     // Check if email is verified
