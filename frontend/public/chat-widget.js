@@ -14,8 +14,8 @@
       apiUrl: window.CHAT_WIDGET_API_URL || 'http://localhost:8080',
       secretKey: window.CHAT_WIDGET_SECRET_KEY,
       position: 'bottom-right',
-      primaryColor: '#1a73e8',
-      secondaryColor: '#5f6368',
+      primaryColor: '#667eea',
+      secondaryColor: '#764ba2',
       title: window.CHAT_WIDGET_TITLE || 'צ\'אט עם המסמכים שלי',
       botName: window.CHAT_WIDGET_BOT_NAME || 'AI',
       botAvatar: window.CHAT_WIDGET_BOT_AVATAR || null,
@@ -90,24 +90,25 @@
       }
 
       .chat-widget-header {
-        background: white;
-        color: #202124;
+        background: linear-gradient(135deg, ${config.primaryColor} 0%, ${config.secondaryColor} 100%);
+        color: white;
         padding: 16px 20px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid #e8eaed;
+        border-bottom: none;
       }
 
       .chat-widget-header h3 {
         margin: 0;
         font-size: 16px;
         font-weight: 500;
+        color: white;
       }
 
       .message-counter {
         font-size: 12px;
-        color: #5f6368;
+        color: rgba(255,255,255,0.9);
         margin-top: 2px;
       }
 
@@ -117,9 +118,9 @@
       }
 
       .header-button {
-        background: transparent;
+        background: rgba(255,255,255,0.2);
         border: none;
-        color: #5f6368;
+        color: white;
         cursor: pointer;
         padding: 8px;
         border-radius: 50%;
@@ -131,24 +132,23 @@
       }
 
       .header-button:hover {
-        background: #f1f3f4;
+        background: rgba(255,255,255,0.3);
       }
 
       .reset-button {
-        background: transparent;
-        border: 1px solid #dadce0;
-        color: #5f6368;
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
         padding: 6px 12px;
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
-        font-size: 12px;
+        font-size: 11px;
         transition: all 0.2s;
         display: none;
       }
 
       .reset-button:hover {
-        background: #f8f9fa;
-        border-color: #5f6368;
+        background: rgba(255,255,255,0.3);
       }
 
       .reset-button.show {
@@ -159,7 +159,7 @@
         flex: 1;
         overflow-y: auto;
         padding: 20px;
-        background: #ffffff;
+        background: #f8f9ff;
       }
 
       .chat-message {
@@ -181,8 +181,8 @@
         width: 32px;
         height: 32px;
         border-radius: 50%;
-        background: #e8eaed;
-        color: #5f6368;
+        background: ${config.secondaryColor};
+        color: white;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -235,8 +235,9 @@
       }
 
       .chat-message.assistant .chat-message-bubble {
-        background: #f1f3f4;
-        color: #202124;
+        background: white;
+        color: #333;
+        border: 1px solid #e1e8ed;
         border-bottom-left-radius: 4px;
       }
 
