@@ -1,4 +1,4 @@
-// frontend/public/chat-widget.js - גרסה משופרת עם הקלטת קול כמו WhatsApp
+// frontend/public/chat-widget.js - Google Chat Style עם פלייר אודיו
 
 (function() {
   'use strict';
@@ -16,8 +16,8 @@
       apiUrl: window.CHAT_WIDGET_API_URL || 'http://localhost:8080',
       secretKey: window.CHAT_WIDGET_SECRET_KEY,
       position: 'bottom-right',
-      primaryColor: '#667eea',
-      secondaryColor: '#764ba2',
+      primaryColor: '#1a73e8',
+      secondaryColor: '#5f6368',
       title: window.CHAT_WIDGET_TITLE || 'צ\'אט עם המסמכים שלי',
       botName: window.CHAT_WIDGET_BOT_NAME || 'AI',
       botAvatar: window.CHAT_WIDGET_BOT_AVATAR || null,
@@ -33,13 +33,8 @@
       return;
     }
 
-    // ==================== Inject CSS ====================
     injectStyles(WIDGET_CONFIG);
-
-    // ==================== Create Widget HTML ====================
     createWidgetHTML(WIDGET_CONFIG);
-
-    // ==================== Initialize Widget ====================
     setupEventListeners(WIDGET_CONFIG);
   }
 
@@ -52,7 +47,7 @@
         ${config.position.includes('right') ? 'right: 20px;' : 'left: 20px;'}
         bottom: 20px;
         z-index: 9999;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-family: 'Google Sans', 'Roboto', Arial, sans-serif;
       }
 
       /* Toggle Button */
@@ -60,19 +55,20 @@
         width: 60px;
         height: 60px;
         border-radius: 50%;
-        background: linear-gradient(135deg, ${config.primaryColor} 0%, ${config.secondaryColor} 100%);
+        background: ${config.primaryColor};
         border: none;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: transform 0.2s;
+        transition: all 0.2s;
         font-size: 28px;
       }
 
       .chat-widget-button:hover {
-        transform: scale(1.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        transform: scale(1.05);
       }
 
       /* Widget Window */
@@ -83,8 +79,8 @@
         width: 380px;
         height: 600px;
         background: white;
-        border-radius: 16px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
         display: none;
         flex-direction: column;
         overflow: hidden;
@@ -92,13 +88,13 @@
 
       .chat-widget-window.open {
         display: flex;
-        animation: slideUp 0.3s ease-out;
+        animation: slideUp 0.2s ease-out;
       }
 
       @keyframes slideUp {
         from {
           opacity: 0;
-          transform: translateY(20px);
+          transform: translateY(10px);
         }
         to {
           opacity: 1;
@@ -108,46 +104,67 @@
 
       /* Header */
       .chat-widget-header {
-        background: linear-gradient(135deg, ${config.primaryColor} 0%, ${config.secondaryColor} 100%);
-        color: white;
-        padding: 20px;
+        background: white;
+        color: #202124;
+        padding: 16px 20px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        position: relative;
+        border-bottom: 1px solid #e8eaed;
       }
 
       .chat-widget-header h3 {
         margin: 0;
+        font-size: 16px;
+        font-weight: 500;
+      }
+
+      .message-counter {
+        font-size: 12px;
+        color: #5f6368;
+        margin-top: 2px;
+      }
+
+      /* Header Actions */
+      .header-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .header-button {
+        background: transparent;
+        border: none;
+        color: #5f6368;
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
         font-size: 18px;
       }
 
-      /* Message Counter */
-      .message-counter {
-        font-size: 11px;
-        opacity: 0.9;
-        margin-top: 3px;
+      .header-button:hover {
+        background: #f1f3f4;
       }
 
       /* Reset Button */
       .reset-button {
-        position: absolute;
-        left: 20px;
-        top: 50%;
-        transform: translateY(-50%);
-        background: rgba(255,255,255,0.2);
-        border: 1px solid rgba(255,255,255,0.3);
-        color: white;
+        background: transparent;
+        border: 1px solid #dadce0;
+        color: #5f6368;
         padding: 6px 12px;
-        border-radius: 6px;
+        border-radius: 4px;
         cursor: pointer;
-        font-size: 11px;
-        transition: all 0.3s;
+        font-size: 12px;
+        transition: all 0.2s;
         display: none;
       }
 
       .reset-button:hover {
-        background: rgba(255,255,255,0.3);
+        background: #f8f9fa;
+        border-color: #5f6368;
       }
 
       .reset-button.show {
@@ -159,7 +176,7 @@
         flex: 1;
         overflow-y: auto;
         padding: 20px;
-        background: #f8f9ff;
+        background: #ffffff;
       }
 
       /* Message Wrapper */
@@ -167,37 +184,36 @@
         margin-bottom: 16px;
         display: flex;
         align-items: flex-start;
-        gap: 10px;
+        gap: 12px;
       }
 
       .chat-message.user {
         flex-direction: row-reverse;
-        justify-content: flex-start;
       }
 
       .chat-message.assistant {
         flex-direction: row;
-        justify-content: flex-start;
       }
 
       /* Avatar */
       .chat-message-avatar {
-        width: 36px;
-        height: 36px;
+        width: 32px;
+        height: 32px;
         border-radius: 50%;
-        background: ${config.primaryColor};
-        color: white;
+        background: #e8eaed;
+        color: #5f6368;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: 600;
-        font-size: 14px;
+        font-weight: 500;
+        font-size: 13px;
         flex-shrink: 0;
         overflow: hidden;
       }
 
-      .chat-message.assistant .chat-message-avatar {
-        background: ${config.secondaryColor};
+      .chat-message.user .chat-message-avatar {
+        background: ${config.primaryColor};
+        color: white;
       }
 
       .chat-message-avatar img {
@@ -206,18 +222,18 @@
         object-fit: cover;
       }
 
-      /* Message Content Wrapper */
+      /* Message Content */
       .chat-message-content {
         display: flex;
         flex-direction: column;
-        max-width: 70%;
+        max-width: 75%;
       }
 
       /* Message Bubble */
       .chat-message-bubble {
-        padding: 12px 16px;
-        border-radius: 12px;
-        line-height: 1.5;
+        padding: 10px 14px;
+        border-radius: 18px;
+        line-height: 1.4;
         font-size: 14px;
         word-wrap: break-word;
         white-space: pre-wrap;
@@ -236,57 +252,101 @@
       .chat-message.user .chat-message-bubble {
         background: ${config.primaryColor};
         color: white;
+        border-bottom-right-radius: 4px;
       }
 
       .chat-message.assistant .chat-message-bubble {
-        background: white;
-        color: #333;
-        border: 1px solid #e1e8ed;
+        background: #f1f3f4;
+        color: #202124;
+        border-bottom-left-radius: 4px;
       }
 
-      /* 🎤 Voice Message Indicator */
-      .voice-message-indicator {
+      /* 🎤 Audio Player for Voice Messages */
+      .voice-audio-player {
+        background: ${config.primaryColor};
+        border-radius: 20px;
+        padding: 8px 16px;
         display: flex;
         align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        opacity: 0.9;
-        margin-top: 4px;
+        gap: 12px;
+        min-width: 200px;
+        color: white;
       }
 
-      /* Voice Wave Animation */
-      .voice-wave {
+      .voice-play-button {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s;
+        font-size: 14px;
+      }
+
+      .voice-play-button:hover {
+        background: rgba(255,255,255,0.3);
+      }
+
+      .voice-waveform {
+        flex: 1;
         display: flex;
         align-items: center;
         gap: 3px;
-        padding: 8px 12px;
-        background: rgba(102, 126, 234, 0.1);
-        border-radius: 8px;
-        margin-bottom: 8px;
+        height: 32px;
       }
 
-      .voice-wave-bar {
+      .voice-waveform-bar {
         width: 3px;
-        background: ${config.primaryColor};
-        border-radius: 3px;
-        animation: wave 1.2s ease-in-out infinite;
+        background: rgba(255,255,255,0.8);
+        border-radius: 2px;
+        transition: height 0.1s;
       }
 
-      .voice-wave-bar:nth-child(1) { height: 12px; animation-delay: 0s; }
-      .voice-wave-bar:nth-child(2) { height: 20px; animation-delay: 0.1s; }
-      .voice-wave-bar:nth-child(3) { height: 16px; animation-delay: 0.2s; }
-      .voice-wave-bar:nth-child(4) { height: 24px; animation-delay: 0.3s; }
-      .voice-wave-bar:nth-child(5) { height: 18px; animation-delay: 0.4s; }
+      .voice-waveform-bar:nth-child(1) { height: 12px; }
+      .voice-waveform-bar:nth-child(2) { height: 20px; }
+      .voice-waveform-bar:nth-child(3) { height: 16px; }
+      .voice-waveform-bar:nth-child(4) { height: 24px; }
+      .voice-waveform-bar:nth-child(5) { height: 14px; }
+      .voice-waveform-bar:nth-child(6) { height: 18px; }
+      .voice-waveform-bar:nth-child(7) { height: 22px; }
+      .voice-waveform-bar:nth-child(8) { height: 16px; }
+      .voice-waveform-bar:nth-child(9) { height: 20px; }
+      .voice-waveform-bar:nth-child(10) { height: 12px; }
 
-      @keyframes wave {
-        0%, 100% { transform: scaleY(1); }
-        50% { transform: scaleY(0.5); }
+      .voice-waveform.playing .voice-waveform-bar {
+        animation: waveAnimation 1s ease-in-out infinite;
+      }
+
+      @keyframes waveAnimation {
+        0%, 100% { height: 12px; }
+        50% { height: 24px; }
+      }
+
+      .voice-waveform-bar:nth-child(2) { animation-delay: 0.1s; }
+      .voice-waveform-bar:nth-child(3) { animation-delay: 0.2s; }
+      .voice-waveform-bar:nth-child(4) { animation-delay: 0.3s; }
+      .voice-waveform-bar:nth-child(5) { animation-delay: 0.4s; }
+      .voice-waveform-bar:nth-child(6) { animation-delay: 0.5s; }
+      .voice-waveform-bar:nth-child(7) { animation-delay: 0.6s; }
+      .voice-waveform-bar:nth-child(8) { animation-delay: 0.7s; }
+      .voice-waveform-bar:nth-child(9) { animation-delay: 0.8s; }
+      .voice-waveform-bar:nth-child(10) { animation-delay: 0.9s; }
+
+      .voice-duration {
+        font-size: 12px;
+        color: rgba(255,255,255,0.9);
+        min-width: 35px;
+        text-align: right;
       }
 
       /* Limit Warning */
       .limit-warning {
-        background: #fff3cd;
-        color: #856404;
+        background: #fef7e0;
+        color: #b06000;
         padding: 10px;
         border-radius: 8px;
         margin: 10px 20px;
@@ -301,111 +361,126 @@
 
       /* Input Area */
       .chat-widget-input-area {
-        padding: 16px;
-        border-top: 1px solid #e1e8ed;
+        padding: 12px 16px;
+        border-top: 1px solid #e8eaed;
         background: white;
       }
 
       .chat-widget-input-wrapper {
+        position: relative;
         display: flex;
-        gap: 10px;
         align-items: flex-end;
+        gap: 8px;
+        background: #f1f3f4;
+        border-radius: 24px;
+        padding: 4px 4px 4px 16px;
+        transition: background 0.2s;
+      }
+
+      .chat-widget-input-wrapper:focus-within {
+        background: #e8eaed;
+      }
+
+      .chat-widget-input-wrapper.recording {
+        background: #fce8e6;
       }
 
       .chat-widget-input {
         flex: 1;
-        padding: 12px;
-        border: 1px solid #e1e8ed;
-        border-radius: 8px;
+        padding: 10px 0;
+        border: none;
+        background: transparent;
         font-size: 14px;
         font-family: inherit;
         resize: none;
         outline: none;
         direction: rtl;
         text-align: right;
-        max-height: 120px;
+        max-height: 100px;
+        color: #202124;
       }
 
-      .chat-widget-input:focus {
-        border-color: ${config.primaryColor};
+      .chat-widget-input::placeholder {
+        color: #5f6368;
       }
 
       .chat-widget-input:disabled {
-        background-color: #f5f5f5;
         cursor: not-allowed;
+        opacity: 0.6;
       }
 
-      /* 🎤 Voice Button */
-      .chat-widget-voice {
-        padding: 12px;
-        background: white;
-        color: ${config.primaryColor};
-        border: 2px solid ${config.primaryColor};
-        border-radius: 8px;
+      /* 🎤 Voice Button - Inside Input */
+      .input-icon-button {
+        background: transparent;
+        border: none;
+        color: #5f6368;
         cursor: pointer;
-        font-size: 20px;
-        transition: all 0.3s;
-        min-width: 48px;
+        padding: 8px;
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
+        transition: all 0.2s;
+        font-size: 20px;
+        min-width: 36px;
+        height: 36px;
       }
 
-      .chat-widget-voice:hover:not(:disabled) {
-        background: ${config.primaryColor};
-        color: white;
+      .input-icon-button:hover:not(:disabled) {
+        background: rgba(0,0,0,0.08);
       }
 
-      .chat-widget-voice:disabled {
-        opacity: 0.5;
+      .input-icon-button:disabled {
+        opacity: 0.4;
         cursor: not-allowed;
       }
 
-      .chat-widget-voice.recording {
-        background: #dc3545;
-        color: white;
-        border-color: #dc3545;
+      .input-icon-button.recording {
+        color: #d93025;
         animation: pulse 1.5s infinite;
       }
 
       @keyframes pulse {
-        0%, 100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.7;
-        }
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
       }
 
+      /* Send Button - Google Style */
       .chat-widget-send {
-        padding: 12px 20px;
         background: ${config.primaryColor};
         color: white;
         border: none;
-        border-radius: 8px;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
         cursor: pointer;
-        font-weight: 600;
-        transition: opacity 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        font-size: 18px;
       }
 
       .chat-widget-send:hover:not(:disabled) {
-        opacity: 0.9;
+        background: #1557b0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
       }
 
       .chat-widget-send:disabled {
-        opacity: 0.5;
+        opacity: 0.4;
         cursor: not-allowed;
       }
 
-      /* 🎤 Recording Status Bar */
+      /* Recording Status */
       .recording-status {
-        background: #dc3545;
-        color: white;
-        padding: 10px 16px;
+        background: #fce8e6;
+        color: #d93025;
+        padding: 8px 16px;
         display: none;
         align-items: center;
         justify-content: space-between;
         font-size: 13px;
+        border-top: 1px solid #f4b4af;
       }
 
       .recording-status.active {
@@ -416,69 +491,59 @@
         display: flex;
         align-items: center;
         gap: 8px;
+        font-weight: 500;
       }
 
       .recording-dot {
         width: 8px;
         height: 8px;
-        background: white;
+        background: #d93025;
         border-radius: 50%;
         animation: blink 1s infinite;
       }
 
       @keyframes blink {
-        0%, 100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.3;
-        }
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
       }
 
       .cancel-recording {
-        background: rgba(255,255,255,0.2);
-        border: 1px solid rgba(255,255,255,0.3);
-        color: white;
-        padding: 4px 12px;
-        border-radius: 4px;
+        background: transparent;
+        border: none;
+        color: #d93025;
+        padding: 4px 8px;
         cursor: pointer;
-        font-size: 11px;
+        font-size: 12px;
+        font-weight: 500;
+        border-radius: 4px;
+        transition: background 0.2s;
       }
 
       .cancel-recording:hover {
-        background: rgba(255,255,255,0.3);
+        background: rgba(217,48,37,0.1);
       }
 
       /* Typing Indicator */
       .typing-indicator {
         display: flex;
         gap: 4px;
-        padding: 12px 16px;
+        padding: 8px 12px;
       }
 
       .typing-dot {
         width: 8px;
         height: 8px;
-        background: #999;
+        background: #5f6368;
         border-radius: 50%;
         animation: typing 1.4s infinite;
       }
 
-      .typing-dot:nth-child(2) {
-        animation-delay: 0.2s;
-      }
-
-      .typing-dot:nth-child(3) {
-        animation-delay: 0.4s;
-      }
+      .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+      .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
       @keyframes typing {
-        0%, 60%, 100% {
-          transform: translateY(0);
-        }
-        30% {
-          transform: translateY(-8px);
-        }
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-8px); }
       }
 
       /* Empty State */
@@ -488,7 +553,7 @@
         align-items: center;
         justify-content: center;
         height: 100%;
-        color: #666;
+        color: #5f6368;
         text-align: center;
         padding: 20px;
       }
@@ -496,12 +561,25 @@
       .chat-widget-empty-icon {
         font-size: 48px;
         margin-bottom: 16px;
+        opacity: 0.5;
+      }
+
+      .chat-widget-empty h3 {
+        color: #202124;
+        font-size: 16px;
+        font-weight: 500;
+        margin: 0 0 8px 0;
+      }
+
+      .chat-widget-empty p {
+        margin: 4px 0;
+        font-size: 14px;
       }
 
       /* Browser Warning */
       .browser-warning {
-        background: #f8d7da;
-        color: #721c24;
+        background: #fef7e0;
+        color: #b06000;
         padding: 10px;
         border-radius: 8px;
         margin: 10px 20px;
@@ -512,6 +590,37 @@
 
       .browser-warning.show {
         display: block;
+      }
+
+      /* Options Menu */
+      .options-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+        padding: 8px 0;
+        margin-top: 4px;
+        display: none;
+        min-width: 180px;
+        z-index: 10000;
+      }
+
+      .options-menu.show {
+        display: block;
+      }
+
+      .options-menu-item {
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        color: #202124;
+        transition: background 0.2s;
+      }
+
+      .options-menu-item:hover {
+        background: #f1f3f4;
       }
     `;
 
@@ -527,16 +636,21 @@
         <button class="chat-widget-button" id="chat-widget-toggle">💬</button>
         <div class="chat-widget-window" id="chat-widget-window">
           <div class="chat-widget-header">
-            <button class="reset-button" id="reset-button">
-              🔄 התחל שיחה חדשה
-            </button>
             <div>
               <h3>${escapeHtml(config.title)}</h3>
               <div class="message-counter" id="message-counter">0/10 הודעות</div>
             </div>
+            <div class="header-actions">
+              <button class="reset-button" id="reset-button">🔄 איפוס</button>
+              <button class="header-button" id="options-button" title="אפשרויות">⋮</button>
+            </div>
+          </div>
+          <div class="options-menu" id="options-menu">
+            <div class="options-menu-item" id="menu-reset">🔄 התחל שיחה חדשה</div>
+            <div class="options-menu-item" id="menu-about">ℹ️ אודות</div>
           </div>
           <div class="limit-warning" id="limit-warning">
-            ⚠️ הגעת למגבלת 10 הודעות. לחץ על "התחל שיחה חדשה" למעלה.
+            ⚠️ הגעת למגבלת 10 הודעות. לחץ על "איפוס" להתחלה חדשה.
           </div>
           <div class="browser-warning" id="browser-warning">
             ⚠️ הדפדפן שלך לא תומך בהקלטת קול
@@ -553,19 +667,19 @@
               <div class="chat-widget-empty-icon">💬</div>
               <h3>שלום!</h3>
               <p>שאל שאלה על המסמכים שלך</p>
-              ${config.voiceEnabled ? '<p style="font-size: 12px; margin-top: 10px;">💡 לחץ על 🎤 להקלטה</p>' : ''}
+              ${config.voiceEnabled ? '<p style="font-size: 12px; margin-top: 8px;">💡 לחץ על 🎤 להקלטה</p>' : ''}
             </div>
           </div>
           <div class="chat-widget-input-area">
-            <div class="chat-widget-input-wrapper">
+            <div class="chat-widget-input-wrapper" id="input-wrapper">
               <textarea 
                 class="chat-widget-input" 
                 id="chat-widget-input"
-                placeholder="שאל שאלה או הקלט קול..."
+                placeholder="הקלד הודעה..."
                 rows="1"
               ></textarea>
-              ${config.voiceEnabled ? '<button class="chat-widget-voice" id="chat-widget-voice" title="הקלט קול">🎤</button>' : ''}
-              <button class="chat-widget-send" id="chat-widget-send">שלח</button>
+              ${config.voiceEnabled ? '<button class="input-icon-button" id="chat-widget-voice" title="הקלט קול">🎤</button>' : ''}
+              <button class="chat-widget-send" id="chat-widget-send" title="שלח">➤</button>
             </div>
           </div>
         </div>
@@ -588,6 +702,9 @@
       recordingStartTime: null,
       recordingTimer: null,
       recordedText: '',
+      recordedAudioBlob: null,
+      mediaRecorder: null,
+      audioChunks: [],
       recognition: null,
       sessionId: generateSessionId(),
       maxHistoryMessages: config.maxHistoryMessages
@@ -596,9 +713,14 @@
     const elements = {
       toggleButton: document.getElementById('chat-widget-toggle'),
       resetButton: document.getElementById('reset-button'),
+      optionsButton: document.getElementById('options-button'),
+      optionsMenu: document.getElementById('options-menu'),
+      menuReset: document.getElementById('menu-reset'),
+      menuAbout: document.getElementById('menu-about'),
       widgetWindow: document.getElementById('chat-widget-window'),
       messagesContainer: document.getElementById('chat-widget-messages'),
       inputField: document.getElementById('chat-widget-input'),
+      inputWrapper: document.getElementById('input-wrapper'),
       sendButton: document.getElementById('chat-widget-send'),
       voiceButton: document.getElementById('chat-widget-voice'),
       messageCounter: document.getElementById('message-counter'),
@@ -609,12 +731,10 @@
       cancelRecording: document.getElementById('cancel-recording')
     };
 
-    // בדיקה אם הדפדפן תומך ב-Web Speech API
     if (config.voiceEnabled) {
       setupVoiceRecognition(state, elements, config);
     }
 
-    // טען היסטוריה מ-sessionStorage
     loadHistoryFromSession(state, elements, config);
 
     elements.toggleButton.addEventListener('click', () => toggleWidget(state, elements));
@@ -628,6 +748,29 @@
     if (elements.cancelRecording) {
       elements.cancelRecording.addEventListener('click', () => cancelRecording(state, elements));
     }
+
+    // Options menu
+    elements.optionsButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      elements.optionsMenu.classList.toggle('show');
+    });
+
+    elements.menuReset.addEventListener('click', () => {
+      elements.optionsMenu.classList.remove('show');
+      resetChat(state, elements, config);
+    });
+
+    elements.menuAbout.addEventListener('click', () => {
+      elements.optionsMenu.classList.remove('show');
+      alert('Chat Widget v2.0\nPowered by AI');
+    });
+
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!elements.optionsButton.contains(e.target) && !elements.optionsMenu.contains(e.target)) {
+        elements.optionsMenu.classList.remove('show');
+      }
+    });
     
     elements.inputField.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -636,20 +779,19 @@
       }
     });
 
-    // Auto-resize textarea
     elements.inputField.addEventListener('input', () => {
       elements.inputField.style.height = 'auto';
-      elements.inputField.style.height = elements.inputField.scrollHeight + 'px';
+      elements.inputField.style.height = Math.min(elements.inputField.scrollHeight, 100) + 'px';
     });
   }
 
-  // ==================== 🎤 Voice Recognition Setup ====================
+  // ==================== Voice Recognition Setup ====================
   
   function setupVoiceRecognition(state, elements, config) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
-      console.warn('Speech Recognition not supported in this browser');
+      console.warn('Speech Recognition not supported');
       if (elements.voiceButton) {
         elements.voiceButton.style.display = 'none';
       }
@@ -658,30 +800,39 @@
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true; // ✅ הקלטה מתמשכת
-    recognition.interimResults = true; // ✅ תוצאות ביניים
-    recognition.lang = 'he-IL'; // עברית כברירת מחדל
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'he-IL';
     recognition.maxAlternatives = 1;
 
+    // Setup MediaRecorder for audio recording
+    setupMediaRecorder(state, elements);
+
     recognition.onstart = () => {
-      console.log('🎤 Voice recording started');
+      console.log('🎤 Recording started');
       state.isRecording = true;
       state.recordingStartTime = Date.now();
       state.recordedText = '';
       
       elements.voiceButton.classList.add('recording');
       elements.recordingStatus.classList.add('active');
+      elements.inputWrapper.classList.add('recording');
       elements.inputField.placeholder = 'מקשיב...';
       elements.inputField.disabled = true;
       elements.sendButton.disabled = true;
       
-      // התחל טיימר
       state.recordingTimer = setInterval(() => {
         const elapsed = Math.floor((Date.now() - state.recordingStartTime) / 1000);
         const minutes = Math.floor(elapsed / 60);
         const seconds = elapsed % 60;
         elements.recordingTime.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
       }, 1000);
+
+      // Start audio recording
+      if (state.mediaRecorder && state.mediaRecorder.state === 'inactive') {
+        state.audioChunks = [];
+        state.mediaRecorder.start();
+      }
     };
 
     recognition.onresult = (event) => {
@@ -697,66 +848,81 @@
         }
       }
 
-      // שמור את הטקסט הסופי
       if (finalTranscript) {
         state.recordedText += finalTranscript;
       }
 
-      // הצג את הטקסט בזמן אמת
       elements.inputField.value = state.recordedText + interimTranscript;
       elements.inputField.style.height = 'auto';
-      elements.inputField.style.height = elements.inputField.scrollHeight + 'px';
+      elements.inputField.style.height = Math.min(elements.inputField.scrollHeight, 100) + 'px';
     };
 
     recognition.onerror = (event) => {
-      console.error('🎤 Speech recognition error:', event.error);
-      
-      let errorMessage = 'שגיאה בהקלטת קול';
+      console.error('🎤 Error:', event.error);
+      let errorMessage = 'שגיאה בהקלטה';
       switch(event.error) {
-        case 'no-speech':
-          errorMessage = 'לא זוהה דיבור';
-          break;
-        case 'audio-capture':
-          errorMessage = 'לא ניתן לגשת למיקרופון';
-          break;
-        case 'not-allowed':
-          errorMessage = 'נדרשת הרשאה למיקרופון';
-          break;
-        case 'network':
-          errorMessage = 'שגיאת רשת';
-          break;
+        case 'no-speech': errorMessage = 'לא זוהה דיבור'; break;
+        case 'audio-capture': errorMessage = 'לא ניתן לגשת למיקרופון'; break;
+        case 'not-allowed': errorMessage = 'נדרשת הרשאה למיקרופון'; break;
       }
-      
       alert(errorMessage);
       cancelRecording(state, elements);
     };
 
     recognition.onend = () => {
-      console.log('🎤 Voice recording ended');
+      console.log('🎤 Recording ended');
       
-      // עצור את הטיימר
       if (state.recordingTimer) {
         clearInterval(state.recordingTimer);
         state.recordingTimer = null;
+      }
+
+      // Stop audio recording
+      if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+        state.mediaRecorder.stop();
       }
       
       state.isRecording = false;
       elements.voiceButton.classList.remove('recording');
       elements.recordingStatus.classList.remove('active');
-      elements.inputField.placeholder = 'שאל שאלה או הקלט קול...';
+      elements.inputWrapper.classList.remove('recording');
+      elements.inputField.placeholder = 'הקלד הודעה...';
       elements.inputField.disabled = false;
       elements.sendButton.disabled = false;
       
-      // שמור את הטקסט המוקלט
       if (state.recordedText.trim()) {
         elements.inputField.value = state.recordedText.trim();
         elements.inputField.style.height = 'auto';
-        elements.inputField.style.height = elements.inputField.scrollHeight + 'px';
+        elements.inputField.style.height = Math.min(elements.inputField.scrollHeight, 100) + 'px';
         elements.inputField.focus();
       }
     };
 
     state.recognition = recognition;
+  }
+
+  function setupMediaRecorder(state, elements) {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        const mediaRecorder = new MediaRecorder(stream);
+        
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            state.audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(state.audioChunks, { type: 'audio/webm' });
+          state.recordedAudioBlob = audioBlob;
+          console.log('🎤 Audio recorded:', audioBlob.size, 'bytes');
+        };
+
+        state.mediaRecorder = mediaRecorder;
+      })
+      .catch(err => {
+        console.error('Microphone access denied:', err);
+      });
   }
 
   function toggleVoiceRecording(state, elements, config) {
@@ -765,27 +931,19 @@
       return;
     }
 
-    if (isAtLimit(state)) {
-      return;
-    }
+    if (isAtLimit(state)) return;
 
     if (state.isRecording) {
-      // עצור הקלטה
-      console.log('🎤 Stopping recording');
       state.recognition.stop();
     } else {
-      // התחל הקלטה
-      console.log('🎤 Starting recording');
       try {
-        // נסה לזהות שפה אוטומטית
         const currentText = elements.inputField.value;
         const lang = detectLanguage(currentText);
         state.recognition.lang = lang === 'he' ? 'he-IL' : 'en-US';
-        
         state.recognition.start();
       } catch (error) {
         console.error('Failed to start recording:', error);
-        alert('שגיאה בהפעלת ההקלטה. אנא נסה שוב.');
+        alert('שגיאה בהפעלת ההקלטה');
       }
     }
   }
@@ -793,6 +951,8 @@
   function cancelRecording(state, elements) {
     if (state.recognition && state.isRecording) {
       state.recordedText = '';
+      state.recordedAudioBlob = null;
+      state.audioChunks = [];
       elements.inputField.value = '';
       state.recognition.stop();
     }
@@ -812,7 +972,7 @@
         renderMessages(state, elements, config);
         updateUI(state, elements);
         
-        console.log('✅ Loaded history:', state.history.length, 'messages');
+        console.log('✅ Loaded history:', state.history.length);
       }
     } catch (e) {
       console.error('Failed to load history:', e);
@@ -869,7 +1029,7 @@
   }
 
   function resetChat(state, elements, config) {
-    if (confirm('האם אתה בטוח שברצונך להתחיל שיחה חדשה? ההיסטוריה תימחק.')) {
+    if (confirm('האם להתחיל שיחה חדשה? ההיסטוריה תימחק.')) {
       state.history = [];
       state.messages = [];
       const storageKey = 'chatHistory_' + config.secretKey;
@@ -877,8 +1037,6 @@
       
       renderMessages(state, elements, config);
       updateUI(state, elements);
-      
-      console.log('✅ Chat reset');
     }
   }
 
@@ -926,6 +1084,12 @@
     }
   }
 
+  function formatDuration(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
   // ==================== Widget Functions ====================
   
   function toggleWidget(state, elements) {
@@ -938,7 +1102,6 @@
     } else {
       elements.toggleButton.textContent = '💬';
       
-      // עצור הקלטה אם פתוחה
       if (state.isRecording && state.recognition) {
         cancelRecording(state, elements);
       }
@@ -952,13 +1115,13 @@
           <div class="chat-widget-empty-icon">💬</div>
           <h3>שלום!</h3>
           <p>שאל שאלה על המסמכים שלך</p>
-          ${config.voiceEnabled ? '<p style="font-size: 12px; margin-top: 10px;">💡 לחץ על 🎤 להקלטה</p>' : ''}
+          ${config.voiceEnabled ? '<p style="font-size: 12px; margin-top: 8px;">💡 לחץ על 🎤 להקלטה</p>' : ''}
         </div>
       `;
       return;
     }
 
-    const messagesHTML = state.messages.map(msg => {
+    const messagesHTML = state.messages.map((msg, index) => {
       const language = detectLanguage(msg.content);
       const textDirection = language === 'he' ? 'rtl' : 'ltr';
       
@@ -969,27 +1132,45 @@
         .join('\n')
         .trim();
       
-      const voiceIndicator = msg.isVoice ? `
-        <div class="voice-message-indicator">
-          <div class="voice-wave">
-            <div class="voice-wave-bar"></div>
-            <div class="voice-wave-bar"></div>
-            <div class="voice-wave-bar"></div>
-            <div class="voice-wave-bar"></div>
-            <div class="voice-wave-bar"></div>
+      // 🎤 Voice message display
+      if (msg.isVoice && msg.audioUrl) {
+        const duration = msg.audioDuration || 10;
+        const audioId = `audio-${index}`;
+        
+        return `
+          <div class="chat-message ${msg.role}">
+            <div class="chat-message-avatar">${createAvatar(msg.role, config)}</div>
+            <div class="chat-message-content">
+              <div class="voice-audio-player" data-audio-id="${audioId}">
+                <button class="voice-play-button" onclick="window.toggleAudioPlayback('${audioId}', this)">▶</button>
+                <div class="voice-waveform" id="waveform-${audioId}">
+                  <div class="voice-waveform-bar"></div>
+                  <div class="voice-waveform-bar"></div>
+                  <div class="voice-waveform-bar"></div>
+                  <div class="voice-waveform-bar"></div>
+                  <div class="voice-waveform-bar"></div>
+                  <div class="voice-waveform-bar"></div>
+                  <div class="voice-waveform-bar"></div>
+                  <div class="voice-waveform-bar"></div>
+                  <div class="voice-waveform-bar"></div>
+                  <div class="voice-waveform-bar"></div>
+                </div>
+                <div class="voice-duration">${formatDuration(duration)}</div>
+                <audio id="${audioId}" src="${msg.audioUrl}" style="display:none;"></audio>
+              </div>
+            </div>
           </div>
-        </div>
-      ` : '';
-      
-      return `
-        <div class="chat-message ${msg.role}">
-          <div class="chat-message-avatar">${createAvatar(msg.role, config)}</div>
-          <div class="chat-message-content">
-            ${voiceIndicator}
-            <div class="chat-message-bubble ${textDirection}">${escapeHtml(cleanedContent)}</div>
+        `;
+      } else {
+        return `
+          <div class="chat-message ${msg.role}">
+            <div class="chat-message-avatar">${createAvatar(msg.role, config)}</div>
+            <div class="chat-message-content">
+              <div class="chat-message-bubble ${textDirection}">${escapeHtml(cleanedContent)}</div>
+            </div>
           </div>
-        </div>
-      `;
+        `;
+      }
     }).join('');
 
     elements.messagesContainer.innerHTML = messagesHTML;
@@ -1014,27 +1195,60 @@
     elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
   }
 
+  // Global function for audio playback
+  window.toggleAudioPlayback = function(audioId, button) {
+    const audio = document.getElementById(audioId);
+    const waveform = document.getElementById('waveform-' + audioId);
+    
+    if (audio.paused) {
+      audio.play();
+      button.textContent = '⏸';
+      waveform.classList.add('playing');
+      
+      audio.onended = () => {
+        button.textContent = '▶';
+        waveform.classList.remove('playing');
+      };
+    } else {
+      audio.pause();
+      button.textContent = '▶';
+      waveform.classList.remove('playing');
+    }
+  };
+
   async function sendMessage(state, elements, config) {
     const question = elements.inputField.value.trim();
-    const isVoice = state.recordedText.length > 0;
+    const isVoice = state.recordedAudioBlob !== null;
     
     if (!question || state.isLoading || isAtLimit(state)) return;
 
-    // אפס את state של הקלטה
-    state.recordedText = '';
+    let audioUrl = null;
+    let audioDuration = 0;
 
-    // הוסף הודעת משתמש
+    // If voice message, create audio URL
+    if (isVoice && state.recordedAudioBlob) {
+      audioUrl = URL.createObjectURL(state.recordedAudioBlob);
+      audioDuration = Math.floor((Date.now() - state.recordingStartTime) / 1000);
+    }
+
     state.messages.push({
       role: 'user',
       content: question,
       timestamp: new Date().toISOString(),
-      isVoice: isVoice
+      isVoice: isVoice,
+      audioUrl: audioUrl,
+      audioDuration: audioDuration
     });
 
     state.history.push({
       role: 'user',
       content: question
     });
+
+    // Reset recording state
+    state.recordedText = '';
+    state.recordedAudioBlob = null;
+    state.audioChunks = [];
 
     elements.inputField.value = '';
     elements.inputField.style.height = 'auto';
@@ -1078,16 +1292,16 @@
       } else {
         state.messages.push({
           role: 'assistant',
-          content: 'מצטער, לא הצלחתי למצוא תשובה. אנא נסה שוב.',
+          content: 'מצטער, לא הצלחתי למצוא תשובה.',
           timestamp: new Date().toISOString(),
           isVoice: false
         });
       }
     } catch (error) {
-      console.error('Chat Widget Error:', error);
+      console.error('Error:', error);
       state.messages.push({
         role: 'assistant',
-        content: 'אירעה שגיאה. אנא נסה שוב מאוחר יותר.',
+        content: 'אירעה שגיאה. נסה שוב.',
         timestamp: new Date().toISOString(),
         isVoice: false
       });
@@ -1105,5 +1319,5 @@
     }
   }
 
-  console.log('✅ Chat Widget with Voice (WhatsApp Style) initialized successfully');
+  console.log('✅ Google Chat Style Widget initialized');
 })();
