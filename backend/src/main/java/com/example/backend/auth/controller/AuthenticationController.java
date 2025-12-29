@@ -208,6 +208,7 @@ public class AuthenticationController {
     }
     
     // Send password reset code to email
+    @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, Object>> forgotPassword(@Valid @RequestBody ForgotPasswordDto request) {
         authenticationService.forgotPassword(request.getEmail());
 
