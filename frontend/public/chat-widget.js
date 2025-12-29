@@ -325,17 +325,19 @@
         text-align: right;
       }
 
-      /* 🎤 תצוגת הקלטה בזמן אמת */
+      /* 🎤 תצוגת הקלטה - בתוך חלונית ההודעות */
       .recording-preview {
         background: linear-gradient(135deg, ${config.primaryColor} 0%, ${config.secondaryColor} 100%);
-        border: none;
-        border-radius: 16px;
-        padding: 12px 16px;
-        margin: 8px 0;
+        border-radius: 20px;
+        padding: 8px 16px;
+        margin: 16px 20px;
         display: none;
         align-items: center;
         gap: 12px;
         box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
       }
 
       .recording-preview.show {
@@ -348,36 +350,34 @@
         align-items: center;
         gap: 3px;
         height: 32px;
-        cursor: pointer;
-        padding: 4px;
-        border-radius: 8px;
-        transition: background 0.2s;
-      }
-
-      .recording-preview-wave:hover {
-        background: rgba(255,255,255,0.1);
+        cursor: default;
       }
 
       .recording-preview-bar {
-        width: 4px;
-        background: rgba(255,255,255,0.9);
+        width: 3px;
+        background: rgba(255,255,255,0.8);
         border-radius: 2px;
-        animation: recordingWave 1s ease-in-out infinite;
       }
 
-      @keyframes recordingWave {
-        0%, 100% { height: 8px; }
-        50% { height: 24px; }
-      }
-
-      .recording-preview-bar:nth-child(1) { height: 10px; }
-      .recording-preview-bar:nth-child(2) { height: 16px; }
-      .recording-preview-bar:nth-child(3) { height: 12px; }
-      .recording-preview-bar:nth-child(4) { height: 20px; }
+      .recording-preview-bar:nth-child(1) { height: 12px; }
+      .recording-preview-bar:nth-child(2) { height: 20px; }
+      .recording-preview-bar:nth-child(3) { height: 16px; }
+      .recording-preview-bar:nth-child(4) { height: 24px; }
       .recording-preview-bar:nth-child(5) { height: 14px; }
       .recording-preview-bar:nth-child(6) { height: 18px; }
-      .recording-preview-bar:nth-child(7) { height: 12px; }
+      .recording-preview-bar:nth-child(7) { height: 22px; }
       .recording-preview-bar:nth-child(8) { height: 16px; }
+      .recording-preview-bar:nth-child(9) { height: 20px; }
+      .recording-preview-bar:nth-child(10) { height: 12px; }
+
+      .recording-preview-wave.playing .recording-preview-bar {
+        animation: waveAnimation 1s ease-in-out infinite;
+      }
+
+      @keyframes waveAnimation {
+        0%, 100% { height: 12px; }
+        50% { height: 24px; }
+      }
 
       .recording-preview-bar:nth-child(2) { animation-delay: 0.1s; }
       .recording-preview-bar:nth-child(3) { animation-delay: 0.2s; }
@@ -386,27 +386,35 @@
       .recording-preview-bar:nth-child(6) { animation-delay: 0.5s; }
       .recording-preview-bar:nth-child(7) { animation-delay: 0.6s; }
       .recording-preview-bar:nth-child(8) { animation-delay: 0.7s; }
-
-      .recording-preview-wave.playing .recording-preview-bar {
-        animation: recordingWave 0.8s ease-in-out infinite;
-      }
+      .recording-preview-bar:nth-child(9) { animation-delay: 0.8s; }
+      .recording-preview-bar:nth-child(10) { animation-delay: 0.9s; }
 
       .recording-preview-time {
-        color: white;
-        font-weight: 600;
-        font-size: 14px;
-        min-width: 45px;
-        text-align: center;
+        color: rgba(255,255,255,0.9);
+        font-weight: 500;
+        font-size: 12px;
+        min-width: 35px;
+        text-align: right;
       }
 
-      .recording-preview-text {
-        flex: 1;
+      .recording-preview .voice-play-button {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s;
+        font-size: 14px;
         color: white;
-        font-size: 13px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        opacity: 0.95;
+        flex-shrink: 0;
+      }
+
+      .recording-preview .voice-play-button:hover {
+        background: rgba(255,255,255,0.3);
       }
 
       .limit-warning {
@@ -746,11 +754,12 @@
               <p>שאל שאלה על המסמכים שלך</p>
               ${config.voiceEnabled ? '<p style="font-size: 12px; margin-top: 8px;">💡 לחץ על המיקרופון להקלטה</p>' : ''}
             </div>
-          </div>
-          <div class="chat-widget-input-area">
-            <!-- 🎤 תצוגת הקלטה -->
+            <!-- 🎤 תצוגת הקלטה - בתוך החלונית -->
             <div class="recording-preview" id="recording-preview">
-              <div class="recording-preview-wave">
+              <button class="voice-play-button" id="preview-play-btn">▶</button>
+              <div class="recording-preview-wave" id="preview-wave">
+                <div class="recording-preview-bar"></div>
+                <div class="recording-preview-bar"></div>
                 <div class="recording-preview-bar"></div>
                 <div class="recording-preview-bar"></div>
                 <div class="recording-preview-bar"></div>
@@ -761,9 +770,9 @@
                 <div class="recording-preview-bar"></div>
               </div>
               <div class="recording-preview-time" id="preview-time">0:00</div>
-              <div class="recording-preview-text" id="preview-text">מקליט...</div>
             </div>
-
+          </div>
+          <div class="chat-widget-input-area">
             <div class="chat-widget-input-wrapper">
               <div class="input-field-container" id="input-field-container">
                 <textarea 
@@ -833,7 +842,8 @@
       cancelRecording: document.getElementById('cancel-recording'),
       recordingPreview: document.getElementById('recording-preview'),
       previewTime: document.getElementById('preview-time'),
-      previewText: document.getElementById('preview-text')
+      previewPlayBtn: document.getElementById('preview-play-btn'),
+      previewWave: document.getElementById('preview-wave')
     };
 
     if (config.voiceEnabled) {
@@ -991,18 +1001,11 @@
         console.log('✅ Recording saved:', state.recordedText);
         elements.recordingPreview.classList.add('show');
         
-        if (state.recordedText.trim()) {
-          elements.previewText.textContent = state.recordedText.trim();
-        } else {
-          elements.previewText.textContent = 'הודעת קול מוכנה';
-        }
-        
         // ✅ הוסף כפתור השמעה
         updatePreviewWithPlayButton(state, elements);
       } else {
         // אם לא הוקלט כלום, הסתר
         elements.recordingPreview.classList.remove('show');
-        elements.previewText.textContent = 'מקליט...';
       }
     };
 
@@ -1071,8 +1074,10 @@
       state.recordedAudioBlob = null;
       state.audioChunks = [];
       elements.recordingPreview.classList.remove('show');
-      elements.previewText.textContent = 'מקליט...';
-      state.recognition.abort(); // ✅ עצור מיידי
+      if (elements.previewPlayBtn) {
+        elements.previewPlayBtn.textContent = '▶';
+      }
+      state.recognition.abort();
     }
   }
 
@@ -1095,20 +1100,22 @@
     audio.style.display = 'none';
     document.body.appendChild(audio);
     
-    // הוסף אייקון play לתצוגה
-    const waveElement = elements.recordingPreview.querySelector('.recording-preview-wave');
-    if (waveElement) {
-      waveElement.style.cursor = 'pointer';
-      waveElement.onclick = () => {
+    // הוסף אירוע ללחיצה על כפתור play
+    if (elements.previewPlayBtn) {
+      elements.previewPlayBtn.onclick = () => {
         if (audio.paused) {
           audio.play();
-          waveElement.classList.add('playing');
+          elements.previewPlayBtn.textContent = '⏸';
+          elements.previewWave.classList.add('playing');
+          
           audio.onended = () => {
-            waveElement.classList.remove('playing');
+            elements.previewPlayBtn.textContent = '▶';
+            elements.previewWave.classList.remove('playing');
           };
         } else {
           audio.pause();
-          waveElement.classList.remove('playing');
+          elements.previewPlayBtn.textContent = '▶';
+          elements.previewWave.classList.remove('playing');
         }
       };
     }
@@ -1377,7 +1384,17 @@
     const recordedText = state.recordedText.trim();
     const question = recordedText || typedText; // עדיפות להקלטה
     
-    if (!question || state.isLoading || isAtLimit(state)) return;
+    console.log('📤 Sending message:', {
+      typedText,
+      recordedText,
+      question,
+      hasAudioBlob: !!state.recordedAudioBlob
+    });
+    
+    if (!question || state.isLoading || isAtLimit(state)) {
+      console.log('⚠️ Cannot send:', { question, isLoading: state.isLoading, atLimit: isAtLimit(state) });
+      return;
+    }
 
     // ✅ בדוק אם זו הודעת קול או טקסט
     const isVoice = recordedText.length > 0 && state.recordedAudioBlob !== null;
@@ -1412,7 +1429,13 @@
     elements.inputField.value = '';
     elements.inputField.style.height = 'auto';
     elements.recordingPreview.classList.remove('show'); // ✅ נקה את התצוגה
-    elements.previewText.textContent = 'מקליט...';
+    if (elements.previewPlayBtn) {
+      elements.previewPlayBtn.textContent = '▶';
+      elements.previewPlayBtn.onclick = null;
+    }
+    if (elements.previewWave) {
+      elements.previewWave.classList.remove('playing');
+    }
     
     // נקה את האודיו הזמני
     const previewAudio = document.getElementById('preview-audio');
