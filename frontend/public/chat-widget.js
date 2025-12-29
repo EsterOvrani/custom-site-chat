@@ -327,14 +327,15 @@
 
       /* 🎤 תצוגת הקלטה בזמן אמת */
       .recording-preview {
-        background: #fce8e6;
-        border: 1px solid #f4b4af;
-        border-radius: 12px;
+        background: linear-gradient(135deg, ${config.primaryColor} 0%, ${config.secondaryColor} 100%);
+        border: none;
+        border-radius: 16px;
         padding: 12px 16px;
         margin: 8px 0;
         display: none;
         align-items: center;
         gap: 12px;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
       }
 
       .recording-preview.show {
@@ -346,29 +347,37 @@
         display: flex;
         align-items: center;
         gap: 3px;
-        height: 24px;
+        height: 32px;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 8px;
+        transition: background 0.2s;
+      }
+
+      .recording-preview-wave:hover {
+        background: rgba(255,255,255,0.1);
       }
 
       .recording-preview-bar {
-        width: 3px;
-        background: #d93025;
+        width: 4px;
+        background: rgba(255,255,255,0.9);
         border-radius: 2px;
         animation: recordingWave 1s ease-in-out infinite;
       }
 
       @keyframes recordingWave {
         0%, 100% { height: 8px; }
-        50% { height: 20px; }
+        50% { height: 24px; }
       }
 
       .recording-preview-bar:nth-child(1) { height: 10px; }
       .recording-preview-bar:nth-child(2) { height: 16px; }
       .recording-preview-bar:nth-child(3) { height: 12px; }
-      .recording-preview-bar:nth-child(4) { height: 18px; }
+      .recording-preview-bar:nth-child(4) { height: 20px; }
       .recording-preview-bar:nth-child(5) { height: 14px; }
-      .recording-preview-bar:nth-child(6) { height: 16px; }
+      .recording-preview-bar:nth-child(6) { height: 18px; }
       .recording-preview-bar:nth-child(7) { height: 12px; }
-      .recording-preview-bar:nth-child(8) { height: 14px; }
+      .recording-preview-bar:nth-child(8) { height: 16px; }
 
       .recording-preview-bar:nth-child(2) { animation-delay: 0.1s; }
       .recording-preview-bar:nth-child(3) { animation-delay: 0.2s; }
@@ -378,20 +387,26 @@
       .recording-preview-bar:nth-child(7) { animation-delay: 0.6s; }
       .recording-preview-bar:nth-child(8) { animation-delay: 0.7s; }
 
+      .recording-preview-wave.playing .recording-preview-bar {
+        animation: recordingWave 0.8s ease-in-out infinite;
+      }
+
       .recording-preview-time {
-        color: #d93025;
-        font-weight: 500;
-        font-size: 13px;
-        min-width: 40px;
+        color: white;
+        font-weight: 600;
+        font-size: 14px;
+        min-width: 45px;
+        text-align: center;
       }
 
       .recording-preview-text {
         flex: 1;
-        color: #5f6368;
+        color: white;
         font-size: 13px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        opacity: 0.95;
       }
 
       .limit-warning {
@@ -709,12 +724,7 @@
             </div>
             <div class="header-actions">
               <button class="reset-button" id="reset-button">🔄 איפוס</button>
-              <button class="header-button" id="options-button" title="אפשרויות">⋮</button>
             </div>
-          </div>
-          <div class="options-menu" id="options-menu">
-            <div class="options-menu-item" id="menu-reset">🔄 התחל שיחה חדשה</div>
-            <div class="options-menu-item" id="menu-about">ℹ️ אודות</div>
           </div>
           <div class="limit-warning" id="limit-warning">
             ⚠️ הגעת למגבלת 10 הודעות. לחץ על "איפוס" להתחלה חדשה.
@@ -809,10 +819,6 @@
     const elements = {
       toggleButton: document.getElementById('chat-widget-toggle'),
       resetButton: document.getElementById('reset-button'),
-      optionsButton: document.getElementById('options-button'),
-      optionsMenu: document.getElementById('options-menu'),
-      menuReset: document.getElementById('menu-reset'),
-      menuAbout: document.getElementById('menu-about'),
       widgetWindow: document.getElementById('chat-widget-window'),
       messagesContainer: document.getElementById('chat-widget-messages'),
       inputField: document.getElementById('chat-widget-input'),
@@ -847,27 +853,6 @@
     if (elements.cancelRecording) {
       elements.cancelRecording.addEventListener('click', () => cancelRecording(state, elements));
     }
-
-    elements.optionsButton.addEventListener('click', (e) => {
-      e.stopPropagation();
-      elements.optionsMenu.classList.toggle('show');
-    });
-
-    elements.menuReset.addEventListener('click', () => {
-      elements.optionsMenu.classList.remove('show');
-      resetChat(state, elements, config);
-    });
-
-    elements.menuAbout.addEventListener('click', () => {
-      elements.optionsMenu.classList.remove('show');
-      alert('Chat Widget v2.0\nעם תמיכה בהקלטת קול');
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!elements.optionsButton.contains(e.target) && !elements.optionsMenu.contains(e.target)) {
-        elements.optionsMenu.classList.remove('show');
-      }
-    });
     
     elements.inputField.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -1001,12 +986,21 @@
       elements.inputField.disabled = false;
       elements.sendButton.disabled = false;
       
-      // ✅ השאר את התצוגה פתוחה עם הטקסט
-      if (state.recordedText.trim()) {
-        elements.previewText.textContent = state.recordedText.trim();
-        console.log('✅ Recorded text:', state.recordedText);
+      // ✅ השאר את התצוגה פתוחה עם הטקסט והאודיו
+      if (state.recordedText.trim() || state.recordedAudioBlob) {
+        console.log('✅ Recording saved:', state.recordedText);
+        elements.recordingPreview.classList.add('show');
+        
+        if (state.recordedText.trim()) {
+          elements.previewText.textContent = state.recordedText.trim();
+        } else {
+          elements.previewText.textContent = 'הודעת קול מוכנה';
+        }
+        
+        // ✅ הוסף כפתור השמעה
+        updatePreviewWithPlayButton(state, elements);
       } else {
-        // אם לא הוקלט כלום, הסתר את התצוגה
+        // אם לא הוקלט כלום, הסתר
         elements.recordingPreview.classList.remove('show');
         elements.previewText.textContent = 'מקליט...';
       }
@@ -1079,6 +1073,44 @@
       elements.recordingPreview.classList.remove('show');
       elements.previewText.textContent = 'מקליט...';
       state.recognition.abort(); // ✅ עצור מיידי
+    }
+  }
+
+  // ✅ פונקציה חדשה - עדכון התצוגה עם כפתור השמעה
+  function updatePreviewWithPlayButton(state, elements) {
+    if (!state.recordedAudioBlob) return;
+    
+    const audioUrl = URL.createObjectURL(state.recordedAudioBlob);
+    const audioId = 'preview-audio';
+    
+    // צור אלמנט אודיו זמני
+    let existingAudio = document.getElementById(audioId);
+    if (existingAudio) {
+      existingAudio.remove();
+    }
+    
+    const audio = document.createElement('audio');
+    audio.id = audioId;
+    audio.src = audioUrl;
+    audio.style.display = 'none';
+    document.body.appendChild(audio);
+    
+    // הוסף אייקון play לתצוגה
+    const waveElement = elements.recordingPreview.querySelector('.recording-preview-wave');
+    if (waveElement) {
+      waveElement.style.cursor = 'pointer';
+      waveElement.onclick = () => {
+        if (audio.paused) {
+          audio.play();
+          waveElement.classList.add('playing');
+          audio.onended = () => {
+            waveElement.classList.remove('playing');
+          };
+        } else {
+          audio.pause();
+          waveElement.classList.remove('playing');
+        }
+      };
     }
   }
 
@@ -1356,6 +1388,7 @@
     if (isVoice) {
       audioUrl = URL.createObjectURL(state.recordedAudioBlob);
       audioDuration = Math.floor((Date.now() - state.recordingStartTime) / 1000);
+      console.log('✅ Sending voice message, duration:', audioDuration, 'seconds');
     }
 
     state.messages.push({
@@ -1372,14 +1405,20 @@
       content: question
     });
 
-    // ✅ נקה הכל
+    // ✅ נקה הכל אחרי הוספה להודעות
     state.recordedText = '';
     state.recordedAudioBlob = null;
     state.audioChunks = [];
     elements.inputField.value = '';
     elements.inputField.style.height = 'auto';
-    elements.recordingPreview.classList.remove('show');
+    elements.recordingPreview.classList.remove('show'); // ✅ נקה את התצוגה
     elements.previewText.textContent = 'מקליט...';
+    
+    // נקה את האודיו הזמני
+    const previewAudio = document.getElementById('preview-audio');
+    if (previewAudio) {
+      previewAudio.remove();
+    }
     
     state.isLoading = true;
     elements.sendButton.disabled = true;
