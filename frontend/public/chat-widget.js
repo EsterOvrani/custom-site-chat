@@ -1,8 +1,9 @@
-// frontend/public/chat-widget.js - גרסה עובדת ונקייה
+// frontend/public/chat-widget.js - גרסה משופרת עם הקלטת קול כמו WhatsApp
 
 (function() {
   'use strict';
 
+  // ==================== Initialization ====================
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initWidget);
   } else {
@@ -10,6 +11,7 @@
   }
 
   function initWidget() {
+    // ==================== Configuration ====================
     const WIDGET_CONFIG = {
       apiUrl: window.CHAT_WIDGET_API_URL || 'http://localhost:8080',
       secretKey: window.CHAT_WIDGET_SECRET_KEY,
@@ -24,18 +26,27 @@
       voiceEnabled: true
     };
 
+    console.log('🔧 Widget Config:', WIDGET_CONFIG);
+
     if (!WIDGET_CONFIG.secretKey) {
-      console.error('❌ Missing SECRET_KEY');
+      console.error('❌ Chat Widget: Missing SECRET_KEY');
       return;
     }
 
+    // ==================== Inject CSS ====================
     injectStyles(WIDGET_CONFIG);
+
+    // ==================== Create Widget HTML ====================
     createWidgetHTML(WIDGET_CONFIG);
+
+    // ==================== Initialize Widget ====================
     setupEventListeners(WIDGET_CONFIG);
   }
 
+  // ==================== CSS Injection ====================
   function injectStyles(config) {
     const styles = `
+      /* Container */
       .chat-widget-container {
         position: fixed;
         ${config.position.includes('right') ? 'right: 20px;' : 'left: 20px;'}
@@ -44,6 +55,7 @@
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       }
 
+      /* Toggle Button */
       .chat-widget-button {
         width: 60px;
         height: 60px;
@@ -63,6 +75,7 @@
         transform: scale(1.1);
       }
 
+      /* Widget Window */
       .chat-widget-window {
         position: absolute;
         bottom: 80px;
@@ -83,10 +96,17 @@
       }
 
       @keyframes slideUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
+      /* Header */
       .chat-widget-header {
         background: linear-gradient(135deg, ${config.primaryColor} 0%, ${config.secondaryColor} 100%);
         color: white;
@@ -102,12 +122,14 @@
         font-size: 18px;
       }
 
+      /* Message Counter */
       .message-counter {
         font-size: 11px;
         opacity: 0.9;
         margin-top: 3px;
       }
 
+      /* Reset Button */
       .reset-button {
         position: absolute;
         left: 20px;
@@ -132,6 +154,7 @@
         display: block;
       }
 
+      /* Messages Container */
       .chat-widget-messages {
         flex: 1;
         overflow-y: auto;
@@ -139,6 +162,7 @@
         background: #f8f9ff;
       }
 
+      /* Message Wrapper */
       .chat-message {
         margin-bottom: 16px;
         display: flex;
@@ -148,12 +172,15 @@
 
       .chat-message.user {
         flex-direction: row-reverse;
+        justify-content: flex-start;
       }
 
       .chat-message.assistant {
         flex-direction: row;
+        justify-content: flex-start;
       }
 
+      /* Avatar */
       .chat-message-avatar {
         width: 36px;
         height: 36px;
@@ -179,10 +206,14 @@
         object-fit: cover;
       }
 
+      /* Message Content Wrapper */
       .chat-message-content {
+        display: flex;
+        flex-direction: column;
         max-width: 70%;
       }
 
+      /* Message Bubble */
       .chat-message-bubble {
         padding: 12px 16px;
         border-radius: 12px;
@@ -213,12 +244,46 @@
         border: 1px solid #e1e8ed;
       }
 
-      .voice-indicator {
+      /* 🎤 Voice Message Indicator */
+      .voice-message-indicator {
+        display: flex;
+        align-items: center;
+        gap: 6px;
         font-size: 12px;
-        opacity: 0.8;
+        opacity: 0.9;
         margin-top: 4px;
       }
 
+      /* Voice Wave Animation */
+      .voice-wave {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        padding: 8px 12px;
+        background: rgba(102, 126, 234, 0.1);
+        border-radius: 8px;
+        margin-bottom: 8px;
+      }
+
+      .voice-wave-bar {
+        width: 3px;
+        background: ${config.primaryColor};
+        border-radius: 3px;
+        animation: wave 1.2s ease-in-out infinite;
+      }
+
+      .voice-wave-bar:nth-child(1) { height: 12px; animation-delay: 0s; }
+      .voice-wave-bar:nth-child(2) { height: 20px; animation-delay: 0.1s; }
+      .voice-wave-bar:nth-child(3) { height: 16px; animation-delay: 0.2s; }
+      .voice-wave-bar:nth-child(4) { height: 24px; animation-delay: 0.3s; }
+      .voice-wave-bar:nth-child(5) { height: 18px; animation-delay: 0.4s; }
+
+      @keyframes wave {
+        0%, 100% { transform: scaleY(1); }
+        50% { transform: scaleY(0.5); }
+      }
+
+      /* Limit Warning */
       .limit-warning {
         background: #fff3cd;
         color: #856404;
@@ -234,6 +299,7 @@
         display: block;
       }
 
+      /* Input Area */
       .chat-widget-input-area {
         padding: 16px;
         border-top: 1px solid #e1e8ed;
@@ -246,126 +312,103 @@
         align-items: flex-end;
       }
 
-      .input-container {
-        flex: 1;
-        background: #f1f3f4;
-        border-radius: 24px;
-        padding: 4px 16px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .input-container.recording {
-        background: #fce8e6;
-      }
-
       .chat-widget-input {
         flex: 1;
-        padding: 10px 0;
-        border: none;
-        background: transparent;
+        padding: 12px;
+        border: 1px solid #e1e8ed;
+        border-radius: 8px;
         font-size: 14px;
         font-family: inherit;
         resize: none;
         outline: none;
         direction: rtl;
         text-align: right;
-        max-height: 100px;
+        max-height: 120px;
       }
 
-      .chat-widget-input::placeholder {
-        color: #5f6368;
+      .chat-widget-input:focus {
+        border-color: ${config.primaryColor};
       }
 
       .chat-widget-input:disabled {
+        background-color: #f5f5f5;
         cursor: not-allowed;
-        opacity: 0.6;
       }
 
-      .voice-btn {
-        background: transparent;
-        border: none;
+      /* 🎤 Voice Button */
+      .chat-widget-voice {
+        padding: 12px;
+        background: white;
+        color: ${config.primaryColor};
+        border: 2px solid ${config.primaryColor};
+        border-radius: 8px;
         cursor: pointer;
-        padding: 6px;
-        border-radius: 50%;
+        font-size: 20px;
+        transition: all 0.3s;
+        min-width: 48px;
         display: flex;
         align-items: center;
-        transition: background 0.2s;
+        justify-content: center;
       }
 
-      .voice-btn:hover:not(:disabled) {
-        background: rgba(0,0,0,0.08);
+      .chat-widget-voice:hover:not(:disabled) {
+        background: ${config.primaryColor};
+        color: white;
       }
 
-      .voice-btn:disabled {
-        opacity: 0.4;
+      .chat-widget-voice:disabled {
+        opacity: 0.5;
         cursor: not-allowed;
       }
 
-      .voice-btn.recording {
+      .chat-widget-voice.recording {
+        background: #dc3545;
+        color: white;
+        border-color: #dc3545;
         animation: pulse 1.5s infinite;
       }
 
       @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.6; }
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
       }
 
-      .mic-icon {
-        width: 20px;
-        height: 20px;
-        fill: #5f6368;
-      }
-
-      .voice-btn.recording .mic-icon {
-        fill: #d93025;
-      }
-
-      .send-btn {
+      .chat-widget-send {
+        padding: 12px 20px;
         background: ${config.primaryColor};
         color: white;
         border: none;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
+        border-radius: 8px;
         cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s;
-        flex-shrink: 0;
+        font-weight: 600;
+        transition: opacity 0.2s;
       }
 
-      .send-btn:hover:not(:disabled) {
-        background: #5568d3;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      .chat-widget-send:hover:not(:disabled) {
+        opacity: 0.9;
       }
 
-      .send-btn:disabled {
-        opacity: 0.4;
+      .chat-widget-send:disabled {
+        opacity: 0.5;
         cursor: not-allowed;
       }
 
-      .send-icon {
-        width: 20px;
-        height: 20px;
-        fill: white;
-        transform: rotate(180deg);
-      }
-
-      .recording-bar {
-        background: #fce8e6;
-        color: #d93025;
-        padding: 8px 16px;
+      /* 🎤 Recording Status Bar */
+      .recording-status {
+        background: #dc3545;
+        color: white;
+        padding: 10px 16px;
         display: none;
         align-items: center;
         justify-content: space-between;
         font-size: 13px;
-        border-top: 1px solid #f4b4af;
       }
 
-      .recording-bar.active {
+      .recording-status.active {
         display: flex;
       }
 
@@ -373,36 +416,40 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        font-weight: 500;
       }
 
       .recording-dot {
         width: 8px;
         height: 8px;
-        background: #d93025;
+        background: white;
         border-radius: 50%;
         animation: blink 1s infinite;
       }
 
       @keyframes blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
       }
 
-      .cancel-btn {
-        background: transparent;
-        border: none;
-        color: #d93025;
-        padding: 4px 8px;
-        cursor: pointer;
-        font-size: 12px;
+      .cancel-recording {
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        padding: 4px 12px;
         border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
       }
 
-      .cancel-btn:hover {
-        background: rgba(217,48,37,0.1);
+      .cancel-recording:hover {
+        background: rgba(255,255,255,0.3);
       }
 
+      /* Typing Indicator */
       .typing-indicator {
         display: flex;
         gap: 4px;
@@ -417,14 +464,24 @@
         animation: typing 1.4s infinite;
       }
 
-      .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-      .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-
-      @keyframes typing {
-        0%, 60%, 100% { transform: translateY(0); }
-        30% { transform: translateY(-8px); }
+      .typing-dot:nth-child(2) {
+        animation-delay: 0.2s;
       }
 
+      .typing-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes typing {
+        0%, 60%, 100% {
+          transform: translateY(0);
+        }
+        30% {
+          transform: translateY(-8px);
+        }
+      }
+
+      /* Empty State */
       .chat-widget-empty {
         display: flex;
         flex-direction: column;
@@ -441,6 +498,7 @@
         margin-bottom: 16px;
       }
 
+      /* Browser Warning */
       .browser-warning {
         background: #f8d7da;
         color: #721c24;
@@ -462,72 +520,65 @@
     document.head.appendChild(styleSheet);
   }
 
+  // ==================== HTML Creation ====================
   function createWidgetHTML(config) {
-    const html = `
+    const widgetHTML = `
       <div class="chat-widget-container">
-        <button class="chat-widget-button" id="toggle-btn">💬</button>
-        <div class="chat-widget-window" id="widget-window">
+        <button class="chat-widget-button" id="chat-widget-toggle">💬</button>
+        <div class="chat-widget-window" id="chat-widget-window">
           <div class="chat-widget-header">
-            <button class="reset-button" id="reset-btn">🔄 התחל שיחה חדשה</button>
+            <button class="reset-button" id="reset-button">
+              🔄 התחל שיחה חדשה
+            </button>
             <div>
               <h3>${escapeHtml(config.title)}</h3>
-              <div class="message-counter" id="msg-counter">0/10 הודעות</div>
+              <div class="message-counter" id="message-counter">0/10 הודעות</div>
             </div>
           </div>
           <div class="limit-warning" id="limit-warning">
-            ⚠️ הגעת למגבלת 10 הודעות. לחץ על "התחל שיחה חדשה".
+            ⚠️ הגעת למגבלת 10 הודעות. לחץ על "התחל שיחה חדשה" למעלה.
           </div>
           <div class="browser-warning" id="browser-warning">
             ⚠️ הדפדפן שלך לא תומך בהקלטת קול
           </div>
-          <div class="recording-bar" id="recording-bar">
+          <div class="recording-status" id="recording-status">
             <div class="recording-timer">
               <div class="recording-dot"></div>
-              <span id="rec-time">0:00</span>
+              <span id="recording-time">0:00</span>
             </div>
-            <button class="cancel-btn" id="cancel-btn">ביטול</button>
+            <button class="cancel-recording" id="cancel-recording">ביטול</button>
           </div>
-          <div class="chat-widget-messages" id="messages">
+          <div class="chat-widget-messages" id="chat-widget-messages">
             <div class="chat-widget-empty">
               <div class="chat-widget-empty-icon">💬</div>
               <h3>שלום!</h3>
               <p>שאל שאלה על המסמכים שלך</p>
-              <p style="font-size: 12px; margin-top: 10px;">💡 לחץ על 🎤 להקלטה</p>
+              ${config.voiceEnabled ? '<p style="font-size: 12px; margin-top: 10px;">💡 לחץ על 🎤 להקלטה</p>' : ''}
             </div>
           </div>
           <div class="chat-widget-input-area">
             <div class="chat-widget-input-wrapper">
-              <div class="input-container" id="input-container">
-                <textarea 
-                  class="chat-widget-input" 
-                  id="input"
-                  placeholder="הקלד הודעה..."
-                  rows="1"
-                ></textarea>
-                <button class="voice-btn" id="voice-btn" title="הקלט קול">
-                  <svg class="mic-icon" viewBox="0 0 24 24">
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                  </svg>
-                </button>
-              </div>
-              <button class="send-btn" id="send-btn" title="שלח">
-                <svg class="send-icon" viewBox="0 0 24 24">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                </svg>
-              </button>
+              <textarea 
+                class="chat-widget-input" 
+                id="chat-widget-input"
+                placeholder="שאל שאלה או הקלט קול..."
+                rows="1"
+              ></textarea>
+              ${config.voiceEnabled ? '<button class="chat-widget-voice" id="chat-widget-voice" title="הקלט קול">🎤</button>' : ''}
+              <button class="chat-widget-send" id="chat-widget-send">שלח</button>
             </div>
           </div>
         </div>
       </div>
     `;
 
-    document.body.insertAdjacentHTML('beforeend', html);
+    const widgetContainer = document.createElement('div');
+    widgetContainer.innerHTML = widgetHTML;
+    document.body.appendChild(widgetContainer);
   }
 
+  // ==================== Event Listeners Setup ====================
   function setupEventListeners(config) {
-    const $ = id => document.getElementById(id);
-    
     const state = {
       messages: [],
       history: [],
@@ -538,245 +589,413 @@
       recordingTimer: null,
       recordedText: '',
       recognition: null,
+      sessionId: generateSessionId(),
       maxHistoryMessages: config.maxHistoryMessages
     };
 
-    setupVoice(state, config);
-    loadHistory(state, config);
+    const elements = {
+      toggleButton: document.getElementById('chat-widget-toggle'),
+      resetButton: document.getElementById('reset-button'),
+      widgetWindow: document.getElementById('chat-widget-window'),
+      messagesContainer: document.getElementById('chat-widget-messages'),
+      inputField: document.getElementById('chat-widget-input'),
+      sendButton: document.getElementById('chat-widget-send'),
+      voiceButton: document.getElementById('chat-widget-voice'),
+      messageCounter: document.getElementById('message-counter'),
+      limitWarning: document.getElementById('limit-warning'),
+      browserWarning: document.getElementById('browser-warning'),
+      recordingStatus: document.getElementById('recording-status'),
+      recordingTime: document.getElementById('recording-time'),
+      cancelRecording: document.getElementById('cancel-recording')
+    };
 
-    $('toggle-btn').onclick = () => toggleWidget(state);
-    $('reset-btn').onclick = () => resetChat(state, config);
-    $('send-btn').onclick = () => sendMessage(state, config);
-    $('voice-btn').onclick = () => toggleVoice(state);
-    $('cancel-btn').onclick = () => cancelRecording(state);
+    // בדיקה אם הדפדפן תומך ב-Web Speech API
+    if (config.voiceEnabled) {
+      setupVoiceRecognition(state, elements, config);
+    }
+
+    // טען היסטוריה מ-sessionStorage
+    loadHistoryFromSession(state, elements, config);
+
+    elements.toggleButton.addEventListener('click', () => toggleWidget(state, elements));
+    elements.resetButton.addEventListener('click', () => resetChat(state, elements, config));
+    elements.sendButton.addEventListener('click', () => sendMessage(state, elements, config));
     
-    $('input').onkeydown = (e) => {
+    if (elements.voiceButton) {
+      elements.voiceButton.addEventListener('click', () => toggleVoiceRecording(state, elements, config));
+    }
+
+    if (elements.cancelRecording) {
+      elements.cancelRecording.addEventListener('click', () => cancelRecording(state, elements));
+    }
+    
+    elements.inputField.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendMessage(state, config);
+        sendMessage(state, elements, config);
       }
-    };
+    });
 
-    $('input').oninput = () => {
-      $('input').style.height = 'auto';
-      $('input').style.height = $('input').scrollHeight + 'px';
-    };
+    // Auto-resize textarea
+    elements.inputField.addEventListener('input', () => {
+      elements.inputField.style.height = 'auto';
+      elements.inputField.style.height = elements.inputField.scrollHeight + 'px';
+    });
   }
 
-  function setupVoice(state, config) {
+  // ==================== 🎤 Voice Recognition Setup ====================
+  
+  function setupVoiceRecognition(state, elements, config) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
-      document.getElementById('voice-btn').style.display = 'none';
-      document.getElementById('browser-warning').classList.add('show');
+      console.warn('Speech Recognition not supported in this browser');
+      if (elements.voiceButton) {
+        elements.voiceButton.style.display = 'none';
+      }
+      elements.browserWarning.classList.add('show');
       return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'he-IL';
+    recognition.continuous = true; // ✅ הקלטה מתמשכת
+    recognition.interimResults = true; // ✅ תוצאות ביניים
+    recognition.lang = 'he-IL'; // עברית כברירת מחדל
+    recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
+      console.log('🎤 Voice recording started');
       state.isRecording = true;
       state.recordingStartTime = Date.now();
       state.recordedText = '';
       
-      document.getElementById('voice-btn').classList.add('recording');
-      document.getElementById('recording-bar').classList.add('active');
-      document.getElementById('input-container').classList.add('recording');
-      document.getElementById('input').placeholder = 'מקשיב...';
-      document.getElementById('input').disabled = true;
-      document.getElementById('send-btn').disabled = true;
+      elements.voiceButton.classList.add('recording');
+      elements.recordingStatus.classList.add('active');
+      elements.inputField.placeholder = 'מקשיב...';
+      elements.inputField.disabled = true;
+      elements.sendButton.disabled = true;
       
+      // התחל טיימר
       state.recordingTimer = setInterval(() => {
         const elapsed = Math.floor((Date.now() - state.recordingStartTime) / 1000);
-        document.getElementById('rec-time').textContent = 
-          `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, '0')}`;
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        elements.recordingTime.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
       }, 1000);
     };
 
     recognition.onresult = (event) => {
-      let interim = '';
-      let final = '';
+      let interimTranscript = '';
+      let finalTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          final += transcript + ' ';
+          finalTranscript += transcript + ' ';
         } else {
-          interim += transcript;
+          interimTranscript += transcript;
         }
       }
 
-      if (final) state.recordedText += final;
-      
-      const input = document.getElementById('input');
-      input.value = state.recordedText + interim;
-      input.style.height = 'auto';
-      input.style.height = input.scrollHeight + 'px';
+      // שמור את הטקסט הסופי
+      if (finalTranscript) {
+        state.recordedText += finalTranscript;
+      }
+
+      // הצג את הטקסט בזמן אמת
+      elements.inputField.value = state.recordedText + interimTranscript;
+      elements.inputField.style.height = 'auto';
+      elements.inputField.style.height = elements.inputField.scrollHeight + 'px';
     };
 
     recognition.onerror = (event) => {
-      let msg = 'שגיאה בהקלטה';
-      if (event.error === 'no-speech') msg = 'לא זוהה דיבור';
-      else if (event.error === 'audio-capture') msg = 'לא ניתן לגשת למיקרופון';
-      else if (event.error === 'not-allowed') msg = 'נדרשת הרשאה למיקרופון';
+      console.error('🎤 Speech recognition error:', event.error);
       
-      alert(msg);
-      cancelRecording(state);
+      let errorMessage = 'שגיאה בהקלטת קול';
+      switch(event.error) {
+        case 'no-speech':
+          errorMessage = 'לא זוהה דיבור';
+          break;
+        case 'audio-capture':
+          errorMessage = 'לא ניתן לגשת למיקרופון';
+          break;
+        case 'not-allowed':
+          errorMessage = 'נדרשת הרשאה למיקרופון';
+          break;
+        case 'network':
+          errorMessage = 'שגיאת רשת';
+          break;
+      }
+      
+      alert(errorMessage);
+      cancelRecording(state, elements);
     };
 
     recognition.onend = () => {
+      console.log('🎤 Voice recording ended');
+      
+      // עצור את הטיימר
       if (state.recordingTimer) {
         clearInterval(state.recordingTimer);
         state.recordingTimer = null;
       }
       
       state.isRecording = false;
-      document.getElementById('voice-btn').classList.remove('recording');
-      document.getElementById('recording-bar').classList.remove('active');
-      document.getElementById('input-container').classList.remove('recording');
-      document.getElementById('input').placeholder = 'הקלד הודעה...';
-      document.getElementById('input').disabled = false;
-      document.getElementById('send-btn').disabled = false;
+      elements.voiceButton.classList.remove('recording');
+      elements.recordingStatus.classList.remove('active');
+      elements.inputField.placeholder = 'שאל שאלה או הקלט קול...';
+      elements.inputField.disabled = false;
+      elements.sendButton.disabled = false;
       
+      // שמור את הטקסט המוקלט
       if (state.recordedText.trim()) {
-        const input = document.getElementById('input');
-        input.value = state.recordedText.trim();
-        input.style.height = 'auto';
-        input.style.height = input.scrollHeight + 'px';
-        input.focus();
+        elements.inputField.value = state.recordedText.trim();
+        elements.inputField.style.height = 'auto';
+        elements.inputField.style.height = elements.inputField.scrollHeight + 'px';
+        elements.inputField.focus();
       }
     };
 
     state.recognition = recognition;
   }
 
-  function toggleVoice(state) {
+  function toggleVoiceRecording(state, elements, config) {
     if (!state.recognition) {
       alert('הדפדפן שלך לא תומך בהקלטת קול');
       return;
     }
 
-    if (isAtLimit(state)) return;
+    if (isAtLimit(state)) {
+      return;
+    }
 
     if (state.isRecording) {
+      // עצור הקלטה
+      console.log('🎤 Stopping recording');
       state.recognition.stop();
     } else {
+      // התחל הקלטה
+      console.log('🎤 Starting recording');
       try {
+        // נסה לזהות שפה אוטומטית
+        const currentText = elements.inputField.value;
+        const lang = detectLanguage(currentText);
+        state.recognition.lang = lang === 'he' ? 'he-IL' : 'en-US';
+        
         state.recognition.start();
       } catch (error) {
-        alert('שגיאה בהפעלת ההקלטה');
+        console.error('Failed to start recording:', error);
+        alert('שגיאה בהפעלת ההקלטה. אנא נסה שוב.');
       }
     }
   }
 
-  function cancelRecording(state) {
+  function cancelRecording(state, elements) {
     if (state.recognition && state.isRecording) {
       state.recordedText = '';
-      document.getElementById('input').value = '';
+      elements.inputField.value = '';
       state.recognition.stop();
     }
   }
 
-  function loadHistory(state, config) {
+  // ==================== History Management ====================
+  
+  function loadHistoryFromSession(state, elements, config) {
     try {
-      const saved = sessionStorage.getItem('chatHistory_' + config.secretKey);
+      const storageKey = 'chatHistory_' + config.secretKey;
+      const saved = sessionStorage.getItem(storageKey);
       if (saved) {
         const data = JSON.parse(saved);
         state.history = data.history || [];
         state.messages = data.messages || [];
-        renderMessages(state, config);
-        updateUI(state);
+        
+        renderMessages(state, elements, config);
+        updateUI(state, elements);
+        
+        console.log('✅ Loaded history:', state.history.length, 'messages');
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Failed to load history:', e);
+    }
   }
 
-  function saveHistory(state, config) {
+  function saveHistoryToSession(state, config) {
     try {
-      sessionStorage.setItem('chatHistory_' + config.secretKey, JSON.stringify({
-        history: state.history,
-        messages: state.messages
-      }));
-    } catch (e) {}
+      const storageKey = 'chatHistory_' + config.secretKey;
+      sessionStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          history: state.history,
+          messages: state.messages
+        })
+      );
+    } catch (e) {
+      console.error('Failed to save history:', e);
+    }
   }
 
   function isAtLimit(state) {
     return state.history.length >= state.maxHistoryMessages;
   }
 
-  function updateUI(state) {
-    const count = state.history.length;
-    document.getElementById('msg-counter').textContent = `${count}/${state.maxHistoryMessages} הודעות`;
+  function updateUI(state, elements) {
+    const messageCount = state.history.length;
     
-    document.getElementById('reset-btn').classList.toggle('show', count > 0);
+    elements.messageCounter.textContent = `${messageCount}/${state.maxHistoryMessages} הודעות`;
     
-    const atLimit = isAtLimit(state);
-    document.getElementById('limit-warning').classList.toggle('show', atLimit);
-    document.getElementById('input').disabled = atLimit || state.isRecording;
-    document.getElementById('send-btn').disabled = atLimit;
-    document.getElementById('voice-btn').disabled = atLimit;
+    if (messageCount > 0) {
+      elements.resetButton.classList.add('show');
+    } else {
+      elements.resetButton.classList.remove('show');
+    }
+    
+    if (isAtLimit(state)) {
+      elements.limitWarning.classList.add('show');
+      elements.inputField.disabled = true;
+      elements.sendButton.disabled = true;
+      if (elements.voiceButton) {
+        elements.voiceButton.disabled = true;
+      }
+    } else {
+      elements.limitWarning.classList.remove('show');
+      if (!state.isRecording) {
+        elements.inputField.disabled = false;
+        elements.sendButton.disabled = false;
+        if (elements.voiceButton) {
+          elements.voiceButton.disabled = false;
+        }
+      }
+    }
   }
 
-  function resetChat(state, config) {
-    if (confirm('האם להתחיל שיחה חדשה? ההיסטוריה תימחק.')) {
+  function resetChat(state, elements, config) {
+    if (confirm('האם אתה בטוח שברצונך להתחיל שיחה חדשה? ההיסטוריה תימחק.')) {
       state.history = [];
       state.messages = [];
-      sessionStorage.removeItem('chatHistory_' + config.secretKey);
-      renderMessages(state, config);
-      updateUI(state);
+      const storageKey = 'chatHistory_' + config.secretKey;
+      sessionStorage.removeItem(storageKey);
+      
+      renderMessages(state, elements, config);
+      updateUI(state, elements);
+      
+      console.log('✅ Chat reset');
     }
   }
 
-  function toggleWidget(state) {
+  // ==================== Utility Functions ====================
+  
+  function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function detectLanguage(text) {
+    if (!text || text.trim().length === 0) return 'he';
+    
+    let hebrewChars = 0;
+    let totalChars = 0;
+    
+    for (let char of text) {
+      if (/\p{L}/u.test(char)) {
+        totalChars++;
+        if (char >= '\u0590' && char <= '\u05FF') {
+          hebrewChars++;
+        }
+      }
+    }
+    
+    return (totalChars > 0 && (hebrewChars / totalChars) > 0.3) ? 'he' : 'en';
+  }
+
+  function createAvatar(role, config) {
+    if (role === 'user') {
+      if (config.userAvatar) {
+        return `<img src="${escapeHtml(config.userAvatar)}" alt="User" />`;
+      }
+      return 'אני';
+    } else {
+      if (config.botAvatar) {
+        return `<img src="${escapeHtml(config.botAvatar)}" alt="${escapeHtml(config.botName)}" />`;
+      }
+      return escapeHtml(config.botName.charAt(0));
+    }
+  }
+
+  // ==================== Widget Functions ====================
+  
+  function toggleWidget(state, elements) {
     state.isOpen = !state.isOpen;
-    document.getElementById('widget-window').classList.toggle('open', state.isOpen);
-    document.getElementById('toggle-btn').textContent = state.isOpen ? '✕' : '💬';
+    elements.widgetWindow.classList.toggle('open', state.isOpen);
     
     if (state.isOpen) {
-      document.getElementById('input').focus();
-    } else if (state.isRecording && state.recognition) {
-      cancelRecording(state);
+      elements.inputField.focus();
+      elements.toggleButton.textContent = '✕';
+    } else {
+      elements.toggleButton.textContent = '💬';
+      
+      // עצור הקלטה אם פתוחה
+      if (state.isRecording && state.recognition) {
+        cancelRecording(state, elements);
+      }
     }
   }
 
-  function renderMessages(state, config) {
-    const container = document.getElementById('messages');
-    
+  function renderMessages(state, elements, config) {
     if (state.messages.length === 0) {
-      container.innerHTML = `
+      elements.messagesContainer.innerHTML = `
         <div class="chat-widget-empty">
           <div class="chat-widget-empty-icon">💬</div>
           <h3>שלום!</h3>
           <p>שאל שאלה על המסמכים שלך</p>
-          <p style="font-size: 12px; margin-top: 10px;">💡 לחץ על 🎤 להקלטה</p>
+          ${config.voiceEnabled ? '<p style="font-size: 12px; margin-top: 10px;">💡 לחץ על 🎤 להקלטה</p>' : ''}
         </div>
       `;
       return;
     }
 
-    const html = state.messages.map(msg => {
-      const lang = detectLanguage(msg.content);
-      const dir = lang === 'he' ? 'rtl' : 'ltr';
-      const content = msg.content.trim();
-      const voiceIcon = msg.isVoice ? '<div class="voice-indicator">🎤 הודעת קול</div>' : '';
+    const messagesHTML = state.messages.map(msg => {
+      const language = detectLanguage(msg.content);
+      const textDirection = language === 'he' ? 'rtl' : 'ltr';
+      
+      const cleanedContent = msg.content
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .join('\n')
+        .trim();
+      
+      const voiceIndicator = msg.isVoice ? `
+        <div class="voice-message-indicator">
+          <div class="voice-wave">
+            <div class="voice-wave-bar"></div>
+            <div class="voice-wave-bar"></div>
+            <div class="voice-wave-bar"></div>
+            <div class="voice-wave-bar"></div>
+            <div class="voice-wave-bar"></div>
+          </div>
+        </div>
+      ` : '';
       
       return `
         <div class="chat-message ${msg.role}">
           <div class="chat-message-avatar">${createAvatar(msg.role, config)}</div>
           <div class="chat-message-content">
-            ${voiceIcon}
-            <div class="chat-message-bubble ${dir}">${escapeHtml(content)}</div>
+            ${voiceIndicator}
+            <div class="chat-message-bubble ${textDirection}">${escapeHtml(cleanedContent)}</div>
           </div>
         </div>
       `;
     }).join('');
 
-    container.innerHTML = html;
+    elements.messagesContainer.innerHTML = messagesHTML;
 
     if (state.isLoading) {
-      container.innerHTML += `
+      elements.messagesContainer.innerHTML += `
         <div class="chat-message assistant">
           <div class="chat-message-avatar">${createAvatar('assistant', config)}</div>
           <div class="chat-message-content">
@@ -792,18 +1011,19 @@
       `;
     }
 
-    container.scrollTop = container.scrollHeight;
+    elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
   }
 
-  async function sendMessage(state, config) {
-    const input = document.getElementById('input');
-    const question = input.value.trim();
+  async function sendMessage(state, elements, config) {
+    const question = elements.inputField.value.trim();
     const isVoice = state.recordedText.length > 0;
     
     if (!question || state.isLoading || isAtLimit(state)) return;
 
+    // אפס את state של הקלטה
     state.recordedText = '';
 
+    // הוסף הודעת משתמש
     state.messages.push({
       role: 'user',
       content: question,
@@ -816,20 +1036,24 @@
       content: question
     });
 
-    input.value = '';
-    input.style.height = 'auto';
+    elements.inputField.value = '';
+    elements.inputField.style.height = 'auto';
     state.isLoading = true;
-    document.getElementById('send-btn').disabled = true;
-    document.getElementById('voice-btn').disabled = true;
+    elements.sendButton.disabled = true;
+    if (elements.voiceButton) {
+      elements.voiceButton.disabled = true;
+    }
     
-    renderMessages(state, config);
-    saveHistory(state, config);
-    updateUI(state);
+    renderMessages(state, elements, config);
+    saveHistoryToSession(state, config);
+    updateUI(state, elements);
 
     try {
-      const res = await fetch(`${config.apiUrl}/api/query/ask`, {
+      const response = await fetch(`${config.apiUrl}/api/query/ask`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           secretKey: config.secretKey,
           question: question,
@@ -837,74 +1061,49 @@
         })
       });
 
-      const data = await res.json();
+      const data = await response.json();
 
-      const answer = (data.success && data.data.answer) 
-        ? data.data.answer 
-        : 'מצטער, לא הצלחתי למצוא תשובה.';
+      if (data.success && data.data.answer) {
+        state.messages.push({
+          role: 'assistant',
+          content: data.data.answer,
+          timestamp: new Date().toISOString(),
+          isVoice: false
+        });
 
-      state.messages.push({
-        role: 'assistant',
-        content: answer,
-        timestamp: new Date().toISOString(),
-        isVoice: false
-      });
-
-      state.history.push({
-        role: 'assistant',
-        content: answer
-      });
+        state.history.push({
+          role: 'assistant',
+          content: data.data.answer
+        });
+      } else {
+        state.messages.push({
+          role: 'assistant',
+          content: 'מצטער, לא הצלחתי למצוא תשובה. אנא נסה שוב.',
+          timestamp: new Date().toISOString(),
+          isVoice: false
+        });
+      }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Chat Widget Error:', error);
       state.messages.push({
         role: 'assistant',
-        content: 'אירעה שגיאה. נסה שוב.',
+        content: 'אירעה שגיאה. אנא נסה שוב מאוחר יותר.',
         timestamp: new Date().toISOString(),
         isVoice: false
       });
     } finally {
       state.isLoading = false;
-      if (!isAtLimit(state)) {
-        document.getElementById('send-btn').disabled = false;
-        document.getElementById('voice-btn').disabled = false;
+      elements.sendButton.disabled = false;
+      if (elements.voiceButton && !isAtLimit(state)) {
+        elements.voiceButton.disabled = false;
       }
       
-      renderMessages(state, config);
-      saveHistory(state, config);
-      updateUI(state);
-      input.focus();
+      renderMessages(state, elements, config);
+      saveHistoryToSession(state, config);
+      updateUI(state, elements);
+      elements.inputField.focus();
     }
   }
 
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  function detectLanguage(text) {
-    if (!text) return 'he';
-    let heb = 0, total = 0;
-    for (let char of text) {
-      if (/\p{L}/u.test(char)) {
-        total++;
-        if (char >= '\u0590' && char <= '\u05FF') heb++;
-      }
-    }
-    return (total > 0 && (heb / total) > 0.3) ? 'he' : 'en';
-  }
-
-  function createAvatar(role, config) {
-    if (role === 'user') {
-      return config.userAvatar 
-        ? `<img src="${escapeHtml(config.userAvatar)}" alt="User" />`
-        : 'אני';
-    } else {
-      return config.botAvatar 
-        ? `<img src="${escapeHtml(config.botAvatar)}" alt="${escapeHtml(config.botName)}" />`
-        : escapeHtml(config.botName.charAt(0));
-    }
-  }
-
-  console.log('✅ Chat Widget ready');
+  console.log('✅ Chat Widget with Voice (WhatsApp Style) initialized successfully');
 })();
