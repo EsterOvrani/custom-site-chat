@@ -1,4 +1,4 @@
-// frontend/public/chat-widget.js - גרסה נקייה בלי voice indicator
+// frontend/public/chat-widget.js - גרסה עם Analytics
 
 (function() {
   'use strict';
@@ -587,14 +587,51 @@
       inputContainer: document.getElementById('input-container')
     };
 
+    // ⭐ פונקציית Analytics - שליחה לשרת
+    async function endSession() {
+      // רק אם יש שיחה
+      if (state.history.length === 0) {
+        return;
+      }
+      
+      console.log('📊 Sending analytics - session ended');
+      
+      try {
+        await fetch(`${config.apiUrl}/api/analytics/session-ended`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            secretKey: config.secretKey,
+            conversationHistory: state.history
+          }),
+          keepalive: true  // חשוב ל-beforeunload!
+        });
+        
+        console.log('✅ Analytics sent successfully');
+      } catch (err) {
+        console.error('❌ Analytics error:', err);
+      }
+    }
+
     if (config.voiceEnabled) {
       setupVoiceRecognition(state, elements);
     }
 
     loadHistoryFromSession(state, elements, config);
 
+    // ⭐ עזיבת דף / ריענון - שלח אנליטיקס
+    window.addEventListener('beforeunload', async () => {
+      await endSession();
+    });
+
     elements.toggleButton.addEventListener('click', () => toggleWidget(state, elements));
-    elements.resetButton.addEventListener('click', () => resetChat(state, elements, config));
+    
+    // ⭐ כפתור "התחל שיחה חדשה" - שלח אנליטיקס לפני איפוס
+    elements.resetButton.addEventListener('click', async () => {
+      await endSession();
+      resetChat(state, elements, config);
+    });
+    
     elements.sendButton.addEventListener('click', () => sendMessage(state, elements, config));
     
     if (elements.voiceButton) {

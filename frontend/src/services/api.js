@@ -154,4 +154,24 @@ export const documentAPI = {
   }
 };
 
+// ==================== Analytics API ====================
+export const analyticsAPI = {
+  // Get statistics
+  getStats: () => api.get('/analytics/stats'),
+  
+  // Get questions
+  getQuestions: () => api.get('/analytics/questions'),
+  
+  // Download questions Excel
+  downloadQuestionsExcel: () => api.get('/analytics/questions/download', {
+    responseType: 'blob'
+  }),
+  
+  // Get categories
+  getCategories: () => api.get('/analytics/categories'),
+  
+  // Clear all analytics
+  clearAll: () => api.delete('/analytics/clear-all')
+};
+
 export default api;

@@ -45,6 +45,9 @@ public class User implements UserDetails {
     @Column(name = "profile_picture_url")
     private String profilePictureUrl;
 
+    @Column(name = "business_type")
+    private String businessType;
+
     // ==================== Auth Provider ====================
 
     @Enumerated(EnumType.STRING)

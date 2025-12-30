@@ -5,6 +5,8 @@ import { authAPI, collectionAPI, documentAPI } from '../../services/api';
 import DocumentsList from './DocumentsList';
 import CollectionSettings from './CollectionSettings';
 import UploadDocumentModal from './UploadDocumentModal';
+import Analytics from './Analytics';
+
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -261,42 +263,57 @@ const Dashboard = () => {
       {/* Main Content */}
       <div className="main-content">
         {/* Tabs */}
-        <div className="tabs">
-          <button
-            className={`tab ${activeTab === 'documents' ? 'active' : ''}`}
-            onClick={() => setActiveTab('documents')}
-          >
-            📄 המסמכים שלי ({documents.length})
-          </button>
-          <button
-            className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
-          >
-            ⚙️ קוד הטמעה והגדרות
-          </button>
-        </div>
+      <div className="tabs">
+        <button
+          className={`tab ${activeTab === 'documents' ? 'active' : ''}`}
+          onClick={() => setActiveTab('documents')}
+        >
+          📄 המסמכים שלי ({documents.length})
+        </button>
+        
+        {/* ⭐ טאב חדש */}
+        <button
+          className={`tab ${activeTab === 'analytics' ? 'active' : ''}`}
+          onClick={() => setActiveTab('analytics')}
+        >
+          📊 אנליטיקס
+        </button>
+        
+        <button
+          className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('settings')}
+        >
+          ⚙️ קוד הטמעה והגדרות
+        </button>
+      </div>
 
         {/* Tab Content */}
-        <div className="tab-content">
-          {activeTab === 'documents' && (
-            <DocumentsList
-              documents={documents}
-              onUploadNew={() => setShowUploadModal(true)}
-              onDelete={handleDeleteDocument}
-              onReorder={handleReorderDocuments}
-              loading={loading}
-            />
-          )}
+      <div className="tab-content">
+        {activeTab === 'documents' && (
+          <DocumentsList
+            documents={documents}
+            onUploadNew={() => setShowUploadModal(true)}
+            onDelete={handleDeleteDocument}
+            onReorder={handleReorderDocuments}
+            loading={loading}
+          />
+        )}
 
-          {activeTab === 'settings' && collection && (
-            <CollectionSettings
-              collection={collection}
-              onRegenerateKey={handleRegenerateKey}
-              loading={loading}
-            />
-          )}
-        </div>
+        {/* ⭐ תוכן טאב חדש */}
+        {activeTab === 'analytics' && (
+          <Analytics />
+        )}
+
+        {activeTab === 'settings' && collection && (
+          <CollectionSettings
+            collection={collection}
+            onRegenerateKey={handleRegenerateKey}
+            loading={loading}
+          />
+        )}
       </div>
+      
+    </div>
 
       {/* Modals */}
       {showUploadModal && (

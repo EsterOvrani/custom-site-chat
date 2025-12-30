@@ -44,6 +44,7 @@ public class SecurityConfiguration {
 
                 // Public Query API (without authentication)
                 .requestMatchers("/api/query/ask").permitAll()
+                .requestMatchers("/api/analytics/session-ended").permitAll()
 
                 // all the another need authentication
                 .anyRequest().authenticated()
