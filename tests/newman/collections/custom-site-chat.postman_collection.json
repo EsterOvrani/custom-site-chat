@@ -1375,10 +1375,486 @@
       ]
     },
     {
-      "name": "9. Cleanup",
+      "name": "9. Analytics API",
       "item": [
         {
-          "name": "9.1 Delete Document",
+          "name": "9.1 Get Analytics Stats (Empty)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Stats received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data).to.be.an('object');",
+                  "});",
+                  "",
+                  "pm.test('Stats have required fields', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data;",
+                  "    ",
+                  "    pm.expect(data.totalSessions).to.be.a('number');",
+                  "    pm.expect(data.totalQuestions).to.be.a('number');",
+                  "    pm.expect(data.uniqueQuestions).to.be.a('number');",
+                  "    pm.expect(data.totalCategories).to.be.a('number');",
+                  "    pm.expect(data.uniqueCategories).to.be.a('number');",
+                  "    pm.expect(data.questionsProcessed).to.be.a('boolean');",
+                  "    pm.expect(data.categoriesProcessed).to.be.a('boolean');",
+                  "});",
+                  "",
+                  "pm.test('Initial stats are zero', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data;",
+                  "    ",
+                  "    pm.expect(data.totalSessions).to.eql(0);",
+                  "    pm.expect(data.totalQuestions).to.eql(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stats"]
+            }
+          }
+        },
+        {
+          "name": "9.2 Send Session Data (Public)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Session accepted', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.message).to.include('processed');",
+                  "});",
+                  "",
+                  "// Wait 3 seconds for async processing",
+                  "console.log('Waiting 3 seconds for async analytics processing...');",
+                  "setTimeout(function() {}, 3000);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"secretKey\": \"{{secretKey}}\",\n    \"conversationHistory\": [\n        {\n            \"role\": \"user\",\n            \"content\": \"האם יש משלוח חינם?\"\n        },\n        {\n            \"role\": \"assistant\",\n            \"content\": \"אני לא בטוח. אין לי מידע על משלוח חינם.\"\n        },\n        {\n            \"role\": \"user\",\n            \"content\": \"כמה זמן לוקח משלוח?\"\n        },\n        {\n            \"role\": \"assistant\",\n            \"content\": \"מצטער, אין לי מידע על זמני משלוח.\"\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/session-ended",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "session-ended"]
+            }
+          }
+        },
+        {
+          "name": "9.3 Send Another Session (Different Topics)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Session accepted', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});",
+                  "",
+                  "// Wait 3 seconds for async processing",
+                  "console.log('Waiting 3 seconds for async analytics processing...');",
+                  "setTimeout(function() {}, 3000);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"secretKey\": \"{{secretKey}}\",\n    \"conversationHistory\": [\n        {\n            \"role\": \"user\",\n            \"content\": \"האם אפשר להחזיר מוצרים?\"\n        },\n        {\n            \"role\": \"assistant\",\n            \"content\": \"מצטער, אין לי מידע על מדיניות ההחזרות.\"\n        },\n        {\n            \"role\": \"user\",\n            \"content\": \"מה המחיר של המוצר?\"\n        },\n        {\n            \"role\": \"assistant\",\n            \"content\": \"לא מצאתי מידע על מחירים.\"\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/session-ended",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "session-ended"]
+            }
+          }
+        },
+        {
+          "name": "9.4 Wait for Processing (5 sec)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Wait 5 seconds for OpenAI processing",
+                  "console.log('Waiting 5 seconds for OpenAI to process analytics...');",
+                  "setTimeout(function() {}, 5000);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Stats updated', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data;",
+                  "    ",
+                  "    console.log('Analytics Stats:', data);",
+                  "    ",
+                  "    // Should have at least 2 sessions and some questions",
+                  "    pm.expect(data.totalSessions).to.be.greaterThan(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stats"]
+            }
+          }
+        },
+        {
+          "name": "9.5 Get Questions (Raw Data)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Questions received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Log questions for debugging",
+                  "const jsonData = pm.response.json();",
+                  "console.log('Questions count:', jsonData.data.length);",
+                  "if (jsonData.data.length > 0) {",
+                  "    console.log('Sample question:', jsonData.data[0]);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/questions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "questions"]
+            }
+          }
+        },
+        {
+          "name": "9.6 Get Categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Categories received', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Categories have required fields', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.data.length > 0) {",
+                  "        const cat = jsonData.data[0];",
+                  "        pm.expect(cat.category).to.be.a('string');",
+                  "        pm.expect(cat.count).to.be.a('number');",
+                  "        pm.expect(cat.percentage).to.be.a('number');",
+                  "    }",
+                  "});",
+                  "",
+                  "// Log categories for debugging",
+                  "const jsonData = pm.response.json();",
+                  "console.log('Categories count:', jsonData.data.length);",
+                  "if (jsonData.data.length > 0) {",
+                  "    console.log('Categories:', jsonData.data);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "categories"]
+            }
+          }
+        },
+        {
+          "name": "9.7 Download Questions Excel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is Excel file', function () {",
+                  "    const contentType = pm.response.headers.get('Content-Type');",
+                  "    pm.expect(contentType).to.include('spreadsheetml');",
+                  "});",
+                  "",
+                  "pm.test('Content-Disposition header present', function () {",
+                  "    const disposition = pm.response.headers.get('Content-Disposition');",
+                  "    pm.expect(disposition).to.include('attachment');",
+                  "    pm.expect(disposition).to.include('.xlsx');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/questions/download",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "questions", "download"]
+            }
+          }
+        },
+        {
+          "name": "9.8 Session with Invalid Secret Key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test('Error response', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.false;",
+                  "    pm.expect(jsonData.error).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"secretKey\": \"sk_invalid_key_12345\",\n    \"conversationHistory\": [\n        {\n            \"role\": \"user\",\n            \"content\": \"Test?\"\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/session-ended",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "session-ended"]
+            }
+          }
+        },
+        {
+          "name": "9.9 Analytics - Unauthorized",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 or 403', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stats"]
+            }
+          }
+        },
+        {
+          "name": "9.10 Clear All Analytics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Clear successful', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/clear-all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "clear-all"]
+            }
+          }
+        },
+        {
+          "name": "9.11 Verify Analytics Cleared",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Stats reset to zero', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data;",
+                  "    ",
+                  "    pm.expect(data.totalSessions).to.eql(0);",
+                  "    pm.expect(data.totalQuestions).to.eql(0);",
+                  "    pm.expect(data.uniqueQuestions).to.eql(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Cleanup",
+      "item": [
+        {
+          "name": "10.1 Delete Document",
           "event": [
             {
               "listen": "test",
@@ -1413,7 +1889,7 @@
           }
         },
         {
-          "name": "9.2 Verify Document Deleted",
+          "name": "10.2 Verify Document Deleted",
           "event": [
             {
               "listen": "test",
@@ -1450,7 +1926,7 @@
           }
         },
         {
-          "name": "9.3 Logout",
+          "name": "10.3 Logout",
           "event": [
             {
               "listen": "test",
@@ -1490,10 +1966,10 @@
       ]
     },
     {
-      "name": "10. Error Handling",
+      "name": "11. Error Handling",
       "item": [
         {
-          "name": "10.1 Invalid Token",
+          "name": "11.1 Invalid Token",
           "event": [
             {
               "listen": "test",
@@ -1523,7 +1999,7 @@
           }
         },
         {
-          "name": "10.2 Non-existent Document",
+          "name": "11.2 Non-existent Document",
           "event": [
             {
               "listen": "prerequest",
@@ -1578,7 +2054,7 @@
           }
         },
         {
-          "name": "10.3 Duplicate Email Registration",
+          "name": "11.3 Duplicate Email Registration",
           "event": [
             {
               "listen": "test",
