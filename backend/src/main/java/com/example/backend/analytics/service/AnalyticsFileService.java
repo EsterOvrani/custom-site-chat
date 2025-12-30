@@ -2,19 +2,20 @@ package com.example.backend.analytics.service;
 
 import com.example.backend.analytics.dto.CategoryStats;
 import com.example.backend.analytics.dto.QuestionSummary;
+import com.example.backend.common.infrastructure.storage.S3Service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,259 +23,324 @@ import java.util.List;
 public class AnalyticsFileService {
 
     private final ObjectMapper objectMapper;
-    private static final String BASE_PATH = "storage";
-
-    // ==================== Directory Management ====================
-
-    public void ensureAnalyticsDirectoryExists(Long userId) {
-        try {
-            Path analyticsPath = getAnalyticsPath(userId);
-            if (!Files.exists(analyticsPath)) {
-                Files.createDirectories(analyticsPath);
-                log.info("✅ Created analytics directory for user: {}", userId);
-            }
-        } catch (IOException e) {
-            log.error("❌ Failed to create analytics directory", e);
-            throw new RuntimeException("נכשל ביצירת תיקיית אנליטיקס", e);
-        }
+    private final S3Service s3Service;  // ⭐ השתמש ב-S3Service הקיים!
+    
+    // ==================== S3 Key Generation ====================
+    
+    private String getAnalyticsPrefix(Long userId) {
+        return "user_" + userId + "/analytics/";
+        // מחזיר: user_1/analytics/
     }
-
-    private Path getAnalyticsPath(Long userId) {
-        return Paths.get(BASE_PATH, "user_" + userId, "analytics");
+    
+    private String getQuestionsKey(Long userId) {
+        return getAnalyticsPrefix(userId) + "questions.txt";
+        // מחזיר: user_1/analytics/questions.txt
     }
-
-    private Path getQuestionsFilePath(Long userId) {
-        return getAnalyticsPath(userId).resolve("questions.txt");
+    
+    private String getCategoriesKey(Long userId) {
+        return getAnalyticsPrefix(userId) + "categories.txt";
+        // מחזיר: user_1/analytics/categories.txt
     }
-
-    private Path getCategoriesFilePath(Long userId) {
-        return getAnalyticsPath(userId).resolve("categories.txt");
-    }
-
-    // ==================== Questions File ====================
-
+    
+    // ==================== Questions - RAW ====================
+    
     public void appendRawQuestions(Long userId, List<String> questions) {
         if (questions == null || questions.isEmpty()) {
             return;
         }
-
+        
         try {
-            ensureAnalyticsDirectoryExists(userId);
-            Path questionsFile = getQuestionsFilePath(userId);
-
-            if (!Files.exists(questionsFile)) {
-                Files.createFile(questionsFile);
+            String key = getQuestionsKey(userId);
+            
+            // 1. קרא תוכן קיים (אם יש)
+            String existingContent = "";
+            if (s3Service.fileExists(key)) {
+                try (InputStream is = s3Service.downloadFile(key)) {
+                    existingContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            } else {
+                log.info("Creating new questions file for user {}", userId);
             }
-
+            
+            // 2. הוסף שורות חדשות
+            StringBuilder newContent = new StringBuilder(existingContent);
             for (String question : questions) {
-                Files.writeString(questionsFile,
-                        question + System.lineSeparator(),
-                        StandardOpenOption.APPEND);
+                newContent.append(question).append("\n");
             }
-
-            log.info("✅ Appended {} raw questions for user {}", questions.size(), userId);
-
-        } catch (IOException e) {
-            log.error("❌ Failed to append questions", e);
-            throw new RuntimeException("נכשל בשמירת שאלות", e);
+            
+            // 3. שמור חזרה ל-S3
+            byte[] bytes = newContent.toString().getBytes(StandardCharsets.UTF_8);
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
+                s3Service.uploadFile(bais, key, "text/plain; charset=utf-8", bytes.length);
+            }
+            
+            log.info("✅ Appended {} raw questions for user {} to S3", questions.size(), userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to append questions to S3", e);
+            throw new RuntimeException("נכשל בשמירת שאלות ל-S3", e);
         }
     }
-
+    
     public List<String> readRawQuestions(Long userId) {
         try {
-            Path questionsFile = getQuestionsFilePath(userId);
-
-            if (!Files.exists(questionsFile)) {
+            String key = getQuestionsKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
+                log.info("No questions file found for user {}", userId);
                 return new ArrayList<>();
             }
-
-            return Files.readAllLines(questionsFile);
-
-        } catch (IOException e) {
-            log.error("❌ Failed to read questions", e);
-            throw new RuntimeException("נכשל בקריאת שאלות", e);
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
+            // פיצול לשורות
+            return content.lines()
+                    .map(String::trim)
+                    .filter(line -> !line.isEmpty())
+                    .collect(Collectors.toList());
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to read questions from S3", e);
+            throw new RuntimeException("נכשל בקריאת שאלות מ-S3", e);
         }
     }
-
+    
+    // ==================== Questions - PROCESSED ====================
+    
     public void saveProcessedQuestions(Long userId, List<QuestionSummary> summaries) {
         try {
-            ensureAnalyticsDirectoryExists(userId);
-            Path questionsFile = getQuestionsFilePath(userId);
-
+            String key = getQuestionsKey(userId);
+            
+            // המרה ל-JSON
             String json = objectMapper.writerWithDefaultPrettyPrinter()
                     .writeValueAsString(summaries);
-
-            Files.writeString(questionsFile, json);
-
-            log.info("✅ Saved {} processed questions for user {}", summaries.size(), userId);
-
-        } catch (IOException e) {
-            log.error("❌ Failed to save processed questions", e);
-            throw new RuntimeException("נכשל בשמירת שאלות מעובדות", e);
+            
+            // שמירה ל-S3
+            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
+                s3Service.uploadFile(bais, key, "application/json; charset=utf-8", bytes.length);
+            }
+            
+            log.info("✅ Saved {} processed questions for user {} to S3", summaries.size(), userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to save processed questions to S3", e);
+            throw new RuntimeException("נכשל בשמירת שאלות מעובדות ל-S3", e);
         }
     }
-
+    
     public List<QuestionSummary> readProcessedQuestions(Long userId) {
         try {
-            Path questionsFile = getQuestionsFilePath(userId);
-
-            if (!Files.exists(questionsFile)) {
+            String key = getQuestionsKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
+                log.info("No processed questions found for user {}", userId);
                 return new ArrayList<>();
             }
-
-            String content = Files.readString(questionsFile);
-
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
+            // בדוק אם זה JSON
             if (content.trim().startsWith("[")) {
-                return objectMapper.readValue(content,
-                        new TypeReference<List<QuestionSummary>>() {});
+                return objectMapper.readValue(content, 
+                    new TypeReference<List<QuestionSummary>>() {});
             } else {
+                // עדיין קובץ טקסט גולמי
                 return new ArrayList<>();
             }
-
+            
         } catch (IOException e) {
-            log.error("❌ Failed to read processed questions", e);
-            throw new RuntimeException("נכשל בקריאת שאלות מעובדות", e);
+            log.error("❌ Failed to read processed questions from S3", e);
+            throw new RuntimeException("נכשל בקריאת שאלות מעובדות מ-S3", e);
         }
     }
-
+    
     public boolean areQuestionsProcessed(Long userId) {
         try {
-            Path questionsFile = getQuestionsFilePath(userId);
-
-            if (!Files.exists(questionsFile)) {
+            String key = getQuestionsKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
                 return false;
             }
-
-            String content = Files.readString(questionsFile);
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
             return content.trim().startsWith("[");
-
-        } catch (IOException e) {
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to check questions status", e);
             return false;
         }
     }
-
-    // ==================== Categories File ====================
-
+    
+    // ==================== Categories - RAW ====================
+    
     public void appendRawCategories(Long userId, List<String> categories) {
         if (categories == null || categories.isEmpty()) {
             return;
         }
-
+        
         try {
-            ensureAnalyticsDirectoryExists(userId);
-            Path categoriesFile = getCategoriesFilePath(userId);
-
-            if (!Files.exists(categoriesFile)) {
-                Files.createFile(categoriesFile);
+            String key = getCategoriesKey(userId);
+            
+            // 1. קרא תוכן קיים
+            String existingContent = "";
+            if (s3Service.fileExists(key)) {
+                try (InputStream is = s3Service.downloadFile(key)) {
+                    existingContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            } else {
+                log.info("Creating new categories file for user {}", userId);
             }
-
+            
+            // 2. הוסף שורות חדשות
+            StringBuilder newContent = new StringBuilder(existingContent);
             for (String category : categories) {
-                Files.writeString(categoriesFile,
-                        category + System.lineSeparator(),
-                        StandardOpenOption.APPEND);
+                newContent.append(category).append("\n");
             }
-
-            log.info("✅ Appended {} raw categories for user {}", categories.size(), userId);
-
-        } catch (IOException e) {
-            log.error("❌ Failed to append categories", e);
-            throw new RuntimeException("נכשל בשמירת קטגוריות", e);
+            
+            // 3. שמור חזרה
+            byte[] bytes = newContent.toString().getBytes(StandardCharsets.UTF_8);
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
+                s3Service.uploadFile(bais, key, "text/plain; charset=utf-8", bytes.length);
+            }
+            
+            log.info("✅ Appended {} raw categories for user {} to S3", categories.size(), userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to append categories to S3", e);
+            throw new RuntimeException("נכשל בשמירת קטגוריות ל-S3", e);
         }
     }
-
+    
     public List<String> readRawCategories(Long userId) {
         try {
-            Path categoriesFile = getCategoriesFilePath(userId);
-
-            if (!Files.exists(categoriesFile)) {
+            String key = getCategoriesKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
+                log.info("No categories file found for user {}", userId);
                 return new ArrayList<>();
             }
-
-            return Files.readAllLines(categoriesFile);
-
-        } catch (IOException e) {
-            log.error("❌ Failed to read categories", e);
-            throw new RuntimeException("נכשל בקריאת קטגוריות", e);
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
+            return content.lines()
+                    .map(String::trim)
+                    .filter(line -> !line.isEmpty())
+                    .collect(Collectors.toList());
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to read categories from S3", e);
+            throw new RuntimeException("נכשל בקריאת קטגוריות מ-S3", e);
         }
     }
-
+    
+    // ==================== Categories - PROCESSED ====================
+    
     public void saveProcessedCategories(Long userId, List<CategoryStats> stats) {
         try {
-            ensureAnalyticsDirectoryExists(userId);
-            Path categoriesFile = getCategoriesFilePath(userId);
-
+            String key = getCategoriesKey(userId);
+            
             String json = objectMapper.writerWithDefaultPrettyPrinter()
                     .writeValueAsString(stats);
-
-            Files.writeString(categoriesFile, json);
-
-            log.info("✅ Saved {} processed categories for user {}", stats.size(), userId);
-
-        } catch (IOException e) {
-            log.error("❌ Failed to save processed categories", e);
-            throw new RuntimeException("נכשל בשמירת קטגוריות מעובדות", e);
+            
+            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
+                s3Service.uploadFile(bais, key, "application/json; charset=utf-8", bytes.length);
+            }
+            
+            log.info("✅ Saved {} processed categories for user {} to S3", stats.size(), userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to save processed categories to S3", e);
+            throw new RuntimeException("נכשל בשמירת קטגוריות מעובדות ל-S3", e);
         }
     }
-
+    
     public List<CategoryStats> readProcessedCategories(Long userId) {
         try {
-            Path categoriesFile = getCategoriesFilePath(userId);
-
-            if (!Files.exists(categoriesFile)) {
+            String key = getCategoriesKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
+                log.info("No processed categories found for user {}", userId);
                 return new ArrayList<>();
             }
-
-            String content = Files.readString(categoriesFile);
-
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
             if (content.trim().startsWith("[")) {
-                return objectMapper.readValue(content,
-                        new TypeReference<List<CategoryStats>>() {});
+                return objectMapper.readValue(content, 
+                    new TypeReference<List<CategoryStats>>() {});
             } else {
                 return new ArrayList<>();
             }
-
+            
         } catch (IOException e) {
-            log.error("❌ Failed to read processed categories", e);
-            throw new RuntimeException("נכשל בקריאת קטגוריות מעובדות", e);
+            log.error("❌ Failed to read processed categories from S3", e);
+            throw new RuntimeException("נכשל בקריאת קטגוריות מעובדות מ-S3", e);
         }
     }
-
+    
     public boolean areCategoriesProcessed(Long userId) {
         try {
-            Path categoriesFile = getCategoriesFilePath(userId);
-
-            if (!Files.exists(categoriesFile)) {
+            String key = getCategoriesKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
                 return false;
             }
-
-            String content = Files.readString(categoriesFile);
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
             return content.trim().startsWith("[");
-
-        } catch (IOException e) {
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to check categories status", e);
             return false;
         }
     }
-
+    
     // ==================== Clear Data ====================
-
+    
     public void clearAllAnalytics(Long userId) {
         try {
-            Path questionsFile = getQuestionsFilePath(userId);
-            Path categoriesFile = getCategoriesFilePath(userId);
-
-            if (Files.exists(questionsFile)) {
-                Files.delete(questionsFile);
+            String questionsKey = getQuestionsKey(userId);
+            String categoriesKey = getCategoriesKey(userId);
+            
+            // מחק questions
+            if (s3Service.fileExists(questionsKey)) {
+                s3Service.deleteFile(questionsKey);
             }
-
-            if (Files.exists(categoriesFile)) {
-                Files.delete(categoriesFile);
+            
+            // מחק categories
+            if (s3Service.fileExists(categoriesKey)) {
+                s3Service.deleteFile(categoriesKey);
             }
-
-            log.info("✅ Cleared analytics for user {}", userId);
-
-        } catch (IOException e) {
-            log.error("❌ Failed to clear analytics", e);
-            throw new RuntimeException("נכשל במחיקת אנליטיקס", e);
+            
+            log.info("✅ Cleared analytics for user {} from S3", userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to clear analytics from S3", e);
+            throw new RuntimeException("נכשל במחיקת אנליטיקס מ-S3", e);
         }
     }
 }
+
+
