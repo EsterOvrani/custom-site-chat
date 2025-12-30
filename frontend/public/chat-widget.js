@@ -1,4 +1,4 @@
-// frontend/public/chat-widget.js - עם עיצוב חדש ולוגיקה מלאה של הקלטת קול
+// frontend/public/chat-widget.js - גרסה מעודכנת עם תיקון זיהוי קול
 
 (function() {
   'use strict';
@@ -23,7 +23,12 @@
       botAvatar: window.CHAT_WIDGET_BOT_AVATAR || null,
       userAvatar: window.CHAT_WIDGET_USER_AVATAR || null,
       maxHistoryMessages: 10,
-      voiceEnabled: true
+      voiceEnabled: true,
+      defaultLanguage: 'he-IL',
+      supportedLanguages: [
+        { code: 'he-IL', name: 'עברית', flag: '🇮🇱' },
+        { code: 'en-US', name: 'English', flag: '🇺🇸' }
+      ]
     };
 
     console.log('🔧 Widget Config:', WIDGET_CONFIG);
@@ -268,6 +273,44 @@
         display: block;
       }
 
+      /* Language Selector */
+      .language-selector {
+        display: flex;
+        gap: 8px;
+        padding: 8px 16px;
+        background: #f8f9ff;
+        border-bottom: 1px solid #e1e8ed;
+        justify-content: center;
+      }
+
+      .lang-btn {
+        padding: 6px 12px;
+        border: 1px solid #e1e8ed;
+        border-radius: 20px;
+        background: white;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .lang-btn:hover {
+        background: #f0f0f0;
+      }
+
+      .lang-btn.active {
+        background: ${config.primaryColor};
+        color: white;
+        border-color: ${config.primaryColor};
+      }
+
+      .lang-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
       /* Recording Bar */
       .recording-bar {
         background: #fce8e6;
@@ -277,7 +320,7 @@
         align-items: center;
         justify-content: space-between;
         font-size: 13px;
-        border-top: 1px solid #f4b4af;
+        border-bottom: 1px solid #f4b4af;
       }
 
       .recording-bar.active {
@@ -560,6 +603,22 @@
       .browser-warning.show {
         display: block;
       }
+
+      /* Auto Language Detection Info */
+      .auto-lang-info {
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        text-align: center;
+        margin-bottom: 8px;
+        display: none;
+      }
+
+      .auto-lang-info.show {
+        display: block;
+      }
     `;
 
     const styleSheet = document.createElement('style');
@@ -569,6 +628,17 @@
 
   // ==================== HTML Creation ====================
   function createWidgetHTML(config) {
+    const languageButtons = config.supportedLanguages.map((lang, index) => `
+      <button 
+        class="lang-btn ${index === 0 ? 'active' : ''}" 
+        id="lang-btn-${lang.code}"
+        data-lang="${lang.code}"
+      >
+        <span>${lang.flag}</span>
+        <span>${lang.name}</span>
+      </button>
+    `).join('');
+
     const widgetHTML = `
       <div class="chat-widget-container">
         <button class="chat-widget-button" id="chat-widget-toggle">💬</button>
@@ -582,16 +652,25 @@
               <div class="message-counter" id="message-counter">0/10 הודעות</div>
             </div>
           </div>
+          ${config.voiceEnabled ? `
+          <div class="language-selector" id="language-selector">
+            ${languageButtons}
+          </div>
+          ` : ''}
           <div class="limit-warning" id="limit-warning">
             ⚠️ הגעת למגבלת 10 הודעות. לחץ על "התחל שיחה חדשה".
           </div>
           <div class="browser-warning" id="browser-warning">
             ⚠️ הדפדפן שלך לא תומך בהקלטת קול
           </div>
+          <div class="auto-lang-info" id="auto-lang-info">
+            🌍 זיהוי שפה אוטומטי מופעל
+          </div>
           <div class="recording-bar" id="recording-bar">
             <div class="recording-timer">
               <div class="recording-dot"></div>
-              <span>מקליט <span id="recording-timer">0:00</span></span>
+              <span id="recording-lang-display">מקליט</span>
+              <span id="recording-timer">0:00</span>
             </div>
             <button class="cancel-btn" id="cancel-recording-btn">ביטול</button>
           </div>
@@ -658,8 +737,11 @@
       voiceTranscript: null,
       voiceDuration: null,
       recognition: null,
+      currentLanguage: config.defaultLanguage,
       sessionId: generateSessionId(),
-      maxHistoryMessages: config.maxHistoryMessages
+      maxHistoryMessages: config.maxHistoryMessages,
+      autoLanguageDetection: true,
+      currentTranscript: '' // ✅ משתנה לשמירת טקסט נוכחי
     };
 
     const elements = {
@@ -675,20 +757,22 @@
       browserWarning: document.getElementById('browser-warning'),
       recordingBar: document.getElementById('recording-bar'),
       recordingTimer: document.getElementById('recording-timer'),
+      recordingLangDisplay: document.getElementById('recording-lang-display'),
       cancelRecordingBtn: document.getElementById('cancel-recording-btn'),
       inputContainer: document.getElementById('input-container'),
       voicePreview: document.getElementById('voice-preview'),
       voicePreviewText: document.getElementById('voice-preview-text'),
       voicePreviewDuration: document.getElementById('voice-preview-duration'),
-      voicePreviewDelete: document.getElementById('voice-preview-delete')
+      voicePreviewDelete: document.getElementById('voice-preview-delete'),
+      languageSelector: document.getElementById('language-selector'),
+      autoLangInfo: document.getElementById('auto-lang-info')
     };
 
-    // בדיקה אם הדפדפן תומך ב-Web Speech API
     if (config.voiceEnabled) {
       setupVoiceRecognition(state, elements, config);
+      setupLanguageButtons(state, elements, config);
     }
 
-    // טען היסטוריה מ-sessionStorage
     loadHistoryFromSession(state, elements, config);
 
     elements.toggleButton.addEventListener('click', () => toggleWidget(state, elements));
@@ -714,10 +798,38 @@
       }
     });
 
-    // Auto-resize textarea
     elements.inputField.addEventListener('input', () => {
       elements.inputField.style.height = 'auto';
       elements.inputField.style.height = elements.inputField.scrollHeight + 'px';
+    });
+  }
+
+  // ==================== 🌍 Language Buttons Setup ====================
+  function setupLanguageButtons(state, elements, config) {
+    config.supportedLanguages.forEach(lang => {
+      const btn = document.getElementById(`lang-btn-${lang.code}`);
+      if (btn) {
+        btn.addEventListener('click', () => {
+          state.currentLanguage = lang.code;
+          state.autoLanguageDetection = false;
+          
+          if (state.recognition) {
+            state.recognition.lang = lang.code;
+            console.log('🌍 Language manually set to:', lang.code);
+          }
+          
+          config.supportedLanguages.forEach(l => {
+            const b = document.getElementById(`lang-btn-${l.code}`);
+            if (b) {
+              b.classList.toggle('active', l.code === lang.code);
+            }
+          });
+          
+          if (elements.autoLangInfo) {
+            elements.autoLangInfo.classList.remove('show');
+          }
+        });
+      }
     });
   }
 
@@ -731,6 +843,9 @@
       if (elements.voiceButton) {
         elements.voiceButton.style.display = 'none';
       }
+      if (elements.languageSelector) {
+        elements.languageSelector.style.display = 'none';
+      }
       elements.browserWarning.classList.add('show');
       return;
     }
@@ -738,27 +853,38 @@
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'he-IL';
+    recognition.lang = state.currentLanguage;
     recognition.maxAlternatives = 1;
 
     let finalTranscript = '';
     let interimTranscript = '';
+    let detectedLanguageSwitch = false;
 
     recognition.onstart = () => {
-      console.log('🎤 Voice recording started');
+      console.log('🎤 Voice recording started with language:', recognition.lang);
       state.isRecording = true;
       state.recordingStartTime = Date.now();
       finalTranscript = '';
       interimTranscript = '';
+      detectedLanguageSwitch = false;
       
       elements.voiceButton.classList.add('recording');
       elements.recordingBar.classList.add('active');
       elements.inputContainer.classList.add('recording');
-      elements.inputField.placeholder = 'מקשיב...';
+      
+      const currentLang = config.supportedLanguages.find(l => l.code === recognition.lang);
+      const langName = currentLang ? currentLang.name : 'Unknown';
+      elements.inputField.placeholder = `מקשיב (${langName})...`;
+      elements.recordingLangDisplay.textContent = `מקליט (${langName})`;
+      
       elements.inputField.disabled = true;
       elements.sendButton.disabled = true;
       
-      // התחל טיימר
+      config.supportedLanguages.forEach(lang => {
+        const btn = document.getElementById(`lang-btn-${lang.code}`);
+        if (btn) btn.disabled = true;
+      });
+      
       state.recordingTimer = setInterval(() => {
         const elapsed = Math.floor((Date.now() - state.recordingStartTime) / 1000);
         const minutes = Math.floor(elapsed / 60);
@@ -779,14 +905,57 @@
         }
       }
       
-      // הצג interim results בשדה הקלט
       const fullText = finalTranscript + interimTranscript;
       elements.inputField.value = fullText;
       elements.inputField.style.height = 'auto';
       elements.inputField.style.height = elements.inputField.scrollHeight + 'px';
       
-      console.log('🎤 Interim:', interimTranscript);
+      // ✅ שמור את הטקסט הסופי ב-state
+      state.currentTranscript = finalTranscript.trim();
+      
       console.log('🎤 Final:', finalTranscript);
+      console.log('🎤 Interim:', interimTranscript);
+      console.log('🎤 Saved in state:', state.currentTranscript);
+      
+      if (state.autoLanguageDetection && !detectedLanguageSwitch && finalTranscript.trim().length > 0) {
+        const detectedLang = detectLanguageFromText(finalTranscript);
+        const currentRecognitionLang = recognition.lang;
+        
+        if (detectedLang && detectedLang !== currentRecognitionLang) {
+          console.log(`🔄 Auto-switching language from ${currentRecognitionLang} to ${detectedLang}`);
+          detectedLanguageSwitch = true;
+          
+          recognition.stop();
+          
+          state.currentLanguage = detectedLang;
+          recognition.lang = detectedLang;
+          
+          config.supportedLanguages.forEach(l => {
+            const b = document.getElementById(`lang-btn-${l.code}`);
+            if (b) {
+              b.classList.toggle('active', l.code === detectedLang);
+            }
+          });
+          
+          if (elements.autoLangInfo) {
+            elements.autoLangInfo.textContent = `🌍 עברתי אוטומטית ל-${config.supportedLanguages.find(l => l.code === detectedLang)?.name}`;
+            elements.autoLangInfo.classList.add('show');
+            setTimeout(() => {
+              elements.autoLangInfo.classList.remove('show');
+            }, 3000);
+          }
+          
+          setTimeout(() => {
+            try {
+              recognition.start();
+            } catch (e) {
+              console.error('Failed to restart recognition:', e);
+            }
+          }, 100);
+          
+          return;
+        }
+      }
     };
 
     recognition.onerror = (event) => {
@@ -795,29 +964,83 @@
       let errorMessage = 'שגיאה בהקלטת קול';
       switch(event.error) {
         case 'no-speech':
-          errorMessage = 'לא זוהה דיבור';
+          errorMessage = 'לא זוהה דיבור - נסה לדבר קרוב יותר למיקרופון';
           break;
         case 'audio-capture':
-          errorMessage = 'לא ניתן לגשת למיקרופון';
+          errorMessage = 'לא ניתן לגשת למיקרופון - בדוק שהוא מחובר ושיש לך הרשאות';
           break;
         case 'not-allowed':
-          errorMessage = 'נדרשת הרשאה למיקרופון';
+          errorMessage = 'נדרשת הרשאה למיקרופון - אפשר גישה בהגדרות הדפדפן';
+          break;
+        case 'network':
+          errorMessage = 'נדרש חיבור אינטרנט לזיהוי קול';
+          break;
+        case 'aborted':
+          if (!detectedLanguageSwitch) {
+            errorMessage = 'ההקלטה בוטלה';
+          } else {
+            return;
+          }
           break;
       }
       
-      alert(errorMessage);
-      stopRecording(state, elements, recognition, false);
+      if (event.error !== 'aborted' || !detectedLanguageSwitch) {
+        alert(errorMessage);
+        stopRecording(state, elements, recognition, false);
+      }
     };
 
     recognition.onend = () => {
       console.log('🎤 Voice recording ended');
+      console.log('🎤 Final transcript at end:', finalTranscript);
       
-      if (state.isRecording) {
-        stopRecording(state, elements, recognition, true);
+      // ✅ שמור את הטקסט הסופי ב-state לפני שנעצור
+      if (finalTranscript.trim().length > 0) {
+        state.currentTranscript = finalTranscript.trim();
+      }
+      
+      if (state.isRecording && !detectedLanguageSwitch) {
+        // ✅ תן זמן קטן ל-onresult לסיים
+        setTimeout(() => {
+          stopRecording(state, elements, recognition, true);
+        }, 300);
       }
     };
 
     state.recognition = recognition;
+  }
+
+  // ==================== 🌍 Language Detection from Text ====================
+  function detectLanguageFromText(text) {
+    if (!text || text.trim().length === 0) return null;
+    
+    let hebrewChars = 0;
+    let englishChars = 0;
+    let totalChars = 0;
+    
+    for (let char of text) {
+      if (/\p{L}/u.test(char)) {
+        totalChars++;
+        if (char >= '\u0590' && char <= '\u05FF') {
+          hebrewChars++;
+        } else if (/[a-zA-Z]/.test(char)) {
+          englishChars++;
+        }
+      }
+    }
+    
+    if (totalChars === 0) return null;
+    
+    const hebrewRatio = hebrewChars / totalChars;
+    const englishRatio = englishChars / totalChars;
+    
+    if (hebrewRatio > 0.3) {
+      return 'he-IL';
+    } else if (englishRatio > 0.3) {
+      return 'en-US';
+    }
+    
+    return null;
   }
 
   function toggleVoiceRecording(state, elements, config) {
@@ -831,10 +1054,8 @@
     }
 
     if (state.isRecording) {
-      // עצור הקלטה
       state.recognition.stop();
     } else {
-      // התחל הקלטה
       try {
         state.recognition.start();
       } catch (error) {
@@ -845,15 +1066,15 @@
   }
 
   function stopRecording(state, elements, recognition, saveTranscript) {
+    console.log('🎤 Stopping recording, saveTranscript:', saveTranscript);
+    
     state.isRecording = false;
     
-    // עצור טיימר
     if (state.recordingTimer) {
       clearInterval(state.recordingTimer);
       state.recordingTimer = null;
     }
     
-    // חשב משך זמן
     const duration = Math.floor((Date.now() - state.recordingStartTime) / 1000);
     state.voiceDuration = duration;
     
@@ -863,57 +1084,56 @@
     elements.recordingTimer.textContent = '0:00';
     elements.inputField.placeholder = 'הקלד הודעה...';
     
-    // קבל את הטקסט המלא
-    let fullTranscript = '';
-    if (saveTranscript) {
-      try {
-        const results = recognition.results;
-        if (results && results.length > 0) {
-          for (let i = 0; i < results.length; i++) {
-            if (results[i].isFinal) {
-              fullTranscript += results[i][0].transcript + ' ';
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to get results:', e);
-      }
+    if (elements.languageSelector) {
+      const langButtons = elements.languageSelector.querySelectorAll('.lang-btn');
+      langButtons.forEach(btn => btn.disabled = false);
+    }
+    
+    // ✅ נסה קודם את הטקסט מ-state, אחר כך מה-input
+    let fullTranscript = state.currentTranscript || elements.inputField.value.trim();
+    
+    console.log('📝 Transcript from state:', state.currentTranscript);
+    console.log('📝 Transcript from input:', elements.inputField.value.trim());
+    console.log('📝 Final transcript:', fullTranscript);
+    
+    if (saveTranscript && fullTranscript.length > 0) {
+      state.voiceTranscript = fullTranscript;
       
-      fullTranscript = fullTranscript.trim();
+      elements.voicePreviewText.textContent = fullTranscript;
+      const minutes = Math.floor(duration / 60);
+      const seconds = duration % 60;
+      elements.voicePreviewDuration.textContent = `🎤 ${minutes}:${seconds.toString().padStart(2, '0')}`;
+      elements.voicePreview.classList.add('show');
       
-      if (fullTranscript.length > 0) {
-        state.voiceTranscript = fullTranscript;
-        
-        // הצג תצוגה מקדימה
-        elements.voicePreviewText.textContent = fullTranscript;
-        const minutes = Math.floor(duration / 60);
-        const seconds = duration % 60;
-        elements.voicePreviewDuration.textContent = `🎤 ${minutes}:${seconds.toString().padStart(2, '0')}`;
-        elements.voicePreview.classList.add('show');
-        
-        // הסתר שדה קלט
-        elements.inputField.value = '';
-        elements.inputField.disabled = true;
-        
-        // הפעל כפתור שליחה
-        elements.sendButton.disabled = false;
-      } else {
-        // אם אין טקסט, פשוט אפס
-        elements.inputField.disabled = false;
-        elements.sendButton.disabled = false;
-        alert('לא זוהה טקסט בהקלטה');
-      }
+      elements.inputField.value = '';
+      elements.inputField.style.height = 'auto';
+      elements.inputField.disabled = true;
+      
+      elements.sendButton.disabled = false;
+      
+      // ✅ נקה את currentTranscript
+      state.currentTranscript = '';
+      
+      console.log('✅ Voice preview shown with text:', fullTranscript);
     } else {
+      elements.inputField.value = '';
+      elements.inputField.style.height = 'auto';
       elements.inputField.disabled = false;
       elements.sendButton.disabled = false;
+      
+      // ✅ נקה את currentTranscript
+      state.currentTranscript = '';
+      
+      if (saveTranscript && fullTranscript.length === 0) {
+        alert('לא זוהה טקסט בהקלטה');
+      }
     }
   }
 
   function cancelRecording(state, elements) {
     if (state.recognition && state.isRecording) {
-      // נקה את הטקסט
       elements.inputField.value = '';
-      // עצור את ההקלטה
+      state.currentTranscript = '';
       state.recognition.stop();
     }
   }
@@ -970,17 +1190,14 @@
   function updateUI(state, elements) {
     const messageCount = state.history.length;
     
-    // עדכן מונה
     elements.messageCounter.textContent = `${messageCount}/${state.maxHistoryMessages} הודעות`;
     
-    // הצג/הסתר כפתור איפוס
     if (messageCount > 0) {
       elements.resetButton.classList.add('show');
     } else {
       elements.resetButton.classList.remove('show');
     }
     
-    // הצג אזהרה אם הגענו למגבלה
     if (isAtLimit(state)) {
       elements.limitWarning.classList.add('show');
       elements.inputField.disabled = true;
@@ -1006,6 +1223,7 @@
       state.messages = [];
       state.voiceTranscript = null;
       state.voiceDuration = null;
+      state.currentTranscript = '';
       
       const storageKey = 'chatHistory_' + config.secretKey;
       sessionStorage.removeItem(storageKey);
@@ -1080,7 +1298,6 @@
     } else {
       elements.toggleButton.textContent = '💬';
       
-      // עצור הקלטה אם פתוחה
       if (state.isRecording && state.recognition) {
         cancelRecording(state, elements);
       }
@@ -1151,13 +1368,11 @@
     let isVoice = false;
     let duration = 0;
     
-    // בדוק אם יש הקלטה קולית
     if (state.voiceTranscript) {
       question = state.voiceTranscript;
       isVoice = true;
       duration = state.voiceDuration || 0;
       
-      // נקה הקלטה
       state.voiceTranscript = null;
       state.voiceDuration = null;
       elements.voicePreview.classList.remove('show');
@@ -1168,7 +1383,6 @@
     
     if (!question || state.isLoading || isAtLimit(state)) return;
 
-    // הוסף הודעת משתמש להצגה
     state.messages.push({
       role: 'user',
       content: question,
@@ -1177,7 +1391,6 @@
       duration: duration
     });
 
-    // הוסף להיסטוריה
     state.history.push({
       role: 'user',
       content: question
@@ -1211,7 +1424,6 @@
       const data = await response.json();
 
       if (data.success && data.data.answer) {
-        // הוסף תשובה להצגה
         state.messages.push({
           role: 'assistant',
           content: data.data.answer,
@@ -1219,7 +1431,6 @@
           isVoice: false
         });
 
-        // הוסף תשובה להיסטוריה
         state.history.push({
           role: 'assistant',
           content: data.data.answer
@@ -1254,5 +1465,5 @@
     }
   }
 
-  console.log('✅ Chat Widget with Voice initialized successfully');
+  console.log('✅ Chat Widget with Multi-Language Voice Recognition initialized successfully');
 })();
