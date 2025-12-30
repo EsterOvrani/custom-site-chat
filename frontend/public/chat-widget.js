@@ -702,8 +702,8 @@
       
       const currentLang = config.supportedLanguages.find(l => l.code === recognition.lang);
       const langName = currentLang ? currentLang.name : 'Unknown';
-      elements.inputField.placeholder = `מקשיב (${langName})...`;
-      elements.recordingLangDisplay.textContent = `מקליט (${langName})`;
+      elements.inputField.placeholder = `מקשיב ...`;
+      elements.recordingLangDisplay.textContent = `מקליט`;
       
       // ✅ לא לנעול את שדה הקלט - המשתמש יכול למחוק
       elements.inputField.disabled = false;
