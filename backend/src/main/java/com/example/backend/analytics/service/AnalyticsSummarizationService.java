@@ -72,52 +72,94 @@ public class AnalyticsSummarizationService {
     private String buildQuestionSummarizationPrompt(List<String> questions) {
         StringBuilder sb = new StringBuilder();
         
-        sb.append("נתונה רשימת שאלות שמשתמשים שאלו בצ'אט. חלקן כפולות או דומות.\n\n");
-        sb.append("רשימת השאלות (סה\"כ ").append(questions.size()).append("):\n");
+        sb.append("Consolidate duplicate Hebrew questions and count their occurrences.\n\n");
+        
+        sb.append("Questions (").append(questions.size()).append(" total):\n");
         for (int i = 0; i < questions.size(); i++) {
-            sb.append((i + 1)).append(". ").append(questions.get(i)).append("\n");
+            sb.append("- ").append(questions.get(i)).append("\n");
         }
         
-        sb.append("\nמשימה:\n");
-        sb.append("1. זהה שאלות דומות/כפולות (לא בהכרח אותו ניסוח מדויק)\n");
-        sb.append("2. קבץ אותן לשאלה אחת מייצגת (הניסוח הכי ברור)\n");
-        sb.append("3. ספור כמה פעמים כל שאלה נשאלה (כולל כל הוריאציות)\n");
-        sb.append("4. תן עד 3 דוגמאות לניסוחים שונים\n\n");
+        sb.append("\nInstructions:\n");
+        sb.append("1. Identify duplicate/similar questions (not necessarily exact wording)\n");
+        sb.append("2. Consolidate into ONE representative question (clearest wording)\n");
+        sb.append("3. Count total occurrences including all variations\n");
+        sb.append("4. Provide up to 3 example variations\n\n");
         
-        sb.append("דוגמה:\n");
-        sb.append("קלט: [\"כמה עולה חולצה?\", \"מה המחיר של החולצה\", \"כמה עולה\"]\n");
-        sb.append("פלט:\n");
-        sb.append("[\n");
-        sb.append("  {\n");
-        sb.append("    \"question\": \"כמה עולה החולצה?\",\n");
-        sb.append("    \"count\": 3,\n");
-        sb.append("    \"examples\": [\"כמה עולה חולצה?\", \"מה המחיר של החולצה\", \"כמה עולה\"]\n");
-        sb.append("  }\n");
-        sb.append("]\n\n");
+        sb.append("Return a JSON object with this structure:\n");
+        sb.append("{\n");
+        sb.append("  \"questions\": [\n");
+        sb.append("    {\n");
+        sb.append("      \"question\": \"normalized question\",\n");
+        sb.append("      \"count\": number,\n");
+        sb.append("      \"examples\": [\"example 1\", \"example 2\"]\n");
+        sb.append("    }\n");
+        sb.append("  ]\n");
+        sb.append("}\n\n");
         
-        sb.append("חשוב:\n");
-        sb.append("- החזר JSON בלבד (ללא backticks או טקסט נוסף)\n");
-        sb.append("- השאלה המייצגת צריכה להיות הניסוח הכי ברור ומלא\n");
-        sb.append("- ספור נכון את כל הוריאציות (כולל שאלות קצרות/ארוכות)\n");
-        sb.append("- אם יש שאלות ייחודיות לגמרי, החזר אותן בנפרד עם count: 1\n\n");
-        
-        sb.append("החזר JSON בפורמט:\n");
-        sb.append("[\n");
-        sb.append("  { \"question\": \"שאלה מנורמלת\", \"count\": מספר, \"examples\": [\"דוגמה 1\", \"דוגמה 2\"] }\n");
-        sb.append("]");
+        sb.append("Example:\n");
+        sb.append("Input: [\"כמה עולה חולצה?\", \"מה המחיר של החולצה\", \"כמה עולה\"]\n");
+        sb.append("Output:\n");
+        sb.append("{\n");
+        sb.append("  \"questions\": [\n");
+        sb.append("    {\n");
+        sb.append("      \"question\": \"כמה עולה החולצה?\",\n");
+        sb.append("      \"count\": 3,\n");
+        sb.append("      \"examples\": [\"כמה עולה חולצה?\", \"מה המחיר של החולצה\", \"כמה עולה\"]\n");
+        sb.append("    }\n");
+        sb.append("  ]\n");
+        sb.append("}");
         
         return sb.toString();
     }
 
     private List<QuestionSummary> parseQuestionSummaries(String jsonResponse) throws Exception {
-        // Remove markdown code blocks if present
+        // Clean response
         String cleaned = jsonResponse.trim();
+        
+        log.info("Raw OpenAI response (questions): {}", cleaned);
+        
+        // Remove markdown code blocks if present
         if (cleaned.startsWith("```")) {
-            cleaned = cleaned.replaceFirst("```json", "").replaceFirst("```", "").trim();
+            cleaned = cleaned.replaceFirst("```json\\s*", "")
+                           .replaceFirst("```\\s*$", "")
+                           .trim();
         }
+        
+        // Find the JSON object
+        int objectStart = cleaned.indexOf('{');
+        if (objectStart > 0) {
+            cleaned = cleaned.substring(objectStart);
+        }
+        
+        int objectEnd = cleaned.lastIndexOf('}');
+        if (objectEnd > 0 && objectEnd < cleaned.length() - 1) {
+            cleaned = cleaned.substring(0, objectEnd + 1);
+        }
+        
+        log.info("Cleaned JSON (questions): {}", cleaned);
 
-        // Parse JSON
-        return objectMapper.readValue(cleaned, new TypeReference<List<QuestionSummary>>() {});
+        // Parse JSON object
+        Map<String, Object> wrapper = objectMapper.readValue(cleaned, 
+            new TypeReference<Map<String, Object>>() {});
+        
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> questionsData = (List<Map<String, Object>>) wrapper.get("questions");
+        
+        // Convert to QuestionSummary
+        List<QuestionSummary> summaries = new ArrayList<>();
+        for (Map<String, Object> data : questionsData) {
+            QuestionSummary summary = new QuestionSummary();
+            summary.setQuestion((String) data.get("question"));
+            summary.setCount(((Number) data.get("count")).intValue());
+            
+            @SuppressWarnings("unchecked")
+            List<String> examples = (List<String>) data.get("examples");
+            summary.setExamples(examples != null ? examples : List.of());
+            
+            summaries.add(summary);
+        }
+        
+        return summaries;
     }
 
     // ========================================================================
