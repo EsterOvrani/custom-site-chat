@@ -21,8 +21,8 @@ import java.util.stream.Collectors;
  * Analytics File Service - Manages analytics data in S3
  * 
  * File structure in S3:
- * user_{id}/analytics/questions.txt   (raw or processed JSON)
- * user_{id}/analytics/categories.txt  (raw or processed JSON)
+ * user/{id}/analytics/questions.txt   (raw or processed JSON)
+ * user/{id}/analytics/categories.txt  (raw or processed JSON)
  * 
  * Flow:
  * 1. Raw data is appended as text (one per line)
@@ -40,7 +40,7 @@ public class AnalyticsFileService {
     // ==================== S3 Key Generation ====================
     
     private String getAnalyticsPrefix(Long userId) {
-        return "user_" + userId + "/analytics/";
+        return "users/" + userId + "/analytics/";
     }
     
     private String getQuestionsKey(Long userId) {
