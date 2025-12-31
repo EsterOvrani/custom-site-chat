@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './Analytics.css';
-import { analyticsAPI } from '../../api/api';
+import { analyticsAPI } from '../../services/api';
 
 /**
  * Analytics Component
