@@ -1,195 +1,371 @@
 package com.example.backend.analytics.controller;
 
-import com.example.backend.analytics.dto.*;
+import com.example.backend.analytics.dto.AnalyticsResponse;
+import com.example.backend.analytics.dto.AnalyticsStats;
+import com.example.backend.analytics.dto.CategoryStats;
+import com.example.backend.analytics.dto.QuestionSummary;
 import com.example.backend.analytics.service.AnalyticsService;
 import com.example.backend.collection.service.CollectionService;
 import com.example.backend.user.model.User;
-import com.example.backend.common.exception.UnauthorizedException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
 import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Analytics Controller - Handles analytics endpoints
+ * 
+ * Public Endpoints (no JWT required):
+ * - POST /api/analytics/session-ended - Receive analytics data from widget
+ * 
+ * Authenticated Endpoints (JWT required):
+ * - GET /api/analytics/questions - Get questions list
+ * - GET /api/analytics/questions/download - Download questions as Excel
+ * - DELETE /api/analytics/questions - Clear questions
+ * - GET /api/analytics/categories - Get categories with stats
+ * - DELETE /api/analytics/categories - Clear categories
+ * - GET /api/analytics/stats - Get summary statistics
+ * - DELETE /api/analytics/clear-all - Clear all analytics data
+ */
 @RestController
 @RequestMapping("/api/analytics")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
 public class AnalyticsController {
+
     private final AnalyticsService analyticsService;
     private final CollectionService collectionService;
 
+    // ========================================================================
+    // PUBLIC ENDPOINTS (No JWT required - validated by secretKey)
+    // ========================================================================
+
+    /**
+     * Receive analytics data from widget
+     * Called when user closes chat or starts new conversation
+     * 
+     * Request Body:
+     * {
+     *   "secretKey": "user-secret-key",
+     *   "unansweredQuestions": ["שאלה 1", "שאלה 2"],
+     *   "topics": ["נושא 1", "נושא 2"]
+     * }
+     */
     @PostMapping("/session-ended")
     public ResponseEntity<Map<String, Object>> sessionEnded(@RequestBody SessionEndedRequest request) {
         try {
-            log.info("📥 Session ended request received");
+            log.info("📥 Analytics data received from widget");
+
+            // Validate secret key and get user
             User user = collectionService.validateSecretKey(request.getSecretKey());
-            analyticsService.processEndedSession(user, request.getConversationHistory());
+
+            // Process analytics data
+            analyticsService.processAnalyticsData(
+                user,
+                request.getUnansweredQuestions(),
+                request.getTopics()
+            );
+
+            // Return success response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Session processed");
+            response.put("message", "Analytics data received");
+
+            log.info("✅ Analytics processed successfully for user: {}", user.getId());
             return ResponseEntity.ok(response);
-        } catch (UnauthorizedException e) {
-            log.error("❌ Invalid secret key");
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("error", "Invalid secret key");
-            return ResponseEntity.status(401).body(response);
+
+        } catch (IllegalArgumentException e) {
+            log.warn("⚠️ Invalid secret key: {}", e.getMessage());
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "Invalid secret key");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+
         } catch (Exception e) {
-            log.error("❌ Failed to process session", e);
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("error", "Internal server error");
-            return ResponseEntity.status(500).body(response);
+            log.error("❌ Failed to process analytics", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "Internal server error");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
 
+    // ========================================================================
+    // AUTHENTICATED ENDPOINTS (JWT required)
+    // ========================================================================
+
+    /**
+     * Get questions list (processed)
+     * Returns consolidated questions with counts and examples
+     */
     @GetMapping("/questions")
-    public ResponseEntity<AnalyticsResponse<List<QuestionSummary>>> getQuestions() {
+    public ResponseEntity<AnalyticsResponse<List<QuestionSummary>>> getQuestions(
+            @AuthenticationPrincipal User user) {
+        
         try {
-            User currentUser = getCurrentUser();
-            List<QuestionSummary> questions = analyticsService.getProcessedQuestions(currentUser);
-            return ResponseEntity.ok(AnalyticsResponse.success(questions));
+            log.info("📊 Fetching questions for user: {}", user.getId());
+            
+            List<QuestionSummary> questions = analyticsService.getProcessedQuestions(user.getId());
+            
+            return ResponseEntity.ok(
+                AnalyticsResponse.success("Questions retrieved successfully", questions)
+            );
+
         } catch (Exception e) {
-            log.error("❌ Failed to get questions", e);
-            return ResponseEntity.status(500).body(AnalyticsResponse.error("שגיאה בטעינת שאלות"));
+            log.error("❌ Failed to fetch questions", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                AnalyticsResponse.error("Failed to retrieve questions")
+            );
         }
     }
 
+    /**
+     * Download questions as Excel file
+     * Returns .xlsx file with questions data
+     */
     @GetMapping("/questions/download")
-    public ResponseEntity<Resource> downloadQuestionsExcel() {
+    public ResponseEntity<byte[]> downloadQuestionsExcel(@AuthenticationPrincipal User user) {
         try {
-            User currentUser = getCurrentUser();
-            log.info("📥 Downloading questions Excel for user: {}", currentUser.getId());
-            List<QuestionSummary> questions = analyticsService.getProcessedQuestions(currentUser);
+            log.info("📥 Generating Excel for user: {}", user.getId());
+
+            List<QuestionSummary> questions = analyticsService.getProcessedQuestions(user.getId());
+
+            // Create Excel file
             byte[] excelBytes = createQuestionsExcel(questions);
-            ByteArrayResource resource = new ByteArrayResource(excelBytes);
+
+            // Set headers
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDispositionFormData("attachment", "analytics-questions.xlsx");
+
+            log.info("✅ Excel generated successfully ({} bytes)", excelBytes.length);
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=questions-report.xlsx")
-                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                    .contentLength(excelBytes.length)
-                    .body(resource);
+                    .headers(headers)
+                    .body(excelBytes);
+
         } catch (Exception e) {
-            log.error("❌ Failed to download questions Excel", e);
-            return ResponseEntity.status(500).build();
+            log.error("❌ Failed to generate Excel", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
+    /**
+     * Clear questions data
+     */
     @DeleteMapping("/questions")
-    public ResponseEntity<AnalyticsResponse<Void>> clearQuestions() {
+    public ResponseEntity<AnalyticsResponse<Void>> clearQuestions(@AuthenticationPrincipal User user) {
         try {
-            User currentUser = getCurrentUser();
-            analyticsService.clearAllAnalytics(currentUser);
-            return ResponseEntity.ok(AnalyticsResponse.success("השאלות נמחקו בהצלחה", null));
+            log.info("🗑️ Clearing questions for user: {}", user.getId());
+            
+            analyticsService.clearQuestions(user.getId());
+            
+            return ResponseEntity.ok(
+                AnalyticsResponse.success("Questions cleared successfully", null)
+            );
+
         } catch (Exception e) {
             log.error("❌ Failed to clear questions", e);
-            return ResponseEntity.status(500).body(AnalyticsResponse.error("שגיאה במחיקת שאלות"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                AnalyticsResponse.error("Failed to clear questions")
+            );
         }
     }
 
+    /**
+     * Get categories with statistics
+     * Returns categories with counts and percentages
+     */
     @GetMapping("/categories")
-    public ResponseEntity<AnalyticsResponse<List<CategoryStats>>> getCategories() {
+    public ResponseEntity<AnalyticsResponse<List<CategoryStats>>> getCategories(
+            @AuthenticationPrincipal User user) {
+        
         try {
-            User currentUser = getCurrentUser();
-            List<CategoryStats> categories = analyticsService.getProcessedCategories(currentUser);
-            return ResponseEntity.ok(AnalyticsResponse.success(categories));
+            log.info("📊 Fetching categories for user: {}", user.getId());
+            
+            List<CategoryStats> categories = analyticsService.getProcessedCategories(user.getId());
+            
+            return ResponseEntity.ok(
+                AnalyticsResponse.success("Categories retrieved successfully", categories)
+            );
+
         } catch (Exception e) {
-            log.error("❌ Failed to get categories", e);
-            return ResponseEntity.status(500).body(AnalyticsResponse.error("שגיאה בטעינת קטגוריות"));
+            log.error("❌ Failed to fetch categories", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                AnalyticsResponse.error("Failed to retrieve categories")
+            );
         }
     }
 
+    /**
+     * Clear categories data
+     */
     @DeleteMapping("/categories")
-    public ResponseEntity<AnalyticsResponse<Void>> clearCategories() {
+    public ResponseEntity<AnalyticsResponse<Void>> clearCategories(@AuthenticationPrincipal User user) {
         try {
-            User currentUser = getCurrentUser();
-            analyticsService.clearAllAnalytics(currentUser);
-            return ResponseEntity.ok(AnalyticsResponse.success("הקטגוריות נמחקו בהצלחה", null));
+            log.info("🗑️ Clearing categories for user: {}", user.getId());
+            
+            analyticsService.clearCategories(user.getId());
+            
+            return ResponseEntity.ok(
+                AnalyticsResponse.success("Categories cleared successfully", null)
+            );
+
         } catch (Exception e) {
             log.error("❌ Failed to clear categories", e);
-            return ResponseEntity.status(500).body(AnalyticsResponse.error("שגיאה במחיקת קטגוריות"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                AnalyticsResponse.error("Failed to clear categories")
+            );
         }
     }
 
+    /**
+     * Get summary statistics
+     * Returns counts and processing status
+     */
     @GetMapping("/stats")
-    public ResponseEntity<AnalyticsResponse<AnalyticsService.AnalyticsStats>> getStats() {
+    public ResponseEntity<AnalyticsResponse<AnalyticsStats>> getStats(
+            @AuthenticationPrincipal User user) {
+        
         try {
-            User currentUser = getCurrentUser();
-            AnalyticsService.AnalyticsStats stats = analyticsService.getStats(currentUser);
-            return ResponseEntity.ok(AnalyticsResponse.success(stats));
+            log.info("📊 Fetching stats for user: {}", user.getId());
+            
+            AnalyticsStats stats = analyticsService.getStats(user.getId());
+            
+            return ResponseEntity.ok(
+                AnalyticsResponse.success("Stats retrieved successfully", stats)
+            );
+
         } catch (Exception e) {
-            log.error("❌ Failed to get stats", e);
-            return ResponseEntity.status(500).body(AnalyticsResponse.error("שגיאה בטעינת סטטיסטיקה"));
+            log.error("❌ Failed to fetch stats", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                AnalyticsResponse.error("Failed to retrieve stats")
+            );
         }
     }
 
+    /**
+     * Clear all analytics data (questions + categories)
+     */
     @DeleteMapping("/clear-all")
-    public ResponseEntity<AnalyticsResponse<Void>> clearAll() {
+    public ResponseEntity<AnalyticsResponse<Void>> clearAll(@AuthenticationPrincipal User user) {
         try {
-            User currentUser = getCurrentUser();
-            analyticsService.clearAllAnalytics(currentUser);
-            return ResponseEntity.ok(AnalyticsResponse.success("כל האנליטיקס נמחק בהצלחה", null));
+            log.info("🗑️ Clearing all analytics for user: {}", user.getId());
+            
+            analyticsService.clearAllAnalytics(user.getId());
+            
+            return ResponseEntity.ok(
+                AnalyticsResponse.success("All analytics cleared successfully", null)
+            );
+
         } catch (Exception e) {
             log.error("❌ Failed to clear all analytics", e);
-            return ResponseEntity.status(500).body(AnalyticsResponse.error("שגיאה במחיקת אנליטיקס"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                AnalyticsResponse.error("Failed to clear analytics")
+            );
         }
     }
 
-    private User getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new UnauthorizedException("משתמש לא מחובר");
-        }
-        Object principal = authentication.getPrincipal();
-        if (!(principal instanceof User)) {
-            throw new UnauthorizedException("משתמש לא תקין");
-        }
-        return (User) principal;
-    }
+    // ========================================================================
+    // HELPER METHODS
+    // ========================================================================
 
+    /**
+     * Create Excel file from questions data
+     */
     private byte[] createQuestionsExcel(List<QuestionSummary> questions) throws Exception {
-        Workbook workbook = new XSSFWorkbook();
-        Sheet sheet = workbook.createSheet("שאלות ללא מענה");
-        CellStyle headerStyle = workbook.createCellStyle();
-        Font headerFont = workbook.createFont();
-        headerFont.setBold(true);
-        headerFont.setFontHeightInPoints((short) 12);
-        headerStyle.setFont(headerFont);
-        headerStyle.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
-        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        Row headerRow = sheet.createRow(0);
-        String[] headers = {"#", "שאלה", "כמה פעמים נשאלה", "דוגמאות לניסוחים"};
-        for (int i = 0; i < headers.length; i++) {
-            Cell cell = headerRow.createCell(i);
-            cell.setCellValue(headers[i]);
-            cell.setCellStyle(headerStyle);
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("שאלות ללא מענה");
+
+            // Create header row
+            Row headerRow = sheet.createRow(0);
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+
+            String[] headers = {"#", "שאלה", "כמה פעמים נשאלה", "דוגמאות לניסוחים"};
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            // Add data rows
+            int rowNum = 1;
+            for (QuestionSummary question : questions) {
+                Row row = sheet.createRow(rowNum++);
+                
+                row.createCell(0).setCellValue(rowNum - 1);
+                row.createCell(1).setCellValue(question.getQuestion());
+                row.createCell(2).setCellValue(question.getCount());
+                
+                // Join examples with comma
+                String examples = question.getExamples() != null 
+                    ? String.join(", ", question.getExamples())
+                    : "";
+                row.createCell(3).setCellValue(examples);
+            }
+
+            // Auto-size columns
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            // Write to byte array
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
         }
-        int rowNum = 1;
-        for (QuestionSummary q : questions) {
-            Row row = sheet.createRow(rowNum++);
-            row.createCell(0).setCellValue(rowNum - 1);
-            row.createCell(1).setCellValue(q.getQuestion());
-            row.createCell(2).setCellValue(q.getCount());
-            row.createCell(3).setCellValue(q.getExamples() != null ? String.join(", ", q.getExamples()) : "");
+    }
+
+    // ========================================================================
+    // DTOs (Inner Classes)
+    // ========================================================================
+
+    /**
+     * Request DTO for session-ended endpoint
+     */
+    public static class SessionEndedRequest {
+        private String secretKey;
+        private List<String> unansweredQuestions;
+        private List<String> topics;
+
+        // Getters and Setters
+        public String getSecretKey() {
+            return secretKey;
         }
-        for (int i = 0; i < headers.length; i++) {
-            sheet.autoSizeColumn(i);
+
+        public void setSecretKey(String secretKey) {
+            this.secretKey = secretKey;
         }
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        workbook.write(outputStream);
-        workbook.close();
-        return outputStream.toByteArray();
+
+        public List<String> getUnansweredQuestions() {
+            return unansweredQuestions;
+        }
+
+        public void setUnansweredQuestions(List<String> unansweredQuestions) {
+            this.unansweredQuestions = unansweredQuestions;
+        }
+
+        public List<String> getTopics() {
+            return topics;
+        }
+
+        public void setTopics(List<String> topics) {
+            this.topics = topics;
+        }
     }
 }

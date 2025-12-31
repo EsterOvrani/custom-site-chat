@@ -2,113 +2,375 @@ package com.example.backend.analytics.service;
 
 import com.example.backend.analytics.dto.CategoryStats;
 import com.example.backend.analytics.dto.QuestionSummary;
-import com.example.backend.analytics.dto.SessionEndedRequest;
-import com.example.backend.user.model.User;
+import com.example.backend.common.infrastructure.storage.S3Service;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import java.util.List;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * Analytics File Service - Manages analytics data in S3
+ * 
+ * File structure in S3:
+ * user_{id}/analytics/questions.txt   (raw or processed JSON)
+ * user_{id}/analytics/categories.txt  (raw or processed JSON)
+ * 
+ * Flow:
+ * 1. Raw data is appended as text (one per line)
+ * 2. On first report request, OpenAI consolidates → saves as JSON
+ * 3. File detection: starts with "[" = processed JSON
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AnalyticsService {
-    private final OpenAIAnalysisService openAIService;
-    private final AnalyticsFileService fileService;
+public class AnalyticsFileService {
 
-    @Async("documentProcessingExecutor")
-    public void processEndedSession(User user, List<SessionEndedRequest.ConversationMessage> conversation) {
+    private final ObjectMapper objectMapper;
+    private final S3Service s3Service;
+    
+    // ==================== S3 Key Generation ====================
+    
+    private String getAnalyticsPrefix(Long userId) {
+        return "user_" + userId + "/analytics/";
+    }
+    
+    private String getQuestionsKey(Long userId) {
+        return getAnalyticsPrefix(userId) + "questions.txt";
+    }
+    
+    private String getCategoriesKey(Long userId) {
+        return getAnalyticsPrefix(userId) + "categories.txt";
+    }
+    
+    // ==================== Questions - RAW ====================
+    
+    public void appendRawQuestions(Long userId, List<String> questions) {
+        if (questions == null || questions.isEmpty()) {
+            return;
+        }
+        
         try {
-            log.info("🔵 Processing ended session for user: {}", user.getId());
-            String businessType = user.getBusinessType() != null ? user.getBusinessType() : "אתר כללי";
-
-            List<String> unansweredQuestions = openAIService.extractUnansweredQuestions(conversation, businessType);
-            List<String> topics = openAIService.extractTopics(conversation, businessType);
-
-            if (!unansweredQuestions.isEmpty()) {
-                fileService.appendRawQuestions(user.getId(), unansweredQuestions);
+            String key = getQuestionsKey(userId);
+            
+            // 1. Read existing content (if exists)
+            String existingContent = "";
+            if (s3Service.fileExists(key)) {
+                try (InputStream is = s3Service.downloadFile(key)) {
+                    existingContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            } else {
+                log.info("Creating new questions file for user {}", userId);
             }
-            if (!topics.isEmpty()) {
-                fileService.appendRawCategories(user.getId(), topics);
+            
+            // 2. Append new lines
+            StringBuilder newContent = new StringBuilder(existingContent);
+            for (String question : questions) {
+                newContent.append(question).append("\n");
             }
-
-            log.info("✅ Session processed successfully - {} questions, {} topics", unansweredQuestions.size(), topics.size());
+            
+            // 3. Save back to S3
+            byte[] bytes = newContent.toString().getBytes(StandardCharsets.UTF_8);
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
+                s3Service.uploadFile(bais, key, "text/plain; charset=utf-8", bytes.length);
+            }
+            
+            log.info("✅ Appended {} raw questions for user {} to S3", questions.size(), userId);
+            
         } catch (Exception e) {
-            log.error("❌ Failed to process ended session", e);
+            log.error("❌ Failed to append questions to S3", e);
+            throw new RuntimeException("נכשל בשמירת שאלות ל-S3", e);
         }
     }
-
-    public List<QuestionSummary> getProcessedQuestions(User user) {
-        log.info("📊 Getting processed questions for user: {}", user.getId());
-        if (fileService.areQuestionsProcessed(user.getId())) {
-            log.info("✅ Questions already processed, reading from file");
-            return fileService.readProcessedQuestions(user.getId());
+    
+    public List<String> readRawQuestions(Long userId) {
+        try {
+            String key = getQuestionsKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
+                log.info("No questions file found for user {}", userId);
+                return new ArrayList<>();
+            }
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
+            // Split to lines
+            return content.lines()
+                    .map(String::trim)
+                    .filter(line -> !line.isEmpty())
+                    .collect(Collectors.toList());
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to read questions from S3", e);
+            throw new RuntimeException("נכשל בקריאת שאלות מ-S3", e);
         }
-        log.info("🔄 Questions not processed yet, processing now...");
-        List<String> rawQuestions = fileService.readRawQuestions(user.getId());
-        if (rawQuestions.isEmpty()) {
-            log.info("📭 No raw questions found");
-            return List.of();
+    }
+    
+    // ==================== Questions - PROCESSED ====================
+    
+    public void saveProcessedQuestions(Long userId, List<QuestionSummary> summaries) {
+        try {
+            String key = getQuestionsKey(userId);
+            
+            // Convert to JSON
+            String json = objectMapper.writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(summaries);
+            
+            // Save to S3
+            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
+                s3Service.uploadFile(bais, key, "application/json; charset=utf-8", bytes.length);
+            }
+            
+            log.info("✅ Saved {} processed questions for user {} to S3", summaries.size(), userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to save processed questions to S3", e);
+            throw new RuntimeException("נכשל בשמירת שאלות מעובדות ל-S3", e);
         }
-        String businessType = user.getBusinessType() != null ? user.getBusinessType() : "אתר כללי";
-        List<QuestionSummary> summaries = openAIService.summarizeQuestions(rawQuestions, businessType);
-        fileService.saveProcessedQuestions(user.getId(), summaries);
-        log.info("✅ Questions processed and saved");
-        return summaries;
     }
-
-    public List<CategoryStats> getProcessedCategories(User user) {
-        log.info("📊 Getting processed categories for user: {}", user.getId());
-        if (fileService.areCategoriesProcessed(user.getId())) {
-            log.info("✅ Categories already processed, reading from file");
-            return fileService.readProcessedCategories(user.getId());
+    
+    public List<QuestionSummary> readProcessedQuestions(Long userId) {
+        try {
+            String key = getQuestionsKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
+                log.info("No processed questions found for user {}", userId);
+                return new ArrayList<>();
+            }
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
+            // Check if JSON
+            if (content.trim().startsWith("[")) {
+                return objectMapper.readValue(content, 
+                    new TypeReference<List<QuestionSummary>>() {});
+            } else {
+                // Still raw text file
+                return new ArrayList<>();
+            }
+            
+        } catch (IOException e) {
+            log.error("❌ Failed to read processed questions from S3", e);
+            throw new RuntimeException("נכשל בקריאת שאלות מעובדות מ-S3", e);
         }
-        log.info("🔄 Categories not processed yet, processing now...");
-        List<String> rawCategories = fileService.readRawCategories(user.getId());
-        if (rawCategories.isEmpty()) {
-            log.info("📭 No raw categories found");
-            return List.of();
+    }
+    
+    public boolean areQuestionsProcessed(Long userId) {
+        try {
+            String key = getQuestionsKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
+                return false;
+            }
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
+            return content.trim().startsWith("[");
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to check questions status", e);
+            return false;
         }
-        String businessType = user.getBusinessType() != null ? user.getBusinessType() : "אתר כללי";
-        List<CategoryStats> stats = openAIService.summarizeCategories(rawCategories, businessType);
-        fileService.saveProcessedCategories(user.getId(), stats);
-        log.info("✅ Categories processed and saved");
-        return stats;
     }
-
-    public void clearAllAnalytics(User user) {
-        log.info("🗑️ Clearing all analytics for user: {}", user.getId());
-        fileService.clearAllAnalytics(user.getId());
-        log.info("✅ All analytics cleared");
+    
+    // ==================== Categories - RAW ====================
+    
+    public void appendRawCategories(Long userId, List<String> categories) {
+        if (categories == null || categories.isEmpty()) {
+            return;
+        }
+        
+        try {
+            String key = getCategoriesKey(userId);
+            
+            // 1. Read existing content
+            String existingContent = "";
+            if (s3Service.fileExists(key)) {
+                try (InputStream is = s3Service.downloadFile(key)) {
+                    existingContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            } else {
+                log.info("Creating new categories file for user {}", userId);
+            }
+            
+            // 2. Append new lines
+            StringBuilder newContent = new StringBuilder(existingContent);
+            for (String category : categories) {
+                newContent.append(category).append("\n");
+            }
+            
+            // 3. Save back
+            byte[] bytes = newContent.toString().getBytes(StandardCharsets.UTF_8);
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
+                s3Service.uploadFile(bais, key, "text/plain; charset=utf-8", bytes.length);
+            }
+            
+            log.info("✅ Appended {} raw categories for user {} to S3", categories.size(), userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to append categories to S3", e);
+            throw new RuntimeException("נכשל בשמירת קטגוריות ל-S3", e);
+        }
     }
-
-    public AnalyticsStats getStats(User user) {
-        List<String> rawQuestions = fileService.readRawQuestions(user.getId());
-        List<String> rawCategories = fileService.readRawCategories(user.getId());
-        boolean questionsProcessed = fileService.areQuestionsProcessed(user.getId());
-        boolean categoriesProcessed = fileService.areCategoriesProcessed(user.getId());
-
-        return AnalyticsStats.builder()
-                .totalSessions(rawCategories.size())
-                .totalQuestions(rawQuestions.size())
-                .uniqueQuestions(questionsProcessed ? fileService.readProcessedQuestions(user.getId()).size() : 0)
-                .totalCategories(rawCategories.size())
-                .uniqueCategories(categoriesProcessed ? fileService.readProcessedCategories(user.getId()).size() : 0)
-                .questionsProcessed(questionsProcessed)
-                .categoriesProcessed(categoriesProcessed)
-                .build();
+    
+    public List<String> readRawCategories(Long userId) {
+        try {
+            String key = getCategoriesKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
+                log.info("No categories file found for user {}", userId);
+                return new ArrayList<>();
+            }
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
+            return content.lines()
+                    .map(String::trim)
+                    .filter(line -> !line.isEmpty())
+                    .collect(Collectors.toList());
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to read categories from S3", e);
+            throw new RuntimeException("נכשל בקריאת קטגוריות מ-S3", e);
+        }
     }
-
-    @lombok.Data
-    @lombok.Builder
-    public static class AnalyticsStats {
-        private Integer totalSessions;
-        private Integer totalQuestions;
-        private Integer uniqueQuestions;
-        private Integer totalCategories;
-        private Integer uniqueCategories;
-        private Boolean questionsProcessed;
-        private Boolean categoriesProcessed;
+    
+    // ==================== Categories - PROCESSED ====================
+    
+    public void saveProcessedCategories(Long userId, List<CategoryStats> stats) {
+        try {
+            String key = getCategoriesKey(userId);
+            
+            String json = objectMapper.writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(stats);
+            
+            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
+                s3Service.uploadFile(bais, key, "application/json; charset=utf-8", bytes.length);
+            }
+            
+            log.info("✅ Saved {} processed categories for user {} to S3", stats.size(), userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to save processed categories to S3", e);
+            throw new RuntimeException("נכשל בשמירת קטגוריות מעובדות ל-S3", e);
+        }
+    }
+    
+    public List<CategoryStats> readProcessedCategories(Long userId) {
+        try {
+            String key = getCategoriesKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
+                log.info("No processed categories found for user {}", userId);
+                return new ArrayList<>();
+            }
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
+            if (content.trim().startsWith("[")) {
+                return objectMapper.readValue(content, 
+                    new TypeReference<List<CategoryStats>>() {});
+            } else {
+                return new ArrayList<>();
+            }
+            
+        } catch (IOException e) {
+            log.error("❌ Failed to read processed categories from S3", e);
+            throw new RuntimeException("נכשל בקריאת קטגוריות מעובדות מ-S3", e);
+        }
+    }
+    
+    public boolean areCategoriesProcessed(Long userId) {
+        try {
+            String key = getCategoriesKey(userId);
+            
+            if (!s3Service.fileExists(key)) {
+                return false;
+            }
+            
+            String content;
+            try (InputStream is = s3Service.downloadFile(key)) {
+                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            
+            return content.trim().startsWith("[");
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to check categories status", e);
+            return false;
+        }
+    }
+    
+    // ==================== Clear Data ====================
+    
+    public void clearQuestions(Long userId) {
+        try {
+            String questionsKey = getQuestionsKey(userId);
+            
+            if (s3Service.fileExists(questionsKey)) {
+                s3Service.deleteFile(questionsKey);
+                log.info("✅ Cleared questions for user {} from S3", userId);
+            } else {
+                log.info("📭 No questions file to clear for user {}", userId);
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to clear questions from S3", e);
+            throw new RuntimeException("נכשל במחיקת שאלות מ-S3", e);
+        }
+    }
+    
+    public void clearCategories(Long userId) {
+        try {
+            String categoriesKey = getCategoriesKey(userId);
+            
+            if (s3Service.fileExists(categoriesKey)) {
+                s3Service.deleteFile(categoriesKey);
+                log.info("✅ Cleared categories for user {} from S3", userId);
+            } else {
+                log.info("📭 No categories file to clear for user {}", userId);
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to clear categories from S3", e);
+            throw new RuntimeException("נכשל במחיקת קטגוריות מ-S3", e);
+        }
+    }
+    
+    public void clearAllAnalytics(Long userId) {
+        try {
+            clearQuestions(userId);
+            clearCategories(userId);
+            log.info("✅ Cleared all analytics for user {} from S3", userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to clear all analytics from S3", e);
+            throw new RuntimeException("נכשל במחיקת כל האנליטיקס מ-S3", e);
+        }
     }
 }

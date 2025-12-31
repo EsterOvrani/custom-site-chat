@@ -1,201 +1,185 @@
 import React, { useState, useEffect } from 'react';
-import { analyticsAPI } from '../../services/api';
 import './Analytics.css';
+import { analyticsAPI } from '../../api/api';
 
-const Analytics = () => {
-  const [activeSubTab, setActiveSubTab] = useState('questions');
+/**
+ * Analytics Component
+ * 
+ * Displays analytics data with two tabs:
+ * 1. Questions Tab - Shows unanswered questions with counts
+ * 2. Categories Tab - Shows topic distribution with chart
+ */
+function Analytics() {
+  const [activeSubTab, setActiveSubTab] = useState('questions'); // 'questions' or 'categories'
+  const [stats, setStats] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // Load data on component mount
   useEffect(() => {
-    loadStats();
+    loadData();
   }, []);
 
-  useEffect(() => {
-    if (activeSubTab === 'questions') {
-      loadQuestions();
-    } else if (activeSubTab === 'categories') {
-      loadCategories();
-    }
-  }, [activeSubTab]);
-
-  const loadStats = async () => {
-    try {
-      const response = await analyticsAPI.getStats();
-      if (response.data.success) {
-        setStats(response.data.data);
-      }
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-  };
-
-  const loadQuestions = async () => {
+  // Load all analytics data
+  const loadData = async () => {
     try {
       setLoading(true);
-      const response = await analyticsAPI.getQuestions();
-      if (response.data.success) {
-        setQuestions(response.data.data || []);
-      }
+      
+      const [statsData, questionsData, categoriesData] = await Promise.all([
+        analyticsAPI.getStats(),
+        analyticsAPI.getQuestions(),
+        analyticsAPI.getCategories()
+      ]);
+
+      setStats(statsData.data);
+      setQuestions(questionsData.data || []);
+      setCategories(categoriesData.data || []);
+
     } catch (error) {
-      console.error('Error loading questions:', error);
+      console.error('Failed to load analytics:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadCategories = async () => {
-    try {
-      setLoading(true);
-      const response = await analyticsAPI.getCategories();
-      if (response.data.success) {
-        setCategories(response.data.data || []);
-      }
-    } catch (error) {
-      console.error('Error loading categories:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Download questions as Excel
   const handleDownloadExcel = async () => {
     try {
-      setDownloading(true);
-      const response = await analyticsAPI.downloadQuestionsExcel();
-      
-      const blob = new Blob([response.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      });
-      
+      const blob = await analyticsAPI.downloadQuestionsExcel();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `questions-report-${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.download = 'analytics-questions.xlsx';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
-      alert('הדוח הורד בהצלחה!');
     } catch (error) {
-      console.error('Error downloading Excel:', error);
-      alert('שגיאה בהורדת הדוח');
-    } finally {
-      setDownloading(false);
+      console.error('Failed to download Excel:', error);
+      alert('שגיאה בהורדת הקובץ');
     }
   };
 
+  // Clear all analytics
   const handleClearAll = async () => {
-    if (!window.confirm('האם אתה בטוח שברצונך למחוק את כל נתוני האנליטיקס?')) {
+    if (!window.confirm('האם למחוק את כל נתוני האנליטיקס? פעולה זו בלתי הפיכה.')) {
       return;
     }
 
     try {
       await analyticsAPI.clearAll();
-      alert('הנתונים נמחקו בהצלחה');
-      loadStats();
-      loadQuestions();
-      loadCategories();
+      await loadData(); // Reload
+      alert('נתוני האנליטיקס נמחקו בהצלחה');
     } catch (error) {
-      console.error('Error clearing analytics:', error);
-      alert('שגיאה במחיקת נתונים');
+      console.error('Failed to clear analytics:', error);
+      alert('שגיאה במחיקת הנתונים');
     }
   };
 
+  if (loading) {
+    return (
+      <div className="analytics-container">
+        <div className="analytics-loading">
+          <div className="spinner"></div>
+          <p>טוען נתונים...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="analytics-container">
-      {/* Header with Stats */}
+      {/* Header with gradient */}
       <div className="analytics-header">
-        <h2>📊 אנליטיקס</h2>
-        {stats && (
-          <div className="stats-summary">
-            <div className="stat-card">
-              <div className="stat-value">{stats.totalSessions}</div>
-              <div className="stat-label">שיחות</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value">{stats.totalQuestions}</div>
-              <div className="stat-label">שאלות</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value">{stats.uniqueQuestions}</div>
-              <div className="stat-label">שאלות ייחודיות</div>
-            </div>
-          </div>
-        )}
+        <div className="analytics-header-content">
+          <h2>📊 אנליטיקס</h2>
+          <p>ניתוח שאלות ונושאים מהצ'אט בוט</p>
+        </div>
       </div>
 
-      {/* Sub Tabs */}
+      {/* Stats Summary Cards */}
+      <div className="analytics-stats-cards">
+        <div className="stats-card">
+          <div className="stats-card-icon">❓</div>
+          <div className="stats-card-content">
+            <div className="stats-card-value">{stats?.totalQuestions || 0}</div>
+            <div className="stats-card-label">שאלות נאספו</div>
+          </div>
+        </div>
+
+        <div className="stats-card">
+          <div className="stats-card-icon">✅</div>
+          <div className="stats-card-content">
+            <div className="stats-card-value">{stats?.uniqueQuestions || 0}</div>
+            <div className="stats-card-label">שאלות ייחודיות</div>
+          </div>
+        </div>
+
+        <div className="stats-card">
+          <div className="stats-card-icon">🏷️</div>
+          <div className="stats-card-content">
+            <div className="stats-card-value">{stats?.uniqueCategories || 0}</div>
+            <div className="stats-card-label">קטגוריות</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sub-Tabs Navigation */}
       <div className="analytics-sub-tabs">
         <button
-          className={`sub-tab ${activeSubTab === 'questions' ? 'active' : ''}`}
+          className={`analytics-sub-tab ${activeSubTab === 'questions' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('questions')}
         >
-          📝 שאלות ללא מענה
+          ❓ שאלות ללא מענה
         </button>
         <button
-          className={`sub-tab ${activeSubTab === 'categories' ? 'active' : ''}`}
+          className={`analytics-sub-tab ${activeSubTab === 'categories' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('categories')}
         >
-          📈 נושאים מרכזיים
+          🏷️ נושאים מרכזיים
         </button>
       </div>
 
-      {/* Content */}
+      {/* Tab Content */}
       <div className="analytics-content">
-        {/* Questions Tab */}
         {activeSubTab === 'questions' && (
-          <div className="questions-section">
-            <div className="section-header">
-              <h3>שאלות שהבוט לא ידע לענות עליהן</h3>
-              <div className="section-actions">
-                <button
-                  className="btn-download"
-                  onClick={handleDownloadExcel}
-                  disabled={downloading || questions.length === 0}
-                >
-                  {downloading ? '⏬ מוריד...' : '📥 הורד דוח Excel'}
-                </button>
-                <button
-                  className="btn-clear"
-                  onClick={handleClearAll}
-                  disabled={questions.length === 0}
-                >
-                  🗑️ נקה הכל
-                </button>
-              </div>
+          <div className="analytics-questions">
+            {/* Action Buttons */}
+            <div className="analytics-actions">
+              <button className="btn-download" onClick={handleDownloadExcel}>
+                📥 הורד אקסל
+              </button>
+              <button className="btn-clear" onClick={handleClearAll}>
+                🗑️ נקה הכל
+              </button>
             </div>
 
-            {loading ? (
-              <div className="loading">
-                <div className="spinner"></div>
-                <p>טוען נתונים...</p>
-              </div>
-            ) : questions.length === 0 ? (
-              <div className="empty-state">
+            {/* Questions List */}
+            {questions.length === 0 ? (
+              <div className="analytics-empty">
                 <div className="empty-icon">📭</div>
-                <p>אין שאלות ללא מענה עדיין</p>
-                <p className="empty-hint">
-                  כשמשתמשים ישאלו שאלות שהבוט לא יודע לענות עליהן, הן יופיעו כאן
-                </p>
+                <h3>אין שאלות עדיין</h3>
+                <p>שאלות שלא קיבלו מענה יופיעו כאן</p>
+                <div className="empty-hint">
+                  💡 <strong>טיפ:</strong> שאלות נאספות רק כשהמשתמש סוגר את החלון או מתחיל שיחה חדשה
+                </div>
               </div>
             ) : (
               <div className="questions-list">
                 {questions.map((q, index) => (
                   <div key={index} className="question-card">
                     <div className="question-header">
-                      <span className="question-count">#{index + 1}</span>
-                      <span className="question-frequency">נשאלה {q.count} פעמים</span>
+                      <h3>{q.question}</h3>
+                      <span className="question-count-badge">
+                        {q.count} {q.count === 1 ? 'פעם' : 'פעמים'}
+                      </span>
                     </div>
-                    <div className="question-text">{q.question}</div>
                     {q.examples && q.examples.length > 0 && (
                       <div className="question-examples">
                         <strong>דוגמאות לניסוחים:</strong>
                         <ul>
-                          {q.examples.slice(0, 3).map((ex, i) => (
+                          {q.examples.map((ex, i) => (
                             <li key={i}>{ex}</li>
                           ))}
                         </ul>
@@ -208,51 +192,33 @@ const Analytics = () => {
           </div>
         )}
 
-        {/* Categories Tab */}
         {activeSubTab === 'categories' && (
-          <div className="categories-section">
-            <div className="section-header">
-              <h3>נושאים שמעניינים את המשתמשים</h3>
-              <button
-                className="btn-clear"
-                onClick={handleClearAll}
-                disabled={categories.length === 0}
-              >
-                🗑️ נקה הכל
-              </button>
-            </div>
-
-            {loading ? (
-              <div className="loading">
-                <div className="spinner"></div>
-                <p>טוען נתונים...</p>
-              </div>
-            ) : categories.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">📭</div>
-                <p>אין נתונים על נושאים עדיין</p>
-                <p className="empty-hint">
-                  לאחר שמשתמשים ידברו עם הבוט, הנושאים שהם מתעניינים בהם יופיעו כאן
-                </p>
+          <div className="analytics-categories">
+            {categories.length === 0 ? (
+              <div className="analytics-empty">
+                <div className="empty-icon">🏷️</div>
+                <h3>אין קטגוריות עדיין</h3>
+                <p>נושאי שיחה יופיעו כאן</p>
               </div>
             ) : (
               <div className="categories-chart">
+                <h3>התפלגות נושאים</h3>
                 {categories.map((cat, index) => (
                   <div key={index} className="category-bar">
                     <div className="category-info">
                       <span className="category-name">{cat.category}</span>
-                      <span className="category-stats">
-                        {cat.count} שיחות ({cat.percentage.toFixed(1)}%)
-                      </span>
+                      <span className="category-count">({cat.count})</span>
                     </div>
-                    <div className="progress-bar">
+                    <div className="category-bar-container">
                       <div
-                        className="progress-fill"
+                        className="category-bar-fill"
                         style={{
                           width: `${cat.percentage}%`,
-                          background: `hsl(${220 - index * 20}, 70%, 60%)`
+                          backgroundColor: `hsl(${index * 40}, 70%, 60%)`
                         }}
-                      ></div>
+                      >
+                        <span className="category-percentage">{cat.percentage.toFixed(1)}%</span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -263,6 +229,6 @@ const Analytics = () => {
       </div>
     </div>
   );
-};
+}
 
 export default Analytics;
