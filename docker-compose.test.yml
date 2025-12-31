@@ -65,10 +65,10 @@ services:
     # ✅ הוסף healthcheck!
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/auth/status"]
-      interval: 10s
-      timeout: 5s
-      retries: 6          # ← הוספנו ניסיונות
-      start_period: 60s      # תן לבקנד 40 שניות להתחיל לפני בדיקות
+      interval: 5s           # בדוק כל 5 שניות
+      timeout: 3s            # זמן תגובה מקסימלי
+      retries: 60            # נסה 60 פעמים (5 דקות)
+      start_period: 40s      # תן לבקנד 40 שניות להתחיל לפני בדיקות
     networks:
       - app-network
     restart: unless-stopped

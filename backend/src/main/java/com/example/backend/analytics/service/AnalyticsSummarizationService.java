@@ -28,7 +28,7 @@ public class AnalyticsSummarizationService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${openai.api.key}")
+    @Value("${openai.api-key}")
     private String openAiApiKey;
 
     @Value("${openai.api.url}")
