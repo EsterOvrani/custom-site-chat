@@ -87,6 +87,14 @@ public class AnalyticsController {
             log.info("✅ Analytics processed successfully for user: {}", user.getId());
             return ResponseEntity.ok(response);
 
+        } catch (com.example.backend.common.exception.UnauthorizedException e) {
+            // Handle UnauthorizedException specifically - return 401
+            log.warn("⚠️ Unauthorized: {}", e.getMessage());
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "Invalid secret key");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+
         } catch (IllegalArgumentException e) {
             log.warn("⚠️ Invalid secret key: {}", e.getMessage());
             Map<String, Object> error = new HashMap<>();
