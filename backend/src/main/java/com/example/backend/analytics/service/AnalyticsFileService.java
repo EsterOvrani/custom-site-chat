@@ -17,29 +17,38 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Analytics File Service - Manages analytics data in S3
+ * 
+ * File structure in S3:
+ * user_{id}/analytics/questions.txt   (raw or processed JSON)
+ * user_{id}/analytics/categories.txt  (raw or processed JSON)
+ * 
+ * Flow:
+ * 1. Raw data is appended as text (one per line)
+ * 2. On first report request, OpenAI consolidates → saves as JSON
+ * 3. File detection: starts with "[" = processed JSON
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AnalyticsFileService {
 
     private final ObjectMapper objectMapper;
-    private final S3Service s3Service;  // ⭐ השתמש ב-S3Service הקיים!
+    private final S3Service s3Service;
     
     // ==================== S3 Key Generation ====================
     
     private String getAnalyticsPrefix(Long userId) {
         return "user_" + userId + "/analytics/";
-        // מחזיר: user_1/analytics/
     }
     
     private String getQuestionsKey(Long userId) {
         return getAnalyticsPrefix(userId) + "questions.txt";
-        // מחזיר: user_1/analytics/questions.txt
     }
     
     private String getCategoriesKey(Long userId) {
         return getAnalyticsPrefix(userId) + "categories.txt";
-        // מחזיר: user_1/analytics/categories.txt
     }
     
     // ==================== Questions - RAW ====================
@@ -52,7 +61,7 @@ public class AnalyticsFileService {
         try {
             String key = getQuestionsKey(userId);
             
-            // 1. קרא תוכן קיים (אם יש)
+            // 1. Read existing content (if exists)
             String existingContent = "";
             if (s3Service.fileExists(key)) {
                 try (InputStream is = s3Service.downloadFile(key)) {
@@ -62,13 +71,13 @@ public class AnalyticsFileService {
                 log.info("Creating new questions file for user {}", userId);
             }
             
-            // 2. הוסף שורות חדשות
+            // 2. Append new lines
             StringBuilder newContent = new StringBuilder(existingContent);
             for (String question : questions) {
                 newContent.append(question).append("\n");
             }
             
-            // 3. שמור חזרה ל-S3
+            // 3. Save back to S3
             byte[] bytes = newContent.toString().getBytes(StandardCharsets.UTF_8);
             try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
                 s3Service.uploadFile(bais, key, "text/plain; charset=utf-8", bytes.length);
@@ -96,7 +105,7 @@ public class AnalyticsFileService {
                 content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
             }
             
-            // פיצול לשורות
+            // Split to lines
             return content.lines()
                     .map(String::trim)
                     .filter(line -> !line.isEmpty())
@@ -114,11 +123,11 @@ public class AnalyticsFileService {
         try {
             String key = getQuestionsKey(userId);
             
-            // המרה ל-JSON
+            // Convert to JSON
             String json = objectMapper.writerWithDefaultPrettyPrinter()
                     .writeValueAsString(summaries);
             
-            // שמירה ל-S3
+            // Save to S3
             byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
             try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
                 s3Service.uploadFile(bais, key, "application/json; charset=utf-8", bytes.length);
@@ -146,12 +155,12 @@ public class AnalyticsFileService {
                 content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
             }
             
-            // בדוק אם זה JSON
+            // Check if JSON
             if (content.trim().startsWith("[")) {
                 return objectMapper.readValue(content, 
                     new TypeReference<List<QuestionSummary>>() {});
             } else {
-                // עדיין קובץ טקסט גולמי
+                // Still raw text file
                 return new ArrayList<>();
             }
             
@@ -192,7 +201,7 @@ public class AnalyticsFileService {
         try {
             String key = getCategoriesKey(userId);
             
-            // 1. קרא תוכן קיים
+            // 1. Read existing content
             String existingContent = "";
             if (s3Service.fileExists(key)) {
                 try (InputStream is = s3Service.downloadFile(key)) {
@@ -202,13 +211,13 @@ public class AnalyticsFileService {
                 log.info("Creating new categories file for user {}", userId);
             }
             
-            // 2. הוסף שורות חדשות
+            // 2. Append new lines
             StringBuilder newContent = new StringBuilder(existingContent);
             for (String category : categories) {
                 newContent.append(category).append("\n");
             }
             
-            // 3. שמור חזרה
+            // 3. Save back
             byte[] bytes = newContent.toString().getBytes(StandardCharsets.UTF_8);
             try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
                 s3Service.uploadFile(bais, key, "text/plain; charset=utf-8", bytes.length);
@@ -319,28 +328,49 @@ public class AnalyticsFileService {
     
     // ==================== Clear Data ====================
     
-    public void clearAllAnalytics(Long userId) {
+    public void clearQuestions(Long userId) {
         try {
             String questionsKey = getQuestionsKey(userId);
-            String categoriesKey = getCategoriesKey(userId);
             
-            // מחק questions
             if (s3Service.fileExists(questionsKey)) {
                 s3Service.deleteFile(questionsKey);
+                log.info("✅ Cleared questions for user {} from S3", userId);
+            } else {
+                log.info("📭 No questions file to clear for user {}", userId);
             }
-            
-            // מחק categories
-            if (s3Service.fileExists(categoriesKey)) {
-                s3Service.deleteFile(categoriesKey);
-            }
-            
-            log.info("✅ Cleared analytics for user {} from S3", userId);
             
         } catch (Exception e) {
-            log.error("❌ Failed to clear analytics from S3", e);
-            throw new RuntimeException("נכשל במחיקת אנליטיקס מ-S3", e);
+            log.error("❌ Failed to clear questions from S3", e);
+            throw new RuntimeException("נכשל במחיקת שאלות מ-S3", e);
+        }
+    }
+    
+    public void clearCategories(Long userId) {
+        try {
+            String categoriesKey = getCategoriesKey(userId);
+            
+            if (s3Service.fileExists(categoriesKey)) {
+                s3Service.deleteFile(categoriesKey);
+                log.info("✅ Cleared categories for user {} from S3", userId);
+            } else {
+                log.info("📭 No categories file to clear for user {}", userId);
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to clear categories from S3", e);
+            throw new RuntimeException("נכשל במחיקת קטגוריות מ-S3", e);
+        }
+    }
+    
+    public void clearAllAnalytics(Long userId) {
+        try {
+            clearQuestions(userId);
+            clearCategories(userId);
+            log.info("✅ Cleared all analytics for user {} from S3", userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to clear all analytics from S3", e);
+            throw new RuntimeException("נכשל במחיקת כל האנליטיקס מ-S3", e);
         }
     }
 }
-
-
