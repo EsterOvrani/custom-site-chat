@@ -1,6 +1,17 @@
 pipeline {
     agent any
     
+    options {
+        // ⭐ שמור רק את ה-build האחרון בלבד!
+        buildDiscarder(logRotator(
+            numToKeepStr: '1',           // רק build אחד
+            artifactNumToKeepStr: '1'     // רק artifacts של build אחד
+        ))
+        
+        // Timeout - אם build תקוע יותר מ-2 שעות, בטל
+        timeout(time: 2, unit: 'HOURS')
+    }
+    
     environment {
         // Fix for the API version issue
         DOCKER_API_VERSION = '1.41'
@@ -172,8 +183,41 @@ pipeline {
             }
             post {
                 always {
-                    sh 'docker-compose -f docker-compose.test.yml logs newman > newman-output.log 2>&1 || true'
-                    archiveArtifacts artifacts: 'newman-output.log', allowEmptyArchive: true
+                    script {
+                        echo '📊 Saving logs before cleanup...'
+                        sh '''
+                            # ⭐ Step 1: מחק קבצי לוג ישנים (למקרה שנשארו מ-build קודם)
+                            echo "🗑️ Removing old log files (if any)..."
+                            rm -f newman-output.log backend-logs.log all-test-logs.log || true
+                            
+                            # ⭐ Step 2: צור לוגים חדשים
+                            echo "📝 Creating fresh log files..."
+                            
+                            # Save Newman logs
+                            docker-compose -f docker-compose.test.yml logs newman > newman-output.log 2>&1 || true
+                            
+                            # Save Backend logs (CRITICAL FOR DEBUGGING!)
+                            docker-compose -f docker-compose.test.yml logs backend > backend-logs.log 2>&1 || true
+                            
+                            # Save all logs
+                            docker-compose -f docker-compose.test.yml logs > all-test-logs.log 2>&1 || true
+                            
+                            # ⭐ Step 3: הצג מידע על הקבצים
+                            echo ""
+                            echo "✅ Logs saved to artifacts:"
+                            ls -lh newman-output.log backend-logs.log all-test-logs.log 2>/dev/null || true
+                            
+                            # חשב סה"כ גודל
+                            echo ""
+                            echo "📊 Log file sizes:"
+                            du -h newman-output.log backend-logs.log all-test-logs.log 2>/dev/null || true
+                        '''
+                    }
+                    
+                    // ⭐ שמור את הקבצים ב-Jenkins artifacts
+                    archiveArtifacts artifacts: 'newman-output.log,backend-logs.log,all-test-logs.log', 
+                                     allowEmptyArchive: true,
+                                     fingerprint: false
                 }
             }
         }
@@ -380,30 +424,34 @@ pipeline {
         cleanup {
             echo '🧹 ====== FINAL DEEP CLEANUP ======'
             sh '''
-                echo "🛑 Step 1: Stopping all Docker Compose services with volumes..."
+                # ⭐ Step 1: מחק קבצי לוג מה-workspace (Jenkins כבר שמר ב-artifacts)
+                echo "🗑️ Removing log files from workspace..."
+                rm -f newman-output.log backend-logs.log all-test-logs.log docker-logs.txt || true
+                
+                echo "🛑 Step 2: Stopping all Docker Compose services with volumes..."
                 docker-compose -f docker-compose.test.yml down -v 2>/dev/null || true
                 docker-compose down -v 2>/dev/null || true
                 
-                echo "🗑️ Step 2: Removing all project images (preserving jenkins-jenkins)..."
+                echo "🗑️ Step 3: Removing all project images (preserving jenkins-jenkins)..."
                 # Delete all project images (not jenkins-jenkins!)
                 docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "jenkins-jenkins" | grep -E "backend|frontend|postgres|qdrant|nginx|newman" | xargs -r docker rmi -f 2>/dev/null || true
                 
                 # Delete dangling images (not jenkins-jenkins!)
                 docker images -f "dangling=true" -q | xargs -r docker rmi -f 2>/dev/null || true
                 
-                echo "🧹 Step 3: Cleaning Docker builder cache..."
+                echo "🧹 Step 4: Cleaning Docker builder cache..."
                 docker builder prune -a -f
                 
-                echo "🗑️ Step 4: Removing unused volumes..."
+                echo "🗑️ Step 5: Removing unused volumes..."
                 docker volume prune -f
                 
-                echo "🗑️ Step 5: Removing unused networks..."
+                echo "🗑️ Step 6: Removing unused networks..."
                 docker network prune -f
                 
-                echo "🧹 Step 6: Final system cleanup..."
+                echo "🧹 Step 7: Final system cleanup..."
                 docker system prune -f
                 
-                echo "🗂️ Step 7: Removing .env file..."
+                echo "🗂️ Step 8: Removing .env file..."
                 rm -f .env || true
                 
                 echo ""
@@ -418,6 +466,7 @@ pipeline {
                 docker volume ls
                 echo ""
                 echo "✅ DEEP CLEANUP COMPLETED (jenkins-jenkins preserved)"
+                echo "✅ Workspace cleaned (only latest build artifacts preserved)"
             '''
         }
     }
