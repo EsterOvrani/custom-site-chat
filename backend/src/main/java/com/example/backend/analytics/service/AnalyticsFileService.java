@@ -1,16 +1,11 @@
 package com.example.backend.analytics.service;
 
-import com.example.backend.analytics.dto.CategoryStats;
-import com.example.backend.analytics.dto.QuestionSummary;
 import com.example.backend.common.infrastructure.storage.S3Service;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -21,20 +16,19 @@ import java.util.stream.Collectors;
  * Analytics File Service - Manages analytics data in S3
  * 
  * File structure in S3:
- * user/{id}/analytics/questions.txt   (raw or processed JSON)
- * user/{id}/analytics/categories.txt  (raw or processed JSON)
+ * users/{id}/analytics/questions.txt   (ALWAYS raw text, one per line)
+ * users/{id}/analytics/categories.txt  (ALWAYS raw text, one per line)
  * 
  * Flow:
- * 1. Raw data is appended as text (one per line)
- * 2. On first report request, OpenAI consolidates → saves as JSON
- * 3. File detection: starts with "[" = processed JSON
+ * 1. Widget sends data → append as raw text (one per line)
+ * 2. User opens dashboard → read raw text → process with OpenAI → return JSON (don't save)
+ * 3. Every dashboard visit → fresh OpenAI processing
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AnalyticsFileService {
 
-    private final ObjectMapper objectMapper;
     private final S3Service s3Service;
     
     // ==================== S3 Key Generation ====================
@@ -51,8 +45,11 @@ public class AnalyticsFileService {
         return getAnalyticsPrefix(userId) + "categories.txt";
     }
     
-    // ==================== Questions - RAW ====================
+    // ==================== Questions - RAW ONLY ====================
     
+    /**
+     * Append raw questions to S3 (one per line)
+     */
     public void appendRawQuestions(Long userId, List<String> questions) {
         if (questions == null || questions.isEmpty()) {
             return;
@@ -91,6 +88,9 @@ public class AnalyticsFileService {
         }
     }
     
+    /**
+     * Read all raw questions from S3 (returns list of strings)
+     */
     public List<String> readRawQuestions(Long userId) {
         try {
             String key = getQuestionsKey(userId);
@@ -105,7 +105,7 @@ public class AnalyticsFileService {
                 content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
             }
             
-            // Split to lines
+            // Split to lines and filter empty
             return content.lines()
                     .map(String::trim)
                     .filter(line -> !line.isEmpty())
@@ -117,82 +117,11 @@ public class AnalyticsFileService {
         }
     }
     
-    // ==================== Questions - PROCESSED ====================
+    // ==================== Categories - RAW ONLY ====================
     
-    public void saveProcessedQuestions(Long userId, List<QuestionSummary> summaries) {
-        try {
-            String key = getQuestionsKey(userId);
-            
-            // Convert to JSON
-            String json = objectMapper.writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(summaries);
-            
-            // Save to S3
-            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-            try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
-                s3Service.uploadFile(bais, key, "application/json; charset=utf-8", bytes.length);
-            }
-            
-            log.info("✅ Saved {} processed questions for user {} to S3", summaries.size(), userId);
-            
-        } catch (Exception e) {
-            log.error("❌ Failed to save processed questions to S3", e);
-            throw new RuntimeException("נכשל בשמירת שאלות מעובדות ל-S3", e);
-        }
-    }
-    
-    public List<QuestionSummary> readProcessedQuestions(Long userId) {
-        try {
-            String key = getQuestionsKey(userId);
-            
-            if (!s3Service.fileExists(key)) {
-                log.info("No processed questions found for user {}", userId);
-                return new ArrayList<>();
-            }
-            
-            String content;
-            try (InputStream is = s3Service.downloadFile(key)) {
-                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-            }
-            
-            // Check if JSON
-            if (content.trim().startsWith("[")) {
-                return objectMapper.readValue(content, 
-                    new TypeReference<List<QuestionSummary>>() {});
-            } else {
-                // Still raw text file
-                return new ArrayList<>();
-            }
-            
-        } catch (IOException e) {
-            log.error("❌ Failed to read processed questions from S3", e);
-            throw new RuntimeException("נכשל בקריאת שאלות מעובדות מ-S3", e);
-        }
-    }
-    
-    public boolean areQuestionsProcessed(Long userId) {
-        try {
-            String key = getQuestionsKey(userId);
-            
-            if (!s3Service.fileExists(key)) {
-                return false;
-            }
-            
-            String content;
-            try (InputStream is = s3Service.downloadFile(key)) {
-                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-            }
-            
-            return content.trim().startsWith("[");
-            
-        } catch (Exception e) {
-            log.error("❌ Failed to check questions status", e);
-            return false;
-        }
-    }
-    
-    // ==================== Categories - RAW ====================
-    
+    /**
+     * Append raw categories to S3 (one per line)
+     */
     public void appendRawCategories(Long userId, List<String> categories) {
         if (categories == null || categories.isEmpty()) {
             return;
@@ -231,6 +160,9 @@ public class AnalyticsFileService {
         }
     }
     
+    /**
+     * Read all raw categories from S3 (returns list of strings)
+     */
     public List<String> readRawCategories(Long userId) {
         try {
             String key = getCategoriesKey(userId);
@@ -253,76 +185,6 @@ public class AnalyticsFileService {
         } catch (Exception e) {
             log.error("❌ Failed to read categories from S3", e);
             throw new RuntimeException("נכשל בקריאת קטגוריות מ-S3", e);
-        }
-    }
-    
-    // ==================== Categories - PROCESSED ====================
-    
-    public void saveProcessedCategories(Long userId, List<CategoryStats> stats) {
-        try {
-            String key = getCategoriesKey(userId);
-            
-            String json = objectMapper.writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(stats);
-            
-            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-            try (ByteArrayInputStream bais = new ByteArrayInputStream(bytes)) {
-                s3Service.uploadFile(bais, key, "application/json; charset=utf-8", bytes.length);
-            }
-            
-            log.info("✅ Saved {} processed categories for user {} to S3", stats.size(), userId);
-            
-        } catch (Exception e) {
-            log.error("❌ Failed to save processed categories to S3", e);
-            throw new RuntimeException("נכשל בשמירת קטגוריות מעובדות ל-S3", e);
-        }
-    }
-    
-    public List<CategoryStats> readProcessedCategories(Long userId) {
-        try {
-            String key = getCategoriesKey(userId);
-            
-            if (!s3Service.fileExists(key)) {
-                log.info("No processed categories found for user {}", userId);
-                return new ArrayList<>();
-            }
-            
-            String content;
-            try (InputStream is = s3Service.downloadFile(key)) {
-                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-            }
-            
-            if (content.trim().startsWith("[")) {
-                return objectMapper.readValue(content, 
-                    new TypeReference<List<CategoryStats>>() {});
-            } else {
-                return new ArrayList<>();
-            }
-            
-        } catch (IOException e) {
-            log.error("❌ Failed to read processed categories from S3", e);
-            throw new RuntimeException("נכשל בקריאת קטגוריות מעובדות מ-S3", e);
-        }
-    }
-    
-    public boolean areCategoriesProcessed(Long userId) {
-        try {
-            String key = getCategoriesKey(userId);
-            
-            if (!s3Service.fileExists(key)) {
-                return false;
-            }
-            
-            String content;
-            try (InputStream is = s3Service.downloadFile(key)) {
-                content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-            }
-            
-            return content.trim().startsWith("[");
-            
-        } catch (Exception e) {
-            log.error("❌ Failed to check categories status", e);
-            return false;
         }
     }
     

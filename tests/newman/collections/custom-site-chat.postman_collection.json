@@ -1445,6 +1445,7 @@
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
                   "console.log('✅ Sent 3 shipping questions to analytics');",
                   "console.log('   Saved as raw text in S3');",
+                  "console.log('   Cache invalidated (if existed)');",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
                 ],
                 "type": "text/javascript"
@@ -1485,6 +1486,7 @@
                   "console.log('✅ Sent 3 pricing/returns questions to analytics');",
                   "console.log('   Total raw questions in S3: 6');",
                   "console.log('   Total raw categories in S3: 3');",
+                  "console.log('   Cache invalidated');",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
                 ],
                 "type": "text/javascript"
@@ -1511,7 +1513,7 @@
           }
         },
         {
-          "name": "9.3.1 Verify Raw Data Saved",
+          "name": "9.3.1 Verify Raw Data Saved (No Cache)",
           "event": [
             {
               "listen": "test",
@@ -1528,7 +1530,7 @@
                   "    pm.expect(stats.totalQuestions).to.equal(6);",
                   "});",
                   "",
-                  "pm.test('Questions NOT processed yet', function() {",
+                  "pm.test('No cache yet (NOT processed)', function() {",
                   "    pm.expect(stats.questionsProcessed).to.be.false;",
                   "    pm.expect(stats.uniqueQuestions).to.equal(0);",
                   "});",
@@ -1537,7 +1539,7 @@
                   "    pm.expect(stats.totalCategories).to.equal(3);",
                   "});",
                   "",
-                  "pm.test('Categories NOT processed yet', function() {",
+                  "pm.test('No cache yet (NOT processed)', function() {",
                   "    pm.expect(stats.categoriesProcessed).to.be.false;",
                   "    pm.expect(stats.uniqueCategories).to.equal(0);",
                   "});",
@@ -1545,11 +1547,11 @@
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
                   "console.log('📊 Raw Data Status:');",
                   "console.log('   Total Questions (raw): ' + stats.totalQuestions);",
-                  "console.log('   Questions Processed: ' + (stats.questionsProcessed ? '✅ YES' : '⏳ NO'));",
+                  "console.log('   Cache exists: ' + (stats.questionsProcessed ? '✅ YES' : '❌ NO'));",
                   "console.log('   Total Categories (raw): ' + stats.totalCategories);",
-                  "console.log('   Categories Processed: ' + (stats.categoriesProcessed ? '✅ YES' : '⏳ NO'));",
+                  "console.log('   Cache exists: ' + (stats.categoriesProcessed ? '✅ YES' : '❌ NO'));",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
-                  "console.log('💡 Data saved as raw text, waiting for dashboard access...');",
+                  "console.log('💡 Data saved as raw text, no cache yet');",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
                 ],
                 "type": "text/javascript"
@@ -1573,7 +1575,7 @@
           }
         },
         {
-          "name": "9.4 Get Questions (First Request - Triggers OpenAI)",
+          "name": "9.4 Get Questions (First Request - OpenAI + Cache)",
           "event": [
             {
               "listen": "prerequest",
@@ -1581,7 +1583,8 @@
                 "exec": [
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
                   "console.log('👤 User opened Analytics Dashboard...');",
-                  "console.log('🔄 This will trigger OpenAI processing for the first time');",
+                  "console.log('🔄 First request → will trigger OpenAI processing');",
+                  "console.log('💾 Result will be cached in memory');",
                   "console.log('⏳ Expected processing time: 5-15 seconds');",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
                 ],
@@ -1623,6 +1626,7 @@
                   "",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
                   "console.log('🤖 OpenAI Processing Complete!');",
+                  "console.log('💾 Result cached in memory');",
                   "console.log('✅ Found ' + questions.length + ' processed questions:');",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
                   "questions.forEach((q, i) => {",
@@ -1632,6 +1636,68 @@
                   "        console.log('      Variations: ' + q.examples.slice(0, 2).join(', '));",
                   "    }",
                   "});",
+                  "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/questions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "questions"]
+            }
+          }
+        },
+        {
+          "name": "9.4.1 Get Questions Again (From Cache)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
+                  "console.log('🔄 Requesting questions again...');",
+                  "console.log('💾 Should return from cache (instant response)');",
+                  "console.log('⚡ No OpenAI call needed');",
+                  "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const responseData = pm.response.json();",
+                  "const questions = responseData.data;",
+                  "",
+                  "pm.test('Questions returned from cache', function() {",
+                  "    pm.expect(questions).to.be.an('array');",
+                  "    pm.expect(questions.length).to.be.greaterThan(0);",
+                  "});",
+                  "",
+                  "pm.test('Response time is fast (cached)', function() {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "",
+                  "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
+                  "console.log('✅ Returned from cache!');",
+                  "console.log('⚡ Response time: ' + pm.response.responseTime + 'ms');",
+                  "console.log('📊 Questions count: ' + questions.length);",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
                 ],
                 "type": "text/javascript"
@@ -1690,6 +1756,7 @@
                   "",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
                   "console.log('✅ Found ' + categories.length + ' processed categories:');",
+                  "console.log('💾 Result cached in memory');",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
                   "categories.forEach((cat, i) => {",
                   "    console.log('   ' + (i+1) + '. \"' + cat.category + '\"');",
@@ -1744,7 +1811,7 @@
                   "});",
                   "",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
-                  "console.log('✅ Excel file generated successfully');",
+                  "console.log('✅ Excel file generated from cache');",
                   "console.log('   File size: ' + pm.response.stream.length + ' bytes');",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
                 ],
@@ -1769,7 +1836,7 @@
           }
         },
         {
-          "name": "9.7 Get Updated Stats",
+          "name": "9.7 Get Updated Stats (With Cache)",
           "event": [
             {
               "listen": "test",
@@ -1787,28 +1854,28 @@
                   "    pm.expect(stats.totalCategories).to.be.greaterThan(0);",
                   "});",
                   "",
-                  "pm.test('Processing completed', function() {",
+                  "pm.test('Cache exists', function() {",
                   "    pm.expect(stats.questionsProcessed).to.be.true;",
                   "    pm.expect(stats.categoriesProcessed).to.be.true;",
                   "});",
                   "",
-                  "pm.test('Unique counts calculated', function() {",
+                  "pm.test('Unique counts from cache', function() {",
                   "    pm.expect(stats.uniqueQuestions).to.be.greaterThan(0);",
                   "    pm.expect(stats.uniqueCategories).to.be.greaterThan(0);",
                   "});",
                   "",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
-                  "console.log('📊 Final Analytics Stats:');",
+                  "console.log('📊 Analytics Stats (With Cache):');",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
                   "console.log('Questions:');",
                   "console.log('   Total (raw): ' + stats.totalQuestions);",
-                  "console.log('   Unique: ' + stats.uniqueQuestions);",
-                  "console.log('   Processed: ' + (stats.questionsProcessed ? '✅' : '❌'));",
+                  "console.log('   Unique (cached): ' + stats.uniqueQuestions);",
+                  "console.log('   Cache status: ' + (stats.questionsProcessed ? '✅ EXISTS' : '❌ NONE'));",
                   "console.log('');",
                   "console.log('Categories:');",
                   "console.log('   Total (raw): ' + stats.totalCategories);",
-                  "console.log('   Unique: ' + stats.uniqueCategories);",
-                  "console.log('   Processed: ' + (stats.categoriesProcessed ? '✅' : '❌'));",
+                  "console.log('   Unique (cached): ' + stats.uniqueCategories);",
+                  "console.log('   Cache status: ' + (stats.categoriesProcessed ? '✅ EXISTS' : '❌ NONE'));",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
                 ],
                 "type": "text/javascript"
@@ -1832,7 +1899,104 @@
           }
         },
         {
-          "name": "9.8 Invalid Secret Key",
+          "name": "9.8 Send New Question (Cache Invalidation)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
+                  "console.log('✅ New question added');",
+                  "console.log('🔄 Cache invalidated');",
+                  "console.log('💡 Next request will trigger OpenAI again');",
+                  "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"secretKey\": \"{{secretKey}}\",\n  \"unansweredQuestions\": [\n    \"מה שעות הפתיחה?\"\n  ],\n  \"topics\": [\n    \"שעות פעילות\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/session-ended",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "session-ended"]
+            }
+          }
+        },
+        {
+          "name": "9.9 Get Questions After Invalidation (Fresh OpenAI)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
+                  "console.log('🔄 Cache was invalidated by new data');",
+                  "console.log('🤖 Will trigger fresh OpenAI processing');",
+                  "console.log('⏳ Expected: 5-15 seconds');",
+                  "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const questions = pm.response.json().data;",
+                  "",
+                  "pm.test('Questions re-processed with new data', function() {",
+                  "    pm.expect(questions).to.be.an('array');",
+                  "    pm.expect(questions.length).to.be.greaterThan(0);",
+                  "});",
+                  "",
+                  "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
+                  "console.log('✅ Fresh OpenAI processing complete');",
+                  "console.log('💾 New cache created with updated data');",
+                  "console.log('📊 Questions count: ' + questions.length);",
+                  "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/questions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "questions"]
+            }
+          }
+        },
+        {
+          "name": "9.10 Invalid Secret Key",
           "event": [
             {
               "listen": "test",
@@ -1874,7 +2038,7 @@
           }
         },
         {
-          "name": "9.9 Unauthorized - No JWT",
+          "name": "9.11 Unauthorized - No JWT",
           "event": [
             {
               "listen": "test",
@@ -1901,7 +2065,7 @@
           }
         },
         {
-          "name": "9.10 Clear All Analytics",
+          "name": "9.12 Clear All Analytics",
           "event": [
             {
               "listen": "test",
@@ -1918,6 +2082,7 @@
                   "",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
                   "console.log('✅ All analytics data cleared from S3');",
+                  "console.log('🔄 Cache also cleared from memory');",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
                 ],
                 "type": "text/javascript"
@@ -1941,7 +2106,7 @@
           }
         },
         {
-          "name": "9.11 Verify Cleared",
+          "name": "9.13 Verify Cleared",
           "event": [
             {
               "listen": "test",
@@ -1961,7 +2126,7 @@
                   "    pm.expect(stats.uniqueCategories).to.equal(0);",
                   "});",
                   "",
-                  "pm.test('Processing flags reset', function() {",
+                  "pm.test('Cache cleared', function() {",
                   "    pm.expect(stats.questionsProcessed).to.be.false;",
                   "    pm.expect(stats.categoriesProcessed).to.be.false;",
                   "});",
@@ -1969,7 +2134,7 @@
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');",
                   "console.log('✅ Analytics successfully cleared!');",
                   "console.log('   All counters: 0');",
-                  "console.log('   Processing flags: false');",
+                  "console.log('   Cache: cleared');",
                   "console.log('   S3 files: deleted');",
                   "console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');"
                 ],

@@ -9,16 +9,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Analytics Service - Business logic for analytics
+ * Analytics Service with Smart Caching
  * 
  * Flow:
- * 1. Widget sends already-analyzed data (questions + topics)
- * 2. Service saves raw data to S3
- * 3. On first report request, consolidates duplicates
- * 4. Returns processed data to frontend
+ * 1. Widget sends data → save as raw text → cache invalidated
+ * 2. User opens dashboard → check if file changed → use cache or re-process
+ * 3. Cache is user-specific and invalidates when S3 file changes
  */
 @Service
 @RequiredArgsConstructor
@@ -27,6 +29,41 @@ public class AnalyticsService {
 
     private final AnalyticsFileService fileService;
     private final AnalyticsSummarizationService summarizationService;
+
+    // ========================================================================
+    // CACHE STORAGE (In-Memory)
+    // ========================================================================
+
+    // Cache for processed questions
+    private final Map<Long, CachedQuestions> questionsCache = new ConcurrentHashMap<>();
+    
+    // Cache for processed categories
+    private final Map<Long, CachedCategories> categoriesCache = new ConcurrentHashMap<>();
+
+    // Helper classes for cache entries
+    private static class CachedQuestions {
+        List<QuestionSummary> data;
+        Instant lastModified;
+        int rawCount; // Number of raw questions when cached
+        
+        CachedQuestions(List<QuestionSummary> data, int rawCount) {
+            this.data = data;
+            this.rawCount = rawCount;
+            this.lastModified = Instant.now();
+        }
+    }
+    
+    private static class CachedCategories {
+        List<CategoryStats> data;
+        Instant lastModified;
+        int rawCount; // Number of raw categories when cached
+        
+        CachedCategories(List<CategoryStats> data, int rawCount) {
+            this.data = data;
+            this.rawCount = rawCount;
+            this.lastModified = Instant.now();
+        }
+    }
 
     // ========================================================================
     // PROCESS ANALYTICS DATA (from Widget)
@@ -46,50 +83,54 @@ public class AnalyticsService {
             List<String> topics) {
         
         try {
-            log.info("🔵 Processing analytics for user: {}", user.getId());
+            log.info("🔵 Saving raw analytics for user: {}", user.getId());
             log.info("   Questions: {}", unansweredQuestions != null ? unansweredQuestions.size() : 0);
             log.info("   Topics: {}", topics != null ? topics.size() : 0);
 
+            Long userId = user.getId();
+
             // Save raw questions to S3
             if (unansweredQuestions != null && !unansweredQuestions.isEmpty()) {
-                fileService.appendRawQuestions(user.getId(), unansweredQuestions);
+                fileService.appendRawQuestions(userId, unansweredQuestions);
                 log.info("✅ Saved {} raw questions", unansweredQuestions.size());
+                
+                // Invalidate cache since new data arrived
+                questionsCache.remove(userId);
+                log.info("🔄 Questions cache invalidated for user {}", userId);
             }
 
             // Save raw categories to S3
             if (topics != null && !topics.isEmpty()) {
-                fileService.appendRawCategories(user.getId(), topics);
+                fileService.appendRawCategories(userId, topics);
                 log.info("✅ Saved {} raw categories", topics.size());
+                
+                // Invalidate cache since new data arrived
+                categoriesCache.remove(userId);
+                log.info("🔄 Categories cache invalidated for user {}", userId);
             }
 
-            log.info("✅ Analytics processed successfully");
+            log.info("✅ Raw analytics saved successfully");
 
         } catch (Exception e) {
-            log.error("❌ Failed to process analytics", e);
-            throw new RuntimeException("נכשל בעיבוד אנליטיקס", e);
+            log.error("❌ Failed to save analytics", e);
+            throw new RuntimeException("נכשל בשמירת אנליטיקס", e);
         }
     }
 
     // ========================================================================
-    // GET PROCESSED QUESTIONS
+    // GET PROCESSED QUESTIONS (Dashboard Request with Smart Cache)
     // ========================================================================
 
     /**
-     * Get processed questions (consolidated with counts)
-     * First request triggers summarization via OpenAI
-     * Subsequent requests return cached JSON
+     * Get processed questions with smart caching
+     * Returns cached result if data hasn't changed
+     * Re-processes with OpenAI if new data arrived
      */
     public List<QuestionSummary> getProcessedQuestions(Long userId) {
         try {
             log.info("📊 Getting processed questions for user: {}", userId);
 
-            // Check if already processed
-            if (fileService.areQuestionsProcessed(userId)) {
-                log.info("✅ Questions already processed, reading from S3");
-                return fileService.readProcessedQuestions(userId);
-            }
-
-            // Read raw questions
+            // Read raw questions from S3
             List<String> rawQuestions = fileService.readRawQuestions(userId);
             
             if (rawQuestions.isEmpty()) {
@@ -97,43 +138,48 @@ public class AnalyticsService {
                 return List.of();
             }
 
-            log.info("🔄 Processing {} raw questions...", rawQuestions.size());
+            int currentRawCount = rawQuestions.size();
 
-            // Summarize with OpenAI
+            // Check cache
+            CachedQuestions cached = questionsCache.get(userId);
+            
+            if (cached != null && cached.rawCount == currentRawCount) {
+                // Cache is valid - same number of questions
+                long cacheAge = Instant.now().getEpochSecond() - cached.lastModified.getEpochSecond();
+                log.info("✅ Using cached questions (age: {}s, count: {})", cacheAge, currentRawCount);
+                return cached.data;
+            }
+
+            // Cache miss or invalidated - process with OpenAI
+            log.info("🔄 Processing {} raw questions with OpenAI (cache miss)...", currentRawCount);
             List<QuestionSummary> summaries = summarizationService.summarizeQuestions(rawQuestions);
 
-            // Save processed results
-            fileService.saveProcessedQuestions(userId, summaries);
-
-            log.info("✅ Processed {} questions → {} summaries", rawQuestions.size(), summaries.size());
+            // Update cache
+            questionsCache.put(userId, new CachedQuestions(summaries, currentRawCount));
+            log.info("✅ Processed and cached {} questions → {} summaries", currentRawCount, summaries.size());
+            
             return summaries;
 
         } catch (Exception e) {
-            log.error("❌ Failed to get processed questions", e);
-            throw new RuntimeException("נכשל בקריאת שאלות", e);
+            log.error("❌ Failed to process questions", e);
+            throw new RuntimeException("נכשל בעיבוד שאלות", e);
         }
     }
 
     // ========================================================================
-    // GET PROCESSED CATEGORIES
+    // GET PROCESSED CATEGORIES (Dashboard Request with Smart Cache)
     // ========================================================================
 
     /**
-     * Get processed categories (consolidated with stats)
-     * First request triggers summarization via OpenAI
-     * Subsequent requests return cached JSON
+     * Get processed categories with smart caching
+     * Returns cached result if data hasn't changed
+     * Re-processes with OpenAI if new data arrived
      */
     public List<CategoryStats> getProcessedCategories(Long userId) {
         try {
             log.info("📊 Getting processed categories for user: {}", userId);
 
-            // Check if already processed
-            if (fileService.areCategoriesProcessed(userId)) {
-                log.info("✅ Categories already processed, reading from S3");
-                return fileService.readProcessedCategories(userId);
-            }
-
-            // Read raw categories
+            // Read raw categories from S3
             List<String> rawCategories = fileService.readRawCategories(userId);
             
             if (rawCategories.isEmpty()) {
@@ -141,74 +187,69 @@ public class AnalyticsService {
                 return List.of();
             }
 
-            log.info("🔄 Processing {} raw categories...", rawCategories.size());
+            int currentRawCount = rawCategories.size();
 
-            // Summarize with OpenAI
+            // Check cache
+            CachedCategories cached = categoriesCache.get(userId);
+            
+            if (cached != null && cached.rawCount == currentRawCount) {
+                // Cache is valid - same number of categories
+                long cacheAge = Instant.now().getEpochSecond() - cached.lastModified.getEpochSecond();
+                log.info("✅ Using cached categories (age: {}s, count: {})", cacheAge, currentRawCount);
+                return cached.data;
+            }
+
+            // Cache miss or invalidated - process with OpenAI
+            log.info("🔄 Processing {} raw categories with OpenAI (cache miss)...", currentRawCount);
             List<CategoryStats> stats = summarizationService.summarizeCategories(rawCategories);
 
-            // Save processed results
-            fileService.saveProcessedCategories(userId, stats);
-
-            log.info("✅ Processed {} categories → {} stats", rawCategories.size(), stats.size());
+            // Update cache
+            categoriesCache.put(userId, new CachedCategories(stats, currentRawCount));
+            log.info("✅ Processed and cached {} categories → {} stats", currentRawCount, stats.size());
+            
             return stats;
 
         } catch (Exception e) {
-            log.error("❌ Failed to get processed categories", e);
-            throw new RuntimeException("נכשל בקריאת קטגוריות", e);
+            log.error("❌ Failed to process categories", e);
+            throw new RuntimeException("נכשל בעיבוד קטגוריות", e);
         }
     }
 
     // ========================================================================
-    // CLEAR DATA
+    // CLEAR DATA (Also clears cache)
     // ========================================================================
 
-    /**
-     * Clear questions data
-     */
     public void clearQuestions(Long userId) {
         try {
             log.info("🗑️ Clearing questions for user: {}", userId);
-            
-            // Just delete the file from S3
             fileService.clearQuestions(userId);
-            
-            log.info("✅ Questions cleared successfully");
-
+            questionsCache.remove(userId); // Clear cache
+            log.info("✅ Questions and cache cleared successfully");
         } catch (Exception e) {
             log.error("❌ Failed to clear questions", e);
             throw new RuntimeException("נכשל במחיקת שאלות", e);
         }
     }
 
-    /**
-     * Clear categories data
-     */
     public void clearCategories(Long userId) {
         try {
             log.info("🗑️ Clearing categories for user: {}", userId);
-            
-            // Just delete the file from S3
             fileService.clearCategories(userId);
-            
-            log.info("✅ Categories cleared successfully");
-
+            categoriesCache.remove(userId); // Clear cache
+            log.info("✅ Categories and cache cleared successfully");
         } catch (Exception e) {
             log.error("❌ Failed to clear categories", e);
             throw new RuntimeException("נכשל במחיקת קטגוריות", e);
         }
     }
 
-    /**
-     * Clear all analytics data
-     */
     public void clearAllAnalytics(Long userId) {
         try {
             log.info("🗑️ Clearing all analytics for user: {}", userId);
-            
             fileService.clearAllAnalytics(userId);
-            
-            log.info("✅ All analytics cleared successfully");
-
+            questionsCache.remove(userId); // Clear cache
+            categoriesCache.remove(userId); // Clear cache
+            log.info("✅ All analytics and cache cleared successfully");
         } catch (Exception e) {
             log.error("❌ Failed to clear all analytics", e);
             throw new RuntimeException("נכשל במחיקת אנליטיקס", e);
@@ -219,10 +260,6 @@ public class AnalyticsService {
     // GET STATISTICS
     // ========================================================================
 
-    /**
-     * Get summary statistics
-     * Note: No longer tracking "total sessions" - only question counts
-     */
     public AnalyticsStats getStats(Long userId) {
         try {
             log.info("📊 Getting stats for user: {}", userId);
@@ -232,32 +269,36 @@ public class AnalyticsService {
             // Count raw questions
             List<String> rawQuestions = fileService.readRawQuestions(userId);
             stats.setTotalQuestions(rawQuestions.size());
-
-            // Count unique questions (from processed data if available)
-            if (fileService.areQuestionsProcessed(userId)) {
-                List<QuestionSummary> processed = fileService.readProcessedQuestions(userId);
-                stats.setUniqueQuestions(processed.size());
+            
+            // Check if cached
+            CachedQuestions cachedQ = questionsCache.get(userId);
+            if (cachedQ != null) {
+                stats.setUniqueQuestions(cachedQ.data.size());
                 stats.setQuestionsProcessed(true);
             } else {
                 stats.setUniqueQuestions(0);
                 stats.setQuestionsProcessed(false);
             }
 
-            // Count categories
+            // Count raw categories
             List<String> rawCategories = fileService.readRawCategories(userId);
             stats.setTotalCategories(rawCategories.size());
-
-            if (fileService.areCategoriesProcessed(userId)) {
-                List<CategoryStats> processed = fileService.readProcessedCategories(userId);
-                stats.setUniqueCategories(processed.size());
+            
+            // Check if cached
+            CachedCategories cachedC = categoriesCache.get(userId);
+            if (cachedC != null) {
+                stats.setUniqueCategories(cachedC.data.size());
                 stats.setCategoriesProcessed(true);
             } else {
                 stats.setUniqueCategories(0);
                 stats.setCategoriesProcessed(false);
             }
 
-            log.info("✅ Stats: {} questions, {} categories", 
-                stats.getTotalQuestions(), stats.getTotalCategories());
+            log.info("✅ Stats: {} raw questions ({} cached), {} raw categories ({} cached)", 
+                stats.getTotalQuestions(), 
+                cachedQ != null ? "yes" : "no",
+                stats.getTotalCategories(),
+                cachedC != null ? "yes" : "no");
 
             return stats;
 

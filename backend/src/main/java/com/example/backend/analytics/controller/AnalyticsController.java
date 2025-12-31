@@ -32,10 +32,10 @@ import java.util.Map;
  * - POST /api/analytics/session-ended - Receive analytics data from widget
  * 
  * Authenticated Endpoints (JWT required):
- * - GET /api/analytics/questions - Get questions list
+ * - GET /api/analytics/questions - Get questions list (with smart caching)
  * - GET /api/analytics/questions/download - Download questions as Excel
  * - DELETE /api/analytics/questions - Clear questions
- * - GET /api/analytics/categories - Get categories with stats
+ * - GET /api/analytics/categories - Get categories with stats (with smart caching)
  * - DELETE /api/analytics/categories - Clear categories
  * - GET /api/analytics/stats - Get summary statistics
  * - DELETE /api/analytics/clear-all - Clear all analytics data
@@ -72,7 +72,7 @@ public class AnalyticsController {
             // Validate secret key and get user
             User user = collectionService.validateSecretKey(request.getSecretKey());
 
-            // Process analytics data
+            // Process analytics data (saves raw + invalidates cache)
             analyticsService.processAnalyticsData(
                 user,
                 request.getUnansweredQuestions(),
@@ -108,8 +108,9 @@ public class AnalyticsController {
     // ========================================================================
 
     /**
-     * Get questions list (processed)
+     * Get questions list (processed with smart caching)
      * Returns consolidated questions with counts and examples
+     * Uses cache if available, processes with OpenAI if cache invalid
      */
     @GetMapping("/questions")
     public ResponseEntity<AnalyticsResponse<List<QuestionSummary>>> getQuestions(
@@ -163,7 +164,7 @@ public class AnalyticsController {
     }
 
     /**
-     * Clear questions data
+     * Clear questions data (clears both S3 and cache)
      */
     @DeleteMapping("/questions")
     public ResponseEntity<AnalyticsResponse<Void>> clearQuestions(@AuthenticationPrincipal User user) {
@@ -185,8 +186,9 @@ public class AnalyticsController {
     }
 
     /**
-     * Get categories with statistics
+     * Get categories with statistics (processed with smart caching)
      * Returns categories with counts and percentages
+     * Uses cache if available, processes with OpenAI if cache invalid
      */
     @GetMapping("/categories")
     public ResponseEntity<AnalyticsResponse<List<CategoryStats>>> getCategories(
@@ -210,7 +212,7 @@ public class AnalyticsController {
     }
 
     /**
-     * Clear categories data
+     * Clear categories data (clears both S3 and cache)
      */
     @DeleteMapping("/categories")
     public ResponseEntity<AnalyticsResponse<Void>> clearCategories(@AuthenticationPrincipal User user) {
@@ -233,7 +235,7 @@ public class AnalyticsController {
 
     /**
      * Get summary statistics
-     * Returns counts and processing status
+     * Returns counts and cache status
      */
     @GetMapping("/stats")
     public ResponseEntity<AnalyticsResponse<AnalyticsStats>> getStats(
@@ -257,7 +259,7 @@ public class AnalyticsController {
     }
 
     /**
-     * Clear all analytics data (questions + categories)
+     * Clear all analytics data (questions + categories + cache)
      */
     @DeleteMapping("/clear-all")
     public ResponseEntity<AnalyticsResponse<Void>> clearAll(@AuthenticationPrincipal User user) {
