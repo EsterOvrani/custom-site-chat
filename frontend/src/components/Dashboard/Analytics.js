@@ -32,9 +32,15 @@ function Analytics() {
         analyticsAPI.getCategories()
       ]);
 
-      setStats(statsData.data);
-      setQuestions(questionsData.data || []);
-      setCategories(categoriesData.data || []);
+      console.log('📊 Analytics data loaded:', {
+        stats: statsData.data,
+        questions: questionsData.data,
+        categories: categoriesData.data
+      });
+
+      setStats(statsData.data?.data || {});
+      setQuestions(Array.isArray(questionsData.data?.data) ? questionsData.data.data : []);
+      setCategories(Array.isArray(categoriesData.data?.data) ? categoriesData.data.data : []);
 
     } catch (error) {
       console.error('Failed to load analytics:', error);
@@ -147,10 +153,10 @@ function Analytics() {
           <div className="analytics-questions">
             {/* Action Buttons */}
             <div className="analytics-actions">
-              <button className="btn-download" onClick={handleDownloadExcel}>
+              <button className="btn-download" onClick={handleDownloadExcel} disabled={questions.length === 0}>
                 📥 הורד אקסל
               </button>
-              <button className="btn-clear" onClick={handleClearAll}>
+              <button className="btn-clear" onClick={handleClearAll} disabled={questions.length === 0 && categories.length === 0}>
                 🗑️ נקה הכל
               </button>
             </div>
