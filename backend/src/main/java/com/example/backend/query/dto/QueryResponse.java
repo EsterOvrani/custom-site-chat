@@ -14,6 +14,8 @@ import java.util.List;
 public class QueryResponse {
     
     private String answer;
+
+    private String rewrittenQuery;
     
     private List<Source> sources;
 

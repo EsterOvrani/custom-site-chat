@@ -58,40 +58,46 @@ public class QueryService {
                 user.getId(), 
                 validatedHistory.size());
 
-            // 3. Search for relevant documents (with context from history)
+            // 3. Improved query construction (rewritten with LLM!)
+            String enhancedQuery = buildEnhancedQuery(question, validatedHistory);
+            log.info("🔍 Searching with query: '{}'", enhancedQuery);
+
+            // 4. Search for relevant documents (with the rewritten question!)
             List<RelevantDocument> relevantDocs = searchRelevantDocuments(
                 user.getCollectionName(),
-                question,
+                enhancedQuery, // Here the rewritten question is used!
                 validatedHistory
             );
 
+            // 5. If no relevant documents were found
             if (relevantDocs.isEmpty()) {
-                return createNoResultsResponse(question, startTime);
+                return createNoResultsResponse(question, enhancedQuery, startTime);  // send also enhancedQuery
             }
 
-            // 4. Building messages for GPT (with history!)
+            // 6. Building messages with history
             List<ChatMessage> messages = buildMessagesWithHistory(
                 question,
                 relevantDocs,
                 validatedHistory
             );
 
-            // 5. Sending to GPT
+            // 7. Sending to GPT
             Response<AiMessage> response = chatModel.generate(messages);
             String answer = response.content().text();
 
-            // 6. Calculating metrics
+            // 8. Calculating metrics
             long responseTime = System.currentTimeMillis() - startTime;
             Double confidence = calculateConfidence(relevantDocs);
             
             OpenAiTokenizer tokenizer = new OpenAiTokenizer("gpt-4");
             int tokensUsed = tokenizer.estimateTokenCountInMessage(response.content());
 
-            // 7. Building sources
+            // 9. Building sources
             List<QueryResponse.Source> sources = buildSources(relevantDocs);
 
             return QueryResponse.builder()
                 .answer(answer)
+                .rewrittenQuery(enhancedQuery)  
                 .sources(sources)
                 .confidence(confidence)
                 .tokensUsed(tokensUsed)
@@ -130,7 +136,7 @@ public class QueryService {
     // Find relevant chunks in Qdrant
     private List<RelevantDocument> searchRelevantDocuments(
             String collectionName,
-            String question,
+            String enhancedQuery,
             List<PublicQueryRequest.HistoryMessage> history) {
         
         try {
@@ -142,9 +148,7 @@ public class QueryService {
                 return new ArrayList<>();
             }
 
-            // Build an improved query with the context
-            String enhancedQuery = buildEnhancedQuery(question, history);
-            log.info("Enhanced query: {}", enhancedQuery);
+            log.info("🔍 Searching Qdrant with enhanced query: '{}'", enhancedQuery);       
 
             // Convert to vector (temporary!)
             Embedding queryEmbedding = embeddingModel.embed(enhancedQuery).content();
@@ -184,29 +188,132 @@ public class QueryService {
         }
     }
 
-    // Add context from history to query
+
+    // Improved query builder - rewrites with LLM to be independent
     private String buildEnhancedQuery(String question, List<PublicQueryRequest.HistoryMessage> history) {
         
+        // אם אין היסטוריה - מחזיר את השאלה המקורית
         if (history == null || history.isEmpty()) {
+            log.info("📝 No history - using original question");
             return question;
         }
         
-        // Get the user's last messages (if any)
-        StringBuilder contextBuilder = new StringBuilder();
-        int userMessagesAdded = 0;
+        // שכתוב השאלה עם LLM
+        return rewriteQueryWithLLM(question, history);
+    }
+
+    // Rewrite the query with LLM to be independent, Uses all available history (up to 10 messages)
+    private String rewriteQueryWithLLM(String question, List<PublicQueryRequest.HistoryMessage> history) {
         
-        for (int i = history.size() - 1; i >= 0 && userMessagesAdded < 2; i--) {
-            PublicQueryRequest.HistoryMessage msg = history.get(i);
-            if ("user".equals(msg.getRole())) {
-                contextBuilder.insert(0, msg.getContent() + " ");
-                userMessagesAdded++;
+        try {
+            log.info("🔄 Rewriting query with LLM...");
+            long startTime = System.currentTimeMillis();
+            
+            // בניית הקשר מכל ההיסטוריה (כבר מוגבלת ל-10 הודעות!)
+            StringBuilder contextBuilder = new StringBuilder();
+            
+            for (PublicQueryRequest.HistoryMessage msg : history) {
+                String role = msg.isUser() ? "User" : "Assistant";
+                contextBuilder.append(role).append(": ").append(msg.getContent()).append("\n");
             }
+            
+            log.info("📚 Using {} history messages for rewriting", history.size());
+            
+            // בניית ה-Prompt לשכתוב
+            String rewritePrompt = buildRewritePrompt(contextBuilder.toString(), question);
+            
+            // שליחה ל-LLM
+            log.info("🚀 Sending rewrite request to LLM...");
+            
+            Response<AiMessage> response = chatModel.generate(
+                SystemMessage.from("You are a query rewriting assistant. Your ONLY job is to rewrite user questions to be standalone based on conversation history."),
+                UserMessage.from(rewritePrompt)
+            );
+            
+            String rewrittenQuery = response.content().text().trim();
+            
+            // ניקוי התשובה - הסרת מרכאות ו-prefixes
+            rewrittenQuery = rewrittenQuery
+                .replaceAll("^\"|\"$", "")
+                .replaceAll("^(Rewritten question:|שאלה משוכתבת:)\\s*", "")
+                .trim();
+            
+            long duration = System.currentTimeMillis() - startTime;
+            
+            log.info("✅ Query rewriting completed in {}ms", duration);
+            log.info("📥 Original:  '{}'", question);
+            log.info("📤 Rewritten: '{}'", rewrittenQuery);
+            
+            return rewrittenQuery;
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to rewrite query - using original question", e);
+            // במקרה של שגיאה - מחזיר את השאלה המקורית
+            return question;
         }
+    }
+
+    // Constructs a prompt to rewrite the query according to the language
+    private String buildRewritePrompt(String context, String question) {
         
-        // Add the current question
-        contextBuilder.append(question);
+        // זיהוי שפה (משתמש בפונקציה הקיימת)
+        String detectedLanguage = detectLanguage(question);
         
-        return contextBuilder.toString();
+        if (detectedLanguage.equals("he")) {
+            // Prompt בעברית
+            return String.format("""
+                בהתבסס על ההקשר הבא מהשיחה, שכתב את השאלה האחרונה של המשתמש כך שתהיה עצמאית ומובנת ללא הקשר.
+                
+                הקשר מהשיחה:
+                %s
+                
+                שאלה נוכחית של המשתמש: %s
+                
+                חוקים חשובים:
+                1. אל תוסיף מידע שלא קיים בשאלה המקורית
+                2. שמור על הכוונה והמשמעות המקורית של השאלה
+                3. אם השאלה כבר עצמאית ומובנת מעצמה - החזר אותה בדיוק כמו שהיא
+                4. אם השאלה מתייחסת להיסטוריה (למשל "ובשבת?", "כמה זה עולה?") - שכתב אותה להיות מלאה
+                5. החזר רק את השאלה המשוכתבת, ללא הסברים או טקסט נוסף
+                6. אל תשנה את השפה של השאלה
+                
+                דוגמאות:
+                - אם השאלה היא "ובשבת?" ובהיסטוריה דובר על שעות פתיחה → "מה שעות הפתיחה בשבת?"
+                - אם השאלה היא "כמה זה עולה?" ובהיסטוריה דובר על קורס → "כמה עולה הקורס?"
+                - אם השאלה היא "מה שעות הפתיחה שלכם?" → "מה שעות הפתיחה שלכם?" (כבר עצמאית)
+                
+                שאלה משוכתבת:""", 
+                context, 
+                question
+            );
+        } else {
+            // Prompt באנגלית
+            return String.format("""
+                Based on the following conversation context, rewrite the user's last question to be standalone and understandable without any prior context.
+                
+                Conversation context:
+                %s
+                
+                User's current question: %s
+                
+                Important rules:
+                1. Do NOT add information that doesn't exist in the original question
+                2. Keep the original intent and meaning of the question
+                3. If the question is already standalone and self-contained - return it exactly as is
+                4. If the question references history (e.g., "on Saturday?", "how much is it?") - rewrite it to be complete
+                5. Return ONLY the rewritten question, no explanations or additional text
+                6. Do NOT change the language of the question
+                
+                Examples:
+                - If question is "on Saturday?" and history discussed opening hours → "What are the opening hours on Saturday?"
+                - If question is "how much is it?" and history discussed a course → "How much does the course cost?"
+                - If question is "What are your opening hours?" → "What are your opening hours?" (already standalone)
+                
+                Rewritten question:""", 
+                context, 
+                question
+            );
+        }
     }
 
     // Build chat messages for GPT
@@ -322,8 +429,9 @@ public class QueryService {
     }
 
     // Response when no documents found
-    private QueryResponse createNoResultsResponse(String question, long startTime) {
-        String detectedLanguage = detectLanguage(question);
+    private QueryResponse createNoResultsResponse(String originalQuestion, String enhancedQuery, long startTime) {
+        
+        String detectedLanguage = detectLanguage(originalQuestion);
         String message = detectedLanguage.equals("he") 
             ? "מצטער, לא מצאתי מידע רלוונטי במסמכים."
             : "Sorry, I couldn't find relevant information in the documents.";
@@ -332,6 +440,7 @@ public class QueryService {
 
         return QueryResponse.builder()
             .answer(message)
+            .rewrittenQuery(enhancedQuery)  // ⭐ חדש!
             .sources(Collections.emptyList())
             .confidence(0.0)
             .tokensUsed(0)
