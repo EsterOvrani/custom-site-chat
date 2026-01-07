@@ -105,10 +105,11 @@ public class CollectionService {
             "  window.CHAT_WIDGET_API_URL = 'https://custom-site-chat.com';\n" +
             "  \n" +
             "  // Customization (optional): \n" +
-            "  window.CHAT_WIDGET_TITLE = 'ENTER TITEL OF THE CHAT LIKE: COMPENY NAME'; \n" +
+            "  window.CHAT_WIDGET_TITLE = 'ENTER TITLE OF THE CHAT LIKE: COMPANY NAME'; \n" +
             "  window.CHAT_WIDGET_BOT_NAME = 'ENTER NAME OF THE BOT USER';\n" +
             "  window.CHAT_WIDGET_BOT_AVATAR = 'ENTER BOT PROFILE IMAGE OR NULL'; \n" +
             "  window.CHAT_WIDGET_USER_AVATAR = 'ENTER LINK OF USER PROFILE IMAGE OR NULL'; \n" +
+            "  window.CHAT_WIDGET_SITE_CATEGORY = 'ENTER THE TOPIC OF YOUR SITE LIKE: ONLINE SHOP SITE'; \n" +
             "</script>\n" +
             "<script src=\"https://custom-site-chat.com/chat-widget.js\"></script>\n" +
             "<!-- End Chat Widget -->",

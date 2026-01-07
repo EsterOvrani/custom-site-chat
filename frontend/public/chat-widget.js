@@ -11,17 +11,18 @@
 
   function initWidget() {
     const WIDGET_CONFIG = {
-      apiUrl: window.CHAT_WIDGET_API_URL || 'http://localhost:8080',
-      secretKey: window.CHAT_WIDGET_SECRET_KEY,
-      position: 'bottom-right',
-      primaryColor: '#667eea',
-      secondaryColor: '#764ba2',
-      title: window.CHAT_WIDGET_TITLE || 'צ\'אט עם המסמכים שלי',
-      botName: window.CHAT_WIDGET_BOT_NAME || 'AI',
-      botAvatar: window.CHAT_WIDGET_BOT_AVATAR || null,
-      userAvatar: window.CHAT_WIDGET_USER_AVATAR || null,
-      maxHistoryMessages: 10,
-      voiceEnabled: true
+        apiUrl: window.CHAT_WIDGET_API_URL || 'http://localhost:8080',
+        secretKey: window.CHAT_WIDGET_SECRET_KEY,
+        position: 'bottom-right',
+        primaryColor: '#667eea',
+        secondaryColor: '#764ba2',
+        title: window.CHAT_WIDGET_TITLE || 'צ\'אט עם המסמכים שלי',
+        botName: window.CHAT_WIDGET_BOT_NAME || 'AI',
+        botAvatar: window.CHAT_WIDGET_BOT_AVATAR || null,
+        userAvatar: window.CHAT_WIDGET_USER_AVATAR || null,
+        siteCategory: window.CHAT_WIDGET_SITE_CATEGORY || null,
+        maxHistoryMessages: 10,
+        voiceEnabled: true
     };
 
     if (!WIDGET_CONFIG.secretKey) {
@@ -556,18 +557,19 @@
 
   function setupEventListeners(config) {
     const state = {
-      messages: [],
-      history: [],
-      isOpen: false,
-      isLoading: false,
-      isRecording: false,
-      recordingStartTime: null,
-      recordingTimer: null,
-      recognition: null,
-      currentLanguage: 'he-IL',
-      sessionId: generateSessionId(),
-      maxHistoryMessages: config.maxHistoryMessages,
-      currentTranscript: ''
+        messages: [],
+        history: [],
+        isOpen: false,
+        isLoading: false,
+        isRecording: false,
+        recordingStartTime: null,
+        recordingTimer: null,
+        recognition: null,
+        currentLanguage: 'he-IL',
+        sessionId: generateSessionId(),
+        maxHistoryMessages: config.maxHistoryMessages,
+        currentTranscript: '',
+        unansweredQuestions: []
     };
 
     const elements = {
@@ -890,6 +892,10 @@
 
   function resetChat(state, elements, config) {
     if (confirm('האם אתה בטוח שברצונך להתחיל שיחה חדשה? ההיסטוריה תימחק.')) {
+      
+      // send the unaswerd question before reset chat
+      sendUnansweredQuestionsToServer(state, config);
+
       state.history = [];
       state.messages = [];
       state.currentTranscript = '';
@@ -1071,6 +1077,32 @@
           role: 'assistant',
           content: data.data.answer
         });
+
+        const noAnswerPhrases = [
+          'מצטער, לא מצאתי מידע רלוונטי במסמכים',
+          'Sorry, I couldn\'t find relevant information in the documents'
+        ];
+
+        const isNoAnswer = noAnswerPhrases.some(phrase => 
+          data.data.answer.toLowerCase().includes(phrase.toLowerCase())
+        );
+
+        if (isNoAnswer) {
+          console.log('📝 Detected unanswered question:', question);
+          state.unansweredQuestions.push(question);
+          
+          // save in sessionStorage - local
+          try {
+            sessionStorage.setItem(
+              'unansweredQuestions_' + config.secretKey,
+              JSON.stringify(state.unansweredQuestions)
+            );
+          } catch (e) {
+            console.error('Failed to save unanswered questions', e);
+          }
+        }
+      
+
       } else {
         state.messages.push({
           role: 'assistant',
@@ -1098,6 +1130,56 @@
       elements.inputField.focus();
     }
   }
+
+  async function sendUnansweredQuestionsToServer(state, config) {
+    // אם אין שאלות - אל תעשה כלום
+    if (state.unansweredQuestions.length === 0) {
+      console.log('ℹ️ No unanswered questions to send');
+      return;
+    }
+
+    console.log('📤 Sending', state.unansweredQuestions.length, 'unanswered questions to server');
+
+    try {
+      // שלח בקשה לשרת
+      await fetch(`${config.apiUrl}/api/analytics/save-questions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          secretKey: config.secretKey,
+          questions: state.unansweredQuestions,
+          siteCategory: config.siteCategory // ⭐ שולח גם את קטגוריית האתר
+        })
+      });
+
+      console.log('✅ Questions sent successfully');
+      
+      // אפס את הרשימה אחרי שליחה מוצלחת
+      state.unansweredQuestions = [];
+      sessionStorage.removeItem('unansweredQuestions_' + config.secretKey);
+
+    } catch (error) {
+      console.error('❌ Failed to send questions:', error);
+    }
+  }
+
+  // send the unanswerd question before the page closed
+  window.addEventListener('beforeunload', () => {
+    if (state.unansweredQuestions.length > 0) {
+      console.log('📤 Page closing - sending questions via beacon');
+      
+      const data = JSON.stringify({
+        secretKey: config.secretKey,
+        questions: state.unansweredQuestions,
+        siteCategory: config.siteCategory
+      });
+      
+      const blob = new Blob([data], { type: 'application/json' });
+      navigator.sendBeacon(`${config.apiUrl}/api/analytics/save-questions`, blob);
+    }
+  });
 
   console.log('✅ Chat Widget initialized');
 })();

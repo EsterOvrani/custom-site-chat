@@ -5,6 +5,8 @@ import { authAPI, collectionAPI, documentAPI } from '../../services/api';
 import DocumentsList from './DocumentsList';
 import CollectionSettings from './CollectionSettings';
 import UploadDocumentModal from './UploadDocumentModal';
+import Analytics from './Analytics';
+
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -274,6 +276,12 @@ const Dashboard = () => {
           >
             ⚙️ קוד הטמעה והגדרות
           </button>
+          <button
+            className={`tab ${activeTab === 'analytics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analytics')}
+          >
+            📊 Analytics
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -294,6 +302,10 @@ const Dashboard = () => {
               onRegenerateKey={handleRegenerateKey}
               loading={loading}
             />
+          )}
+
+          {activeTab === 'analytics' && (
+            <Analytics />
           )}
         </div>
       </div>
