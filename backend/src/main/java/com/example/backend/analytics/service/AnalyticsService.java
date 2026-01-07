@@ -212,31 +212,47 @@ public class AnalyticsService {
         return String.format("users/%d/analytics/questions.txt", user.getId());
     }
 
-    // ניתוח חכם של השאלות עם AI
+    /**
+     * Analyze questions with AI
+     * Groups questions by category, removes duplicates, and provides insights
+     */
     public AnalysisResponse analyzeQuestions(User user) {
         String filePath = getFilePath(user);
 
         try {
-            // 1. הורדת הקובץ מ-S3
+            // 1. Check if questions file exists
+            if (!s3Service.fileExists(filePath)) {
+                log.warn("⚠️ No questions file found for user: {}", user.getId());
+                throw new RuntimeException("לא נמצאו שאלות לניתוח.");
+            }
+
+            // 2. Download file from S3
             InputStream inputStream = s3Service.downloadFile(filePath);
             String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
 
-            // 2. חילוץ השאלות
+            // 3. Extract questions from file content
             List<String> questions = new ArrayList<>();
             String[] lines = content.split("\n");
             for (String line : lines) {
                 line = line.trim();
+                // Skip empty lines and "Question N" headers
                 if (!line.isEmpty() && !line.startsWith("שאלה")) {
                     questions.add(line);
                 }
             }
 
+            // 4. Check if there are actual questions to analyze
+            if (questions.isEmpty()) {
+                log.warn("⚠️ Questions file is empty for user: {}", user.getId());
+                throw new RuntimeException("קובץ השאלות ריק.");
+            }
+
             log.info("🔍 Analyzing {} questions with AI", questions.size());
 
-            // 3. בניית prompt ל-AI
+            // 5. Build prompt for AI analysis
             String prompt = buildAnalysisPrompt(questions);
 
-            // 4. שליחה ל-AI
+            // 6. Send to AI for analysis
             Response<AiMessage> response = chatModel.generate(
                     SystemMessage.from("אתה מומחה לניתוח וסיווג שאלות לקוחות. תחזיר תשובה במבנה JSON בלבד."),
                     UserMessage.from(prompt)
@@ -245,13 +261,13 @@ public class AnalyticsService {
             String aiResponse = response.content().text().trim();
             log.info("📥 AI Response received: {}", aiResponse);
 
-            // 5. ניקוי התשובה מ-markdown backticks
+            // 7. Clean response - remove markdown backticks if present
             aiResponse = aiResponse
                     .replaceAll("^```json\\s*", "")
                     .replaceAll("\\s*```$", "")
                     .trim();
 
-            // 6. המרה ל-JSON
+            // 8. Parse JSON response to AnalysisResponse object
             ObjectMapper mapper = new ObjectMapper();
             AnalysisResponse analysis = mapper.readValue(aiResponse, AnalysisResponse.class);
 

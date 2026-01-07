@@ -82,7 +82,13 @@ const Analytics = () => {
       }
     } catch (error) {
       console.error('Analysis error:', error);
-      setMessage('❌ שגיאה בניתוח השאלות');
+      
+      // 🆕 בדיקה אם זו הודעת שגיאה מהשרת
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          'שגיאה בניתוח השאלות';
+      
+      setMessage('❌ ' + errorMessage);
     } finally {
       setLoading(false);
     }
