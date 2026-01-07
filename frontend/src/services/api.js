@@ -162,7 +162,10 @@ export const analyticsAPI = {
     });
   },
   
-  clearQuestions: () => api.delete('/analytics/clear')
+  clearQuestions: () => api.delete('/analytics/clear'),
+  
+  // 🆕 ניתוח חכם
+  analyzeQuestions: () => api.get('/analytics/analyze')
 };
 
 export default api;

@@ -1,5 +1,6 @@
 package com.example.backend.analytics.service;
 
+import com.example.backend.analytics.dto.AnalysisResponse;
 import com.example.backend.collection.service.CollectionService;
 import com.example.backend.user.model.User;
 import com.example.backend.common.infrastructure.storage.S3Service;
@@ -9,9 +10,12 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.data.message.AiMessage;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -36,14 +40,14 @@ public class AnalyticsService {
     // append the unquestion to the question s file in S3
     public void appendQuestionsToFile(User user, List<String> newQuestions, String siteCategory) {
         String filePath = getFilePath(user);
-        
+
         List<String> allQuestions = new ArrayList<>();
-        
+
         // 1. check if the file is empty if mot read the contex
         try {
             InputStream existing = s3Service.downloadFile(filePath);
             String content = new String(existing.readAllBytes(), StandardCharsets.UTF_8);
-            
+
             // extract the questions from the file
             String[] lines = content.split("\n");
             for (String line : lines) {
@@ -53,40 +57,40 @@ public class AnalyticsService {
                     allQuestions.add(line);
                 }
             }
-            
+
             log.info("📖 Found {} existing questions in file", allQuestions.size());
-            
+
         } catch (Exception e) {
             log.info("📝 No existing file found, will create new one");
         }
-        
+
         // 2. filter the question with AI
         if (siteCategory != null && !siteCategory.trim().isEmpty()) {
-            log.info("🔍 Filtering {} new questions for category: {}", 
-                newQuestions.size(), siteCategory);
-            
+            log.info("🔍 Filtering {} new questions for category: {}",
+                    newQuestions.size(), siteCategory);
+
             List<String> filteredNew = filterWithLLM(newQuestions, siteCategory);
             allQuestions.addAll(filteredNew);
-            
-            log.info("✅ Added {} relevant questions (filtered from {} total)", 
-                filteredNew.size(), newQuestions.size());
+
+            log.info("✅ Added {} relevant questions (filtered from {} total)",
+                    filteredNew.size(), newQuestions.size());
         } else {
             // if the is no category add the question without filter
             allQuestions.addAll(newQuestions);
-            log.info("ℹ️ No category provided - added all {} questions without filtering", 
-                newQuestions.size());
+            log.info("ℹ️ No category provided - added all {} questions without filtering",
+                    newQuestions.size());
         }
-        
+
         // 3. save the all questions backed to file
         saveQuestionsToFile(user, allQuestions);
-        
+
         log.info("✅ Total questions in file now: {}", allQuestions.size());
     }
 
     // filter the question with AI
     private List<String> filterWithLLM(List<String> questions, String siteCategory) {
-        log.info("🔍 Filtering {} questions with LLM for category: {}", 
-            questions.size(), siteCategory);
+        log.info("🔍 Filtering {} questions with LLM for category: {}",
+                questions.size(), siteCategory);
 
         // build question list with numbers
         StringBuilder questionsText = new StringBuilder();
@@ -108,16 +112,16 @@ public class AnalyticsService {
             
             פורמט תשובה: מספרים מופרדים בפסיקים בלבד (לדוגמה: 1,3,5,7)
             אם אין שאלות רלוונטיות בכלל, החזר: NONE
-            """, 
-            siteCategory,
-            questionsText
+            """,
+                siteCategory,
+                questionsText
         );
 
         try {
             // send to AI
             Response<AiMessage> response = chatModel.generate(
-                SystemMessage.from("אתה מומחה לסינון שאלות לפי רלוונטיות."),
-                UserMessage.from(prompt)
+                    SystemMessage.from("אתה מומחה לסינון שאלות לפי רלוונטיות."),
+                    UserMessage.from(prompt)
             );
 
             String answer = response.content().text().trim();
@@ -132,7 +136,7 @@ public class AnalyticsService {
             // Answer press - converting numbers to questions
             List<String> filtered = new ArrayList<>();
             String[] indices = answer.split(",");
-            
+
             for (String indexStr : indices) {
                 try {
                     int index = Integer.parseInt(indexStr.trim()) - 1; // cuz array start from 0 index
@@ -144,8 +148,8 @@ public class AnalyticsService {
                 }
             }
 
-            log.info("✅ Filtered to {} relevant questions out of {}", 
-                filtered.size(), questions.size());
+            log.info("✅ Filtered to {} relevant questions out of {}",
+                    filtered.size(), questions.size());
             return filtered;
 
         } catch (Exception e) {
@@ -157,32 +161,32 @@ public class AnalyticsService {
     // the the questions list to file
     private void saveQuestionsToFile(User user, List<String> questions) {
         String filePath = getFilePath(user);
-        
+
         // build context file
         StringBuilder content = new StringBuilder();
         for (int i = 0; i < questions.size(); i++) {
             content.append("שאלה ").append(i + 1).append("\n");
             content.append(questions.get(i)).append("\n\n");
         }
-        
+
         // convert to bytes
         byte[] bytes = content.toString().getBytes(StandardCharsets.UTF_8);
-        
+
         // upload to s3
         s3Service.uploadFile(
-            new ByteArrayInputStream(bytes),
-            filePath,
-            "text/plain; charset=UTF-8",
-            bytes.length
+                new ByteArrayInputStream(bytes),
+                filePath,
+                "text/plain; charset=UTF-8",
+                bytes.length
         );
-        
+
         log.info("💾 Saved {} questions to S3: {}", questions.size(), filePath);
     }
 
     // download the questions file
     public byte[] downloadQuestionsFile(User user) {
         String filePath = getFilePath(user);
-        
+
         try {
             InputStream inputStream = s3Service.downloadFile(filePath);
             return inputStream.readAllBytes();
@@ -207,4 +211,101 @@ public class AnalyticsService {
     private String getFilePath(User user) {
         return String.format("users/%d/analytics/questions.txt", user.getId());
     }
+
+    // ניתוח חכם של השאלות עם AI
+    public AnalysisResponse analyzeQuestions(User user) {
+        String filePath = getFilePath(user);
+
+        try {
+            // 1. הורדת הקובץ מ-S3
+            InputStream inputStream = s3Service.downloadFile(filePath);
+            String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+
+            // 2. חילוץ השאלות
+            List<String> questions = new ArrayList<>();
+            String[] lines = content.split("\n");
+            for (String line : lines) {
+                line = line.trim();
+                if (!line.isEmpty() && !line.startsWith("שאלה")) {
+                    questions.add(line);
+                }
+            }
+
+            log.info("🔍 Analyzing {} questions with AI", questions.size());
+
+            // 3. בניית prompt ל-AI
+            String prompt = buildAnalysisPrompt(questions);
+
+            // 4. שליחה ל-AI
+            Response<AiMessage> response = chatModel.generate(
+                    SystemMessage.from("אתה מומחה לניתוח וסיווג שאלות לקוחות. תחזיר תשובה במבנה JSON בלבד."),
+                    UserMessage.from(prompt)
+            );
+
+            String aiResponse = response.content().text().trim();
+            log.info("📥 AI Response received: {}", aiResponse);
+
+            // 5. ניקוי התשובה מ-markdown backticks
+            aiResponse = aiResponse
+                    .replaceAll("^```json\\s*", "")
+                    .replaceAll("\\s*```$", "")
+                    .trim();
+
+            // 6. המרה ל-JSON
+            ObjectMapper mapper = new ObjectMapper();
+            AnalysisResponse analysis = mapper.readValue(aiResponse, AnalysisResponse.class);
+
+            log.info("✅ Analysis completed: {} categories found", analysis.getCategories().size());
+            return analysis;
+
+        } catch (Exception e) {
+            log.error("❌ Failed to analyze questions", e);
+            throw new RuntimeException("נכשל בניתוח השאלות: " + e.getMessage());
+        }
+    }
+
+    // בניית prompt מובנה
+    private String buildAnalysisPrompt(List<String> questions) {
+        StringBuilder questionsText = new StringBuilder();
+        for (int i = 0; i < questions.size(); i++) {
+            questionsText.append((i + 1)).append(". ").append(questions.get(i)).append("\n");
+        }
+
+        return String.format("""
+            נתונות השאלות הבאות מלקוחות:
+            %s
+            
+            בצע ניתוח ומיון:
+            1. זהה שאלות זהות במשמעות (גם אם מנוסחות אחרת)
+            2. קבץ לפי נושאים (קטגוריות)
+            3. בחר את הניסוח הברור ביותר לכל שאלה
+            4. ספור כמה פעמים כל שאלה נשאלה
+            
+            החזר JSON בפורמט הזה בדיוק:
+            {
+            "categories": [
+                {
+                "categoryName": "שם הקטגוריה",
+                "icon": "אייקון אימוג'י",
+                "questions": [
+                    {
+                    "question": "השאלה המייצגת",
+                    "count": 5
+                    }
+                ],
+                "totalCount": 5
+                }
+            ],
+            "summary": "סיכום קצר של הממצאים",
+            "totalQuestions": 10
+            }
+            
+            כללים חשובים:
+            - החזר רק JSON, ללא טקסט נוסף
+            - אל תוסיף מרכאות או backticks מסביב ל-JSON
+            - אייקון מתאים לכל קטגוריה (📦 משלוחים, 💰 מחירים, 🕐 שעות...)
+            - ספור נכון את totalCount בכל קטגוריה
+            """, questionsText);
+    }
+
 }
