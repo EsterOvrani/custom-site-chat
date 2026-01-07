@@ -3,6 +3,7 @@ package com.example.backend.analytics.controller;
 import com.example.backend.analytics.dto.AnalysisResponse;
 import com.example.backend.analytics.service.AnalyticsService;
 import com.example.backend.analytics.dto.SaveQuestionsRequest;
+import com.example.backend.analytics.service.ExcelExportService;
 import com.example.backend.user.model.User;
 import com.example.backend.common.exception.UnauthorizedException;
 
@@ -30,6 +31,8 @@ import java.util.Map;
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
+    private final ExcelExportService excelExportService;
+
 
     /**
      * Receiving questions from the widget
@@ -147,6 +150,36 @@ public class AnalyticsController {
             response.put("error", e.getMessage());
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @GetMapping("/download-excel")
+    public ResponseEntity<ByteArrayResource> downloadExcelAnalysis() {
+        User currentUser = getCurrentUser();
+
+        log.info("📊 Generating Excel analysis for user: {}", currentUser.getId());
+
+        try {
+            // Get analysis
+            AnalysisResponse analysis = analyticsService.analyzeQuestions(currentUser);
+            
+            // Generate Excel file
+            byte[] excelBytes = excelExportService.exportToExcel(analysis);
+            
+            // Wrap with Resource
+            ByteArrayResource resource = new ByteArrayResource(excelBytes);
+            
+            // Return as download file
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=analyzed_questions.xlsx")
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .contentLength(excelBytes.length)
+                    .body(resource);
+                    
+        } catch (Exception e) {
+            log.error("❌ Failed to generate Excel", e);
+            throw new RuntimeException("נכשל ביצירת קובץ Excel: " + e.getMessage());
         }
     }
 

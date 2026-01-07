@@ -8,7 +8,7 @@ import {
   Legend
 } from 'chart.js';
 
-// רישום רכיבי Chart.js
+// sign components in Chart.js
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const Analytics = () => {
@@ -17,7 +17,7 @@ const Analytics = () => {
   const [analysis, setAnalysis] = useState(null);
   const [showAnalysis, setShowAnalysis] = useState(false);
 
-  // הורדת קובץ
+  // download questions file
   const handleDownload = async () => {
     setLoading(true);
     setMessage('');
@@ -42,7 +42,7 @@ const Analytics = () => {
     }
   };
 
-  // מחיקת שאלות
+  // delete questions
   const handleClear = async () => {
     if (!window.confirm('האם אתה בטוח שברצונך למחוק את כל השאלות?')) {
       return;
@@ -64,7 +64,7 @@ const Analytics = () => {
     }
   };
 
-  // 🆕 ניתוח חכם
+  // smart Analytics
   const handleAnalyze = async () => {
     setLoading(true);
     setMessage('');
@@ -94,36 +94,34 @@ const Analytics = () => {
     }
   };
 
-  // 🆕 הורדת קובץ מסודר
-  const handleDownloadAnalysis = () => {
+  // download neat excel file of anaytics AI
+  const handleDownloadAnalysis = async () => {
     if (!analysis) return;
 
-    let content = '📊 ניתוח שאלות - Custom Site Chat\n';
-    content += '=====================================\n\n';
-    content += `סיכום: ${analysis.summary}\n`;
-    content += `סה"כ שאלות: ${analysis.totalQuestions}\n\n`;
-
-    analysis.categories.forEach(cat => {
-      content += `\n${cat.icon} ${cat.categoryName} (${cat.totalCount} שאלות)\n`;
-      content += '─────────────────────────────────────\n';
+    try {
+      const response = await analyticsAPI.downloadExcelAnalysis();
       
-      cat.questions.forEach((q, idx) => {
-        content += `${idx + 1}. ${q.question} × ${q.count}\n`;
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
       });
-    });
-
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'analyzed_questions.txt';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'analyzed_questions.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      setMessage('✅ קובץ Excel הורד בהצלחה');
+    } catch (error) {
+      console.error('Download error:', error);
+      setMessage('❌ שגיאה בהורדת קובץ Excel');
+    }
   };
 
-  // 🆕 הכנת נתונים לגרף
+  // prepar the data to graph
   const getChartData = () => {
     if (!analysis) return null;
 
@@ -288,7 +286,6 @@ const Analytics = () => {
             alignItems: 'center',
             marginBottom: '20px'
           }}>
-            <h3 style={{ margin: 0, color: '#333' }}>📈 תוצאות הניתוח</h3>
             <button
               onClick={handleDownloadAnalysis}
               style={{
@@ -302,7 +299,7 @@ const Analytics = () => {
                 fontSize: '14px'
               }}
             >
-              💾 הורד ניתוח
+              📊 הורד ניתוח Excel
             </button>
           </div>
 

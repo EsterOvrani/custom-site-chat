@@ -164,8 +164,13 @@ export const analyticsAPI = {
   
   clearQuestions: () => api.delete('/analytics/clear'),
   
-  // 🆕 ניתוח חכם
-  analyzeQuestions: () => api.get('/analytics/analyze')
+  analyzeQuestions: () => api.get('/analytics/analyze'),
+  
+  downloadExcelAnalysis: () => {
+    return api.get('/analytics/download-excel', {
+      responseType: 'blob'
+    });
+  }
 };
 
 export default api;
