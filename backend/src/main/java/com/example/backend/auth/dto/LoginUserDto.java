@@ -9,6 +9,6 @@ import lombok.Data;
 @Setter
 @Data
 public class LoginUserDto {
-    private String email;
+    private String username;
     private String password;
 }

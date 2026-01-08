@@ -6,7 +6,7 @@ import GoogleLoginButton from './GoogleLoginButton';
 import './Login.css';
 
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -43,7 +43,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const response = await authAPI.login(email, password);
+      const response = await authAPI.login(username, password);
       
       if (response.data.success) {
         localStorage.setItem('token', response.data.token);
@@ -127,14 +127,15 @@ const Login = () => {
         {/* ==================== Regular Login Form ==================== */}
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="email">אימייל:</label>
+            <label htmlFor="username">שם משתמש:</label>
             <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
               disabled={loading}
+              autoComplete="username"
             />
           </div>
 
@@ -147,6 +148,7 @@ const Login = () => {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={loading}
+              autoComplete="current-password"
             />
           </div>
 

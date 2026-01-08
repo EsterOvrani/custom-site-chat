@@ -53,8 +53,8 @@ public class AuthenticationService {
 
     // Authenticate user with email and password
     public User authenticate(LoginUserDto input) {
-        User user = userRepository.findByEmail(input.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("משתמש", input.getEmail()));
+        User user = userRepository.findByUsername(input.getUsername())
+                .orElseThrow(() -> new ResourceNotFoundException("משתמש", input.getUsername()));
 
         if (!user.isEnabled()) {
             throw AuthenticationException.userNotVerified();
@@ -62,7 +62,7 @@ public class AuthenticationService {
 
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        input.getEmail(),
+                        input.getUsername(),
                         input.getPassword()
                 )
         );

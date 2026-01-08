@@ -67,7 +67,7 @@ export const authAPI = {
   checkStatus: () => api.get('/auth/status'),
   
   // התחברות רגילה
-  login: (email, password) => api.post('/auth/login', { email, password }),
+  login: (username, password) => api.post('/auth/login', { username, password }),
   
   // הרשמה
   register: (userData) => api.post('/auth/signup', userData),
