@@ -133,24 +133,13 @@ public class AnalyticsController {
 
         log.info("📊 Starting AI analysis for user: {}", currentUser.getId());
 
-        try {
-            AnalysisResponse analysis = analyticsService.analyzeQuestions(currentUser);
+        AnalysisResponse analysis = analyticsService.analyzeQuestions(currentUser);
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("data", analysis);
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("data", analysis);
 
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("❌ Analysis failed", e);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("error", e.getMessage());
-
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/download-excel")

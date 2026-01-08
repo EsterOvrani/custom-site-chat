@@ -36,7 +36,26 @@ const Analytics = () => {
       setMessage('✅ הקובץ הורד בהצלחה');
     } catch (error) {
       console.error('Download error:', error);
-      setMessage('❌ שגיאה בהורדת הקובץ');
+      
+      // When responseType is 'blob', error.response.data is a Blob
+      // We need to parse it manually to get the JSON error message
+      if (error.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const errorData = JSON.parse(text);
+          const errorMessage = errorData.message || errorData.error || 'שגיאה בהורדת המסמך';
+          setMessage('❌ ' + errorMessage);
+        } catch (parseError) {
+          // If parsing fails, use a default message
+          setMessage('❌ שגיאה בהורדת המסמך');
+        }
+      } else {
+        // Fallback for non-blob errors
+        const errorMessage = error.response?.data?.message || 
+                            error.response?.data?.error || 
+                            'שגיאה בהורדת המסמך';
+        setMessage('❌ ' + errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -58,7 +77,13 @@ const Analytics = () => {
       setShowAnalysis(false);
     } catch (error) {
       console.error('Clear error:', error);
-      setMessage('❌ שגיאה במחיקת השאלות');
+      
+      // Extract error message from server response
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          'שגיאה במחיקת השאלות';
+      
+      setMessage('❌ ' + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -83,7 +108,7 @@ const Analytics = () => {
     } catch (error) {
       console.error('Analysis error:', error);
       
-      // 🆕 בדיקה אם זו הודעת שגיאה מהשרת
+      // Extract error message from server response
       const errorMessage = error.response?.data?.message || 
                           error.response?.data?.error || 
                           'שגיאה בניתוח השאלות';

@@ -189,21 +189,47 @@ public class AnalyticsService {
 
         try {
             InputStream inputStream = s3Service.downloadFile(filePath);
-            return inputStream.readAllBytes();
+            byte[] fileBytes = inputStream.readAllBytes();
+            
+            // Check if file is empty or contains only whitespace
+            if (fileBytes.length == 0) {
+                log.warn("⚠️ Questions file is empty for user: {}", user.getId());
+                throw new com.example.backend.common.exception.ResourceNotFoundException("קובץ השאלות ריק. אין שאלות להורדה.");
+            }
+            
+            // Check if file contains actual questions (not just whitespace)
+            String content = new String(fileBytes, StandardCharsets.UTF_8).trim();
+            if (content.isEmpty()) {
+                log.warn("⚠️ Questions file contains only whitespace for user: {}", user.getId());
+                throw new com.example.backend.common.exception.ResourceNotFoundException("קובץ השאלות ריק. אין שאלות להורדה.");
+            }
+            
+            return fileBytes;
+        } catch (com.example.backend.common.exception.ResourceNotFoundException e) {
+            // Re-throw ResourceNotFoundException as-is
+            throw e;
         } catch (Exception e) {
             log.error("❌ File not found: {}", filePath);
-            throw new RuntimeException("לא נמצא קובץ שאלות");
+            throw new com.example.backend.common.exception.ResourceNotFoundException("לא נמצאו שאלות. אנא נסה לאסוף שאלות תחילה.");
         }
     }
 
     // delete questions file
     public void deleteQuestionsFile(User user) {
         String filePath = getFilePath(user);
+        
+        // Check if file exists before trying to delete
+        if (!s3Service.fileExists(filePath)) {
+            log.warn("⚠️ No questions file to delete for user: {}", user.getId());
+            throw new com.example.backend.common.exception.ResourceNotFoundException("אין שאלות למחיקה. הקובץ לא קיים.");
+        }
+        
         try {
             s3Service.deleteFile(filePath);
             log.info("🗑️ Deleted questions file: {}", filePath);
         } catch (Exception e) {
             log.error("❌ Failed to delete file: {}", filePath, e);
+            throw new RuntimeException("שגיאה במחיקת הקובץ: " + e.getMessage());
         }
     }
 
@@ -223,7 +249,7 @@ public class AnalyticsService {
             // 1. Check if questions file exists
             if (!s3Service.fileExists(filePath)) {
                 log.warn("⚠️ No questions file found for user: {}", user.getId());
-                throw new RuntimeException("לא נמצאו שאלות לניתוח.");
+                throw new com.example.backend.common.exception.ResourceNotFoundException("לא נמצאו שאלות לניתוח.");
             }
 
             // 2. Download file from S3
@@ -244,7 +270,7 @@ public class AnalyticsService {
             // 4. Check if there are actual questions to analyze
             if (questions.isEmpty()) {
                 log.warn("⚠️ Questions file is empty for user: {}", user.getId());
-                throw new RuntimeException("קובץ השאלות ריק.");
+                throw new com.example.backend.common.exception.ResourceNotFoundException("קובץ השאלות ריק.");
             }
 
             log.info("🔍 Analyzing {} questions with AI", questions.size());
@@ -274,6 +300,9 @@ public class AnalyticsService {
             log.info("✅ Analysis completed: {} categories found", analysis.getCategories().size());
             return analysis;
 
+        } catch (com.example.backend.common.exception.ResourceNotFoundException e) {
+            // Re-throw ResourceNotFoundException as-is
+            throw e;
         } catch (Exception e) {
             log.error("❌ Failed to analyze questions", e);
             throw new RuntimeException("נכשל בניתוח השאלות: " + e.getMessage());
