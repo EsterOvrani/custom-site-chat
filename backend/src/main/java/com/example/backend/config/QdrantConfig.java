@@ -34,11 +34,15 @@ public class QdrantConfig {
     }
 
     /**
-     * create OpenAiChatModel
+     * create OpenAiChatModel with GPT-4o
      */
     @Bean
     public OpenAiChatModel openAiChatModel() {
-        log.info("Creating OpenAI Chat model");
-        return OpenAiChatModel.withApiKey(openaiApiKey);
+        log.info("🚀 Creating OpenAI Chat model with GPT-4o");
+        return OpenAiChatModel.builder()
+                .apiKey(openaiApiKey)
+                .modelName("gpt-4o")
+                .temperature(0.7)
+                .build();
     }
 }
