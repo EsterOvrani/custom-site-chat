@@ -50,15 +50,18 @@ const Login = () => {
         localStorage.setItem('user', JSON.stringify(response.data.user));
         navigate('/');
       } else {
-        setError(response.data.error || 'שגיאה בהתחברות');
+        setError(response.data.error || response.data.message || 'שגיאה בהתחברות');
       }
     } catch (err) {
       console.error('Login error:', err);
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else {
-        setError('שגיאה בחיבור לשרת');
-      }
+      
+      // Extract error message from server response
+      // Backend returns ErrorResponse with 'message' field
+      const errorMessage = err.response?.data?.message || 
+                          err.response?.data?.error || 
+                          'שגיאה בחיבור לשרת';
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -79,15 +82,17 @@ const Login = () => {
         localStorage.setItem('user', JSON.stringify(response.data.user));
         navigate('/');
       } else {
-        setError(response.data.error || 'שגיאה בהתחברות עם Google');
+        setError(response.data.error || response.data.message || 'שגיאה בהתחברות עם Google');
       }
     } catch (err) {
       console.error('❌ Google login error:', err);
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else {
-        setError('שגיאה בהתחברות עם Google');
-      }
+      
+      // Extract error message from server response
+      const errorMessage = err.response?.data?.message || 
+                          err.response?.data?.error || 
+                          'שגיאה בהתחברות עם Google';
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

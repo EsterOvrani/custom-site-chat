@@ -123,6 +123,27 @@ public class GlobalExceptionHandler {
 
     // ==================== Security Exceptions ====================
     
+    // Handling Spring Security's BadCredentialsException (wrong password)
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentialsException(
+            org.springframework.security.authentication.BadCredentialsException ex,
+            HttpServletRequest request) {
+        
+        log.warn("⚠️ Bad credentials: {}", ex.getMessage());
+        
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .success(false)
+                .errorCode("BAD_CREDENTIALS")
+                .message("אימייל או סיסמה שגויים")
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+        
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(errorResponse);
+    }
+    
     // Error handling @Validated (Constraint Validation)
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> handleAuthenticationException(
