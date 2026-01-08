@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI, collectionAPI, documentAPI } from '../../services/api';
+import axios from 'axios';
 import DocumentsList from './DocumentsList';
 import CollectionSettings from './CollectionSettings';
-import UploadDocumentModal from './UploadDocumentModal';
 import Analytics from './Analytics';
 
 import './Dashboard.css';
@@ -14,7 +14,6 @@ const Dashboard = () => {
   const [collection, setCollection] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [activeTab, setActiveTab] = useState('documents');
-  const [showUploadModal, setShowUploadModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(false);
 
@@ -157,37 +156,78 @@ const Dashboard = () => {
     }
   };
 
-  const handleUploadComplete = (newDocument, placeholderId) => {
-    console.log('📤 Upload event:', { newDocument, placeholderId });
+  // ⭐ העלאה ישירה של קבצים ללא מודל
+  const handleUploadNew = async (files) => {
+    if (!files || files.length === 0) return;
     
-    if (placeholderId) {
-      // ⭐ זו קריאה שנייה - צריך להחליף או להסיר את ה-placeholder
-      if (newDocument) {
-        // הצלחה - החלף placeholder עם מסמך אמיתי
-        setDocuments(prevDocs => 
-          prevDocs.map(doc => 
-            doc.id === placeholderId ? newDocument : doc
-          )
-        );
-        console.log('✅ Replaced placeholder with real document');
-      } else {
-        // שגיאה - הסר את ה-placeholder
-        setDocuments(prevDocs => 
-          prevDocs.filter(doc => doc.id !== placeholderId)
-        );
-        showToast('שגיאה בהעלאת המסמך', 'error');
-        console.error('❌ Upload failed, removed placeholder');
-      }
-    } else {
-      // ⭐ זו קריאה ראשונה - הוסף placeholder
-      setShowUploadModal(false);
-      
-      if (newDocument) {
-        setDocuments(prevDocs => [newDocument, ...prevDocs]);
-        // showToast('מעלה מסמך...', 'success');
-        console.log('✅ Added placeholder document');
-      }
+    console.log(`🚀 Starting upload of ${files.length} files`);
+    
+    for (const file of files) {
+      await uploadSingleFile(file);
     }
+  };
+
+  const uploadSingleFile = async (file) => {
+    // יצירת placeholder
+    const placeholderId = `temp-${Date.now()}-${Math.random()}`;
+    const placeholder = {
+      id: placeholderId,
+      originalFileName: file.name,
+      fileSize: file.size,
+      fileSizeFormatted: formatFileSize(file.size),
+      processingStatus: 'PENDING',
+      processingProgress: 5,
+      processingStage: 'UPLOADING',
+      processingStageDescription: 'מעלה לשרת...',
+      createdAt: new Date().toISOString(),
+      active: true,
+      isPlaceholder: true
+    };
+    
+    console.log(`📤 [${file.name}] Adding placeholder`);
+    setDocuments(prev => [placeholder, ...prev]);
+    
+    // העלאה בפועל
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const token = localStorage.getItem('token');
+      const response = await axios.post('/api/documents/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      console.log(`✅ [${file.name}] Upload successful`);
+      
+      if (response.data.success && response.data.document) {
+        // החלפת placeholder במסמך אמיתי
+        setDocuments(prev => prev.map(doc => 
+          doc.id === placeholderId ? response.data.document : doc
+        ));
+        showToast(`${file.name} הועלה בהצלחה`, 'success');
+      } else {
+        throw new Error('No document in response');
+      }
+      
+    } catch (error) {
+      console.error(`❌ [${file.name}] Upload error:`, error);
+      
+      // הסרת placeholder
+      setDocuments(prev => prev.filter(doc => doc.id !== placeholderId));
+      
+      const errorMsg = error.response?.data?.message || error.message;
+      showToast(`שגיאה בהעלאת ${file.name}: ${errorMsg}`, 'error');
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
   };
 
   const handleDeleteDocument = async (documentId) => {
@@ -289,7 +329,7 @@ const Dashboard = () => {
           {activeTab === 'documents' && (
             <DocumentsList
               documents={documents}
-              onUploadNew={() => setShowUploadModal(true)}
+              onUploadNew={handleUploadNew}
               onDelete={handleDeleteDocument}
               onReorder={handleReorderDocuments}
               loading={loading}
@@ -309,14 +349,6 @@ const Dashboard = () => {
           )}
         </div>
       </div>
-
-      {/* Modals */}
-      {showUploadModal && (
-        <UploadDocumentModal
-          onClose={() => setShowUploadModal(false)}
-          onComplete={handleUploadComplete}
-        />
-      )}
 
       {/* Toast Notifications */}
       {toast.show && (

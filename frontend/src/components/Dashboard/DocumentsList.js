@@ -1,11 +1,12 @@
 // frontend/src/components/Dashboard/DocumentsList.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { documentAPI } from '../../services/api';
 import ProgressBar from './ProgressBar';
 
 const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading }) => {
   const [downloading, setDownloading] = useState({});
   const [processingDocs, setProcessingDocs] = useState([]);
+  const fileInputRef = useRef(null);
   
   // ⭐ Polling - בדיקה אוטומטית של מסמכים בעיבוד
   useEffect(() => {
@@ -98,6 +99,36 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
     }
   };
 
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    
+    if (files.length === 0) return;
+    
+    // ולידציה
+    for (const file of files) {
+      if (file.type !== 'application/pdf') {
+        alert(`הקובץ "${file.name}" אינו PDF. ניתן להעלות רק קבצי PDF.`);
+        e.target.value = '';
+        return;
+      }
+      
+      const maxSize = 50 * 1024 * 1024; // 50MB
+      if (file.size > maxSize) {
+        alert(`הקובץ "${file.name}" גדול מדי. גודל מקסימלי: 50MB`);
+        e.target.value = '';
+        return;
+      }
+    }
+    
+    // קריאה לפונקציה מה-Dashboard
+    if (onUploadNew) {
+      onUploadNew(files);
+    }
+    
+    // איפוס input
+    e.target.value = '';
+  };
+
   if (loading && documents.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
@@ -117,26 +148,40 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
         marginBottom: '30px'
       }}>
         <h2 style={{ margin: 0, color: '#333' }}>המסמכים שלי</h2>
-        <button
-          className="btn-primary"
-          onClick={onUploadNew}
-          style={{
-            padding: '12px 24px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontSize: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <span>➕</span>
-          <span>העלה מסמך חדש</span>
-        </button>
+        
+        <>
+          {/* Input file נסתר */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            multiple
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+          />
+          
+          {/* כפתור שפותח את סייר הקבצים */}
+          <button
+            className="btn-primary"
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              padding: '12px 24px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <span>➕</span>
+            <span>העלה מסמך חדש</span>
+          </button>
+        </>
       </div>
 
       {/* ⭐ Progress Bars Section */}
