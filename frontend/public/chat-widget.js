@@ -497,11 +497,11 @@
             </button>
             <div>
               <h3>${escapeHtml(config.title)}</h3>
-              <div class="message-counter" id="message-counter">0/10 הודעות</div>
+              <div class="message-counter" id="message-counter">0/10 שאלות</div>
             </div>
           </div>
           <div class="limit-warning" id="limit-warning">
-            ⚠️ הגעת למגבלת 10 הודעות. לחץ על "התחל שיחה חדשה".
+            ⚠️ הגעת למגבלת 10 שאלות. לחץ על "התחל שיחה חדשה".
           </div>
           <div class="browser-warning" id="browser-warning">
             ⚠️ הדפדפן שלך לא תומך בהקלטת קול
@@ -859,15 +859,18 @@
   }
 
   function isAtLimit(state) {
-    return state.history.length >= state.maxHistoryMessages;
+    // Each question + answer = 2 messages, so divide by 2 to get question count
+    const userMessageCount = Math.floor(state.history.length / 2);
+    return userMessageCount >= state.maxHistoryMessages;
   }
 
   function updateUI(state, elements) {
-    const messageCount = state.history.length;
+    // Each question + answer = 2 messages, so divide by 2 to get question count
+    const userMessageCount = Math.floor(state.history.length / 2);
     
-    elements.messageCounter.textContent = `${messageCount}/${state.maxHistoryMessages} הודעות`;
+    elements.messageCounter.textContent = `${userMessageCount}/${state.maxHistoryMessages} שאלות`;
     
-    if (messageCount > 0) {
+    if (userMessageCount > 0) {
       elements.resetButton.classList.add('show');
     } else {
       elements.resetButton.classList.remove('show');
