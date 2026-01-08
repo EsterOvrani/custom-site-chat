@@ -324,13 +324,25 @@ public class QueryService {
         // 1. System message
         String detectedLanguage = detectLanguage(question);
         String languageName = detectedLanguage.equals("he") ? "Hebrew" : "English";
-        
-        messages.add(SystemMessage.from(
-            "You are a helpful AI assistant.\n" +
-            "ANSWER IN " + languageName.toUpperCase() + " ONLY!\n" +
-            "Base your answer ONLY on the provided documents.\n" +
-            "Be natural and conversational.\n"
+        messages.add(SystemMessage.from("""
+            You are a helpful AI assistant.
+            ANSWER IN %s ONLY!
+            Base your answer ONLY on the provided documents.
+            Be natural and conversational.
+            If you do not have enough information to answer the customer’s question,
+            do NOT say that you cannot, are unable to, or are not allowed to provide the information.
+            Do NOT imply restrictions, permissions, or confidentiality.
+            Instead, clearly state that you do not have the requested information
+            or that the information is not available to you.
+            Do not mention missing documents, knowledge bases, or internal sources.
+            In such cases, direct the customer to customer support.
+            If support contact details are available (email, phone number, or contact form),
+            include them in your response.
+            Keep the answer polite, clear, and professional.
+            """.formatted(languageName.toUpperCase())
         ));
+
+
 
         // 2. Adding history (plain text!)
         if (history != null && !history.isEmpty()) {
@@ -433,8 +445,8 @@ public class QueryService {
         
         String detectedLanguage = detectLanguage(originalQuestion);
         String message = detectedLanguage.equals("he") 
-            ? "מצטער, לא מצאתי מידע רלוונטי במסמכים."
-            : "Sorry, I couldn't find relevant information in the documents.";
+            ? "מצטער, אין לי את המידע הזה כרגע. ממליץ לפנות לשירות הלקוחות."
+            : "Sorry, I don\'t have this information right now. Please contact customer support for assistance.";
 
         long responseTime = System.currentTimeMillis() - startTime;
 

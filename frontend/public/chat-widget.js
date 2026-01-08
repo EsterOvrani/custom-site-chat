@@ -1023,134 +1023,136 @@
   }
 
   async function sendMessage(state, elements, config) {
-      const question = elements.inputField.value.trim();
-      
-      if (!question || state.isLoading || isAtLimit(state)) return;
+    const question = elements.inputField.value.trim();
 
-      // 1️⃣ Save user message for UI display (always original)
+    if (!question || state.isLoading || isAtLimit(state)) return;
+
+    // 1️⃣ Save user message for UI display
+    state.messages.push({
+      role: 'user',
+      content: question,
+      timestamp: new Date().toISOString()
+    });
+
+    // 2️⃣ Save to history (temporary, may be rewritten)
+    const historyIndex = state.history.length;
+    state.history.push({
+      role: 'user',
+      content: question
+    });
+
+    // Clear input and update UI
+    elements.inputField.value = '';
+    elements.inputField.style.height = 'auto';
+    state.currentTranscript = '';
+    state.isLoading = true;
+    elements.sendButton.disabled = true;
+    if (elements.voiceButton) elements.voiceButton.disabled = true;
+
+    renderMessages(state, elements, config);
+    saveHistoryToSession(state, config);
+    updateUI(state, elements);
+
+    try {
+      const response = await fetch(`${config.apiUrl}/api/query/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          secretKey: config.secretKey,
+          question,
+          history: state.history.slice(0, historyIndex)
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data.answer) {
+
+        // 🔄 Update rewritten query in history (if exists)
+        if (data.data.rewrittenQuery && data.data.rewrittenQuery !== question) {
+          state.history[historyIndex].content = data.data.rewrittenQuery;
+        }
+
+        // 3️⃣ Save bot response
+        state.messages.push({
+          role: 'assistant',
+          content: data.data.answer,
+          timestamp: new Date().toISOString()
+        });
+
+        state.history.push({
+          role: 'assistant',
+          content: data.data.answer
+        });
+
+        // ===============================
+        // ⭐ Detect unanswered questions
+        // ===============================
+
+        // English patterns (optional, keep if you have English answers)
+        const englishNoInfoRegexes = [
+          /i (don't|do not) have .* (information|details)/i,
+          /the information is not available to me/i,
+          /i do not have enough information/i,
+          /i don't have specific .* information/i
+        ];
+
+        // Hebrew pattern
+        const hebrewNoInfoRegex = /אין\s+(?:.*\s)?(מידע|המידע)/i;
+
+        const answerText = data.data.answer;
+
+        const isUnanswered =
+          englishNoInfoRegexes.some(regex => regex.test(answerText)) ||
+          hebrewNoInfoRegex.test(answerText);
+
+        if (isUnanswered) {
+          const questionToSave =
+            (data.data.rewrittenQuery && data.data.rewrittenQuery !== question)
+              ? data.data.rewrittenQuery
+              : question;
+
+          console.log('📝 Detected unanswered question:', questionToSave);
+
+          state.unansweredQuestions.push(questionToSave);
+
+          try {
+            sessionStorage.setItem(
+              'unansweredQuestions_' + config.secretKey,
+              JSON.stringify(state.unansweredQuestions)
+            );
+          } catch (e) {
+            console.error('Failed to save unanswered questions', e);
+          }
+        }
+
+      } else {
+        state.messages.push({
+          role: 'assistant',
+          content: 'מצטער, לא הצלחתי למצוא תשובה. אנא נסה שוב.',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+    } catch (error) {
+      console.error('Chat Widget Error:', error);
       state.messages.push({
-        role: 'user',
-        content: question, // ← Original question for display
+        role: 'assistant',
+        content: 'אירעה שגיאה. אנא נסה שוב מאוחר יותר.',
         timestamp: new Date().toISOString()
       });
-
-      // 2️⃣ Save to history (temporary - will be updated if rewritten)
-      const historyIndex = state.history.length; // ⭐ Save the position!
-      state.history.push({
-        role: 'user',
-        content: question // ← Temporary
-      });
-
-      // Clear input and update UI
-      elements.inputField.value = '';
-      elements.inputField.style.height = 'auto';
-      state.currentTranscript = '';
-      state.isLoading = true;
-      elements.sendButton.disabled = true;
-      if (elements.voiceButton) {
-        elements.voiceButton.disabled = true;
+    } finally {
+      state.isLoading = false;
+      elements.sendButton.disabled = false;
+      if (elements.voiceButton && !isAtLimit(state)) {
+        elements.voiceButton.disabled = false;
       }
-      
+
       renderMessages(state, elements, config);
       saveHistoryToSession(state, config);
       updateUI(state, elements);
-
-      try {
-        const response = await fetch(`${config.apiUrl}/api/query/ask`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            secretKey: config.secretKey,
-            question: question,
-            history: state.history.slice(0, historyIndex) // ⭐ Without current question
-          })
-        });
-
-        const data = await response.json();
-
-        if (data.success && data.data.answer) {
-          
-          // ⭐ 3️⃣ Update history with rewritten query (if exists)
-          if (data.data.rewrittenQuery && data.data.rewrittenQuery !== question) {
-            console.log('🔄 Query rewritten by server:');
-            console.log('   Original:', question);
-            console.log('   Rewritten:', data.data.rewrittenQuery);
-            
-            // Replace question in history (NOT in messages!)
-            state.history[historyIndex].content = data.data.rewrittenQuery;
-          } else {
-            console.log('ℹ️ Query was not rewritten (standalone or no rewrite needed)');
-          }
-
-          // 4️⃣ Save bot response (regardless of whether it was a context question)
-          state.messages.push({
-            role: 'assistant',
-            content: data.data.answer,
-            timestamp: new Date().toISOString()
-          });
-
-          state.history.push({
-            role: 'assistant',
-            content: data.data.answer
-          });
-
-          // ⭐ Detect unanswered questions
-          const noAnswerPhrases = [
-            'מצטער, לא מצאתי מידע רלוונטי במסמכים',
-            'Sorry, I couldn\'t find relevant information in the documents'
-          ];
-
-          const isNoAnswer = noAnswerPhrases.some(phrase => 
-            data.data.answer.toLowerCase().includes(phrase.toLowerCase())
-          );
-
-          if (isNoAnswer) {
-            // ⭐ Save rewritten question if exists, otherwise original
-            const questionToSave = (data.data.rewrittenQuery && data.data.rewrittenQuery !== question) 
-              ? data.data.rewrittenQuery  // ← Rewritten question
-              : question;                 // ← Original question
-            
-            console.log('📝 Detected unanswered question:', questionToSave);
-            state.unansweredQuestions.push(questionToSave); // ✅ Now correct!
-            
-            try {
-              sessionStorage.setItem(
-                'unansweredQuestions_' + config.secretKey,
-                JSON.stringify(state.unansweredQuestions)
-              );
-            } catch (e) {
-              console.error('Failed to save unanswered questions', e);
-            }
-          }
-
-        } else {
-          state.messages.push({
-            role: 'assistant',
-            content: 'מצטער, לא הצלחתי למצוא תשובה. אנא נסה שוב.',
-            timestamp: new Date().toISOString()
-          });
-        }
-      } catch (error) {
-        console.error('Chat Widget Error:', error);
-        state.messages.push({
-          role: 'assistant',
-          content: 'אירעה שגיאה. אנא נסה שוב מאוחר יותר.',
-          timestamp: new Date().toISOString()
-        });
-      } finally {
-        state.isLoading = false;
-        elements.sendButton.disabled = false;
-        if (elements.voiceButton && !isAtLimit(state)) {
-          elements.voiceButton.disabled = false;
-        }
-        
-        renderMessages(state, elements, config);
-        saveHistoryToSession(state, config);
-        updateUI(state, elements);
-        elements.inputField.focus();
-      }
+      elements.inputField.focus();
+    }
   }
 
   async function sendUnansweredQuestionsToServer(state, config) {
