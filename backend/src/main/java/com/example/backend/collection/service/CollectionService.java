@@ -100,8 +100,14 @@ public class CollectionService {
     private String generateEmbedCode(String secretKey) {
         return String.format(
             "<!-- Custom Site Chat Widget -->\n" +
+            "<!-- ⚠️ SECURITY WARNING: Never expose your secret key in client-side code! -->\n" +
+            "<!-- Use environment variables and server-side rendering. See instructions below. -->\n\n" +
             "<script>\n" +
-            "  window.CHAT_WIDGET_SECRET_KEY = '%s';\n" +
+            "  // ❌ DO NOT USE THIS DIRECTLY (Security Risk):\n" +
+            "  // window.CHAT_WIDGET_SECRET_KEY = '%s';\n\n" +
+            "  // ✅ SECURE METHOD: Load from environment variable via your backend\n" +
+            "  // The secret key should be injected server-side:\n" +
+            "  window.CHAT_WIDGET_SECRET_KEY = '%%YOUR_ENV_VARIABLE%%';\n\n" +
             "  window.CHAT_WIDGET_API_URL = 'https://custom-site-chat.com';\n" +
             "  \n" +
             "  // Customization (optional): \n" +
@@ -112,7 +118,9 @@ public class CollectionService {
             "  window.CHAT_WIDGET_SITE_CATEGORY = 'ENTER THE TOPIC OF YOUR SITE LIKE: ONLINE SHOP SITE'; \n" +
             "</script>\n" +
             "<script src=\"https://custom-site-chat.com/chat-widget.js\"></script>\n" +
-            "<!-- End Chat Widget -->",
+            "<!-- End Chat Widget -->\n\n" +
+            "<!-- YOUR SECRET KEY (Store securely!): %s -->",
+            secretKey,
             secretKey
         );
     }
