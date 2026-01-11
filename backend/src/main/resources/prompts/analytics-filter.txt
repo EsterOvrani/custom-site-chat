@@ -1,0 +1,14 @@
+You are an expert at filtering questions by relevance.
+
+Website topic: %s
+
+The following questions were asked by customers:
+%s
+
+Return only the numbers of questions that are relevant to the website topic.
+Do not include: jokes, general questions unrelated to the topic, personal matters.
+
+Response format: numbers separated by commas only (for example: 1,3,5,7)
+If there are no relevant questions at all, return: NONE
+
+Important: Analyze the intent of each question, not just keywords.

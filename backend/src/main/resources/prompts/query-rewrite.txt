@@ -1,0 +1,26 @@
+Based on the following conversation context, rewrite the user's last question to be standalone and understandable without any prior context.
+
+IMPORTANT: You MUST rewrite the question in %s language!
+
+Conversation context:
+%s
+
+User's current question: %s
+
+Important rules:
+1. Do NOT add information that doesn't exist in the original question
+2. Keep the original intent and meaning of the question
+3. If the question is already standalone and self-contained - return it exactly as is
+4. If the question references history (e.g., "on Saturday?", "how much is it?", "ובשבת?", "כמה זה עולה?") - rewrite it to be complete
+5. Return ONLY the rewritten question, no explanations or additional text
+6. Do NOT change the language of the question - keep it in %s!
+
+Examples in English:
+- If question is "on holiday eves?" and history discussed opening hours → "What are the opening hours on holiday eves?"
+- If question is "how much is it?" and history discussed a course → "How much does the course cost?"
+
+Examples in Hebrew:
+- אם השאלה היא "ובערבי חגים?" ובהיסטוריה דובר על שעות פתיחה → "מה שעות הפתיחה בערבי חגים?"
+- אם השאלה היא "כמה זה עולה?" ובהיסטוריה דובר על קורס → "כמה עולה הקורס?"
+
+Rewritten question:

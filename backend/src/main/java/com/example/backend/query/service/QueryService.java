@@ -37,6 +37,7 @@ public class QueryService {
     private final QdrantVectorService qdrantVectorService;
     private final EmbeddingModel embeddingModel;
     private final OpenAiChatModel chatModel;
+    private final PromptService promptService;
 
     private static final int MAX_RELEVANT_CHUNKS = 5;
     private static final int MAX_HISTORY_MESSAGES = 10;
@@ -71,7 +72,7 @@ public class QueryService {
 
             // 5. If no relevant documents were found
             if (relevantDocs.isEmpty()) {
-                return createNoResultsResponse(question, enhancedQuery, startTime);  // send also enhancedQuery
+                return createNoResultsResponse(question, enhancedQuery, startTime);
             }
 
             // 6. Building messages with history
@@ -108,7 +109,7 @@ public class QueryService {
             throw e;
         } catch (Exception e) {
             log.error("❌ Failed to answer question", e);
-            throw new RuntimeException("שגיאה בעיבוד השאלה: " + e.getMessage());
+            throw new RuntimeException("Error processing question: " + e.getMessage());
         }
     }
 
@@ -192,13 +193,13 @@ public class QueryService {
     // Improved query builder - rewrites with LLM to be independent
     private String buildEnhancedQuery(String question, List<PublicQueryRequest.HistoryMessage> history) {
         
-        // אם אין היסטוריה - מחזיר את השאלה המקורית
+        // If no history - return original question
         if (history == null || history.isEmpty()) {
             log.info("📝 No history - using original question");
             return question;
         }
         
-        // שכתוב השאלה עם LLM
+        // Rewrite query with LLM
         return rewriteQueryWithLLM(question, history);
     }
 
@@ -209,7 +210,7 @@ public class QueryService {
             log.info("🔄 Rewriting query with LLM...");
             long startTime = System.currentTimeMillis();
             
-            // בניית הקשר מכל ההיסטוריה (כבר מוגבלת ל-10 הודעות!)
+            // Build context from all history (already limited to 10 messages!)
             StringBuilder contextBuilder = new StringBuilder();
             
             for (PublicQueryRequest.HistoryMessage msg : history) {
@@ -219,10 +220,10 @@ public class QueryService {
             
             log.info("📚 Using {} history messages for rewriting", history.size());
             
-            // בניית ה-Prompt לשכתוב
+            // Build rewrite prompt
             String rewritePrompt = buildRewritePrompt(contextBuilder.toString(), question);
             
-            // שליחה ל-LLM
+            // Send to LLM
             log.info("🚀 Sending rewrite request to LLM...");
             
             Response<AiMessage> response = chatModel.generate(
@@ -232,10 +233,10 @@ public class QueryService {
             
             String rewrittenQuery = response.content().text().trim();
             
-            // ניקוי התשובה - הסרת מרכאות ו-prefixes
+            // Clean the response - remove quotes and prefixes
             rewrittenQuery = rewrittenQuery
                 .replaceAll("^\"|\"$", "")
-                .replaceAll("^(Rewritten question:|שאלה משוכתבת:)\\s*", "")
+                .replaceAll("^(Rewritten question:|Rewritten question)\\s*", "")
                 .trim();
             
             long duration = System.currentTimeMillis() - startTime;
@@ -248,72 +249,15 @@ public class QueryService {
             
         } catch (Exception e) {
             log.error("❌ Failed to rewrite query - using original question", e);
-            // במקרה של שגיאה - מחזיר את השאלה המקורית
+            // In case of error - return original question
             return question;
         }
     }
 
     // Constructs a prompt to rewrite the query according to the language
     private String buildRewritePrompt(String context, String question) {
-        
-        // זיהוי שפה (משתמש בפונקציה הקיימת)
         String detectedLanguage = detectLanguage(question);
-        
-        if (detectedLanguage.equals("he")) {
-            // Prompt בעברית
-            return String.format("""
-                בהתבסס על ההקשר הבא מהשיחה, שכתב את השאלה האחרונה של המשתמש כך שתהיה עצמאית ומובנת ללא הקשר.
-                
-                הקשר מהשיחה:
-                %s
-                
-                שאלה נוכחית של המשתמש: %s
-                
-                חוקים חשובים:
-                1. אל תוסיף מידע שלא קיים בשאלה המקורית
-                2. שמור על הכוונה והמשמעות המקורית של השאלה
-                3. אם השאלה כבר עצמאית ומובנת מעצמה - החזר אותה בדיוק כמו שהיא
-                4. אם השאלה מתייחסת להיסטוריה (למשל "ובשבת?", "כמה זה עולה?") - שכתב אותה להיות מלאה
-                5. החזר רק את השאלה המשוכתבת, ללא הסברים או טקסט נוסף
-                6. אל תשנה את השפה של השאלה
-                
-                דוגמאות:
-                - אם השאלה היא "ובשבת?" ובהיסטוריה דובר על שעות פתיחה → "מה שעות הפתיחה בשבת?"
-                - אם השאלה היא "כמה זה עולה?" ובהיסטוריה דובר על קורס → "כמה עולה הקורס?"
-                - אם השאלה היא "מה שעות הפתיחה שלכם?" → "מה שעות הפתיחה שלכם?" (כבר עצמאית)
-                
-                שאלה משוכתבת:""", 
-                context, 
-                question
-            );
-        } else {
-            // Prompt באנגלית
-            return String.format("""
-                Based on the following conversation context, rewrite the user's last question to be standalone and understandable without any prior context.
-                
-                Conversation context:
-                %s
-                
-                User's current question: %s
-                
-                Important rules:
-                1. Do NOT add information that doesn't exist in the original question
-                2. Keep the original intent and meaning of the question
-                3. If the question is already standalone and self-contained - return it exactly as is
-                4. If the question references history (e.g., "on Saturday?", "how much is it?") - rewrite it to be complete
-                5. Return ONLY the rewritten question, no explanations or additional text
-                6. Do NOT change the language of the question
-                
-                Examples:
-                - If question is "on Saturday?" and history discussed opening hours → "What are the opening hours on Saturday?"
-                - If question is "how much is it?" and history discussed a course → "How much does the course cost?"
-                - If question is "What are your opening hours?" → "What are your opening hours?" (already standalone)
-                
-                Rewritten question:""", 
-                context, 
-                question
-            );
-        }
+        return promptService.getQueryRewritePrompt(detectedLanguage, context, question);
     }
 
     // Build chat messages for GPT
@@ -321,28 +265,12 @@ public class QueryService {
         
         List<ChatMessage> messages = new ArrayList<>();
 
-        // 1. System message
+        // 1. System message from PromptService
         String detectedLanguage = detectLanguage(question);
         String languageName = detectedLanguage.equals("he") ? "Hebrew" : "English";
-        messages.add(SystemMessage.from("""
-            You are a helpful AI assistant.
-            ANSWER IN %s ONLY!
-            Base your answer ONLY on the provided documents.
-            Be natural and conversational.
-            If you do not have enough information to answer the customer’s question,
-            do NOT say that you cannot, are unable to, or are not allowed to provide the information.
-            Do NOT imply restrictions, permissions, or confidentiality.
-            Instead, clearly state that you do not have the requested information
-            or that the information is not available to you.
-            Do not mention missing documents, knowledge bases, or internal sources.
-            In such cases, direct the customer to customer support.
-            If support contact details are available (email, phone number, or contact form),
-            include them in your response.
-            Keep the answer polite, clear, and professional.
-            """.formatted(languageName.toUpperCase())
-        ));
-
-
+        
+        String systemMessage = promptService.getSystemMessage(languageName);
+        messages.add(SystemMessage.from(systemMessage));
 
         // 2. Adding history (plain text!)
         if (history != null && !history.isEmpty()) {
@@ -444,15 +372,13 @@ public class QueryService {
     private QueryResponse createNoResultsResponse(String originalQuestion, String enhancedQuery, long startTime) {
         
         String detectedLanguage = detectLanguage(originalQuestion);
-        String message = detectedLanguage.equals("he") 
-            ? "מצטער, אין לי את המידע הזה כרגע. ממליץ לפנות לשירות הלקוחות."
-            : "Sorry, I don\'t have this information right now. Please contact customer support for assistance.";
+        String message = promptService.getNoResultsMessage(detectedLanguage);
 
         long responseTime = System.currentTimeMillis() - startTime;
 
         return QueryResponse.builder()
             .answer(message)
-            .rewrittenQuery(enhancedQuery)  // ⭐ חדש!
+            .rewrittenQuery(enhancedQuery)
             .sources(Collections.emptyList())
             .confidence(0.0)
             .tokensUsed(0)
@@ -460,7 +386,7 @@ public class QueryService {
             .build();
     }
 
-    // ✅ Inner class
+    // Inner class
     @lombok.Data
     private static class RelevantDocument {
         private String text;

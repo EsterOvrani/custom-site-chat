@@ -4,8 +4,8 @@ import com.example.backend.analytics.dto.AnalysisResponse;
 import com.example.backend.collection.service.CollectionService;
 import com.example.backend.user.model.User;
 import com.example.backend.common.infrastructure.storage.S3Service;
+import com.example.backend.query.service.PromptService;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.data.message.AiMessage;
@@ -15,7 +15,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -31,28 +30,29 @@ public class AnalyticsService {
     private final S3Service s3Service;
     private final CollectionService collectionService;
     private final OpenAiChatModel chatModel;
+    private final PromptService promptService;
 
-    // get user by the key
+    // Get user by the key
     public User getUserBySecretKey(String secretKey) {
         return collectionService.validateSecretKey(secretKey);
     }
 
-    // append the unquestion to the question s file in S3
+    // Append the questions to the questions file in S3
     public void appendQuestionsToFile(User user, List<String> newQuestions, String siteCategory) {
         String filePath = getFilePath(user);
 
         List<String> allQuestions = new ArrayList<>();
 
-        // 1. check if the file is empty if mot read the contex
+        // 1. Check if the file exists, if not read the content
         try {
             InputStream existing = s3Service.downloadFile(filePath);
             String content = new String(existing.readAllBytes(), StandardCharsets.UTF_8);
 
-            // extract the questions from the file
+            // Extract the questions from the file
             String[] lines = content.split("\n");
             for (String line : lines) {
                 line = line.trim();
-                // take the questions only without empty line...
+                // Take the questions only without empty lines
                 if (!line.isEmpty() && !line.startsWith("שאלה")) {
                     allQuestions.add(line);
                 }
@@ -64,7 +64,7 @@ public class AnalyticsService {
             log.info("📝 No existing file found, will create new one");
         }
 
-        // 2. filter the question with AI
+        // 2. Filter the questions with AI
         if (siteCategory != null && !siteCategory.trim().isEmpty()) {
             log.info("🔍 Filtering {} new questions for category: {}",
                     newQuestions.size(), siteCategory);
@@ -75,71 +75,54 @@ public class AnalyticsService {
             log.info("✅ Added {} relevant questions (filtered from {} total)",
                     filteredNew.size(), newQuestions.size());
         } else {
-            // if the is no category add the question without filter
+            // If there is no category add the questions without filter
             allQuestions.addAll(newQuestions);
             log.info("ℹ️ No category provided - added all {} questions without filtering",
                     newQuestions.size());
         }
 
-        // 3. save the all questions backed to file
+        // 3. Save all questions back to file
         saveQuestionsToFile(user, allQuestions);
 
         log.info("✅ Total questions in file now: {}", allQuestions.size());
     }
 
-    // filter the question with AI
+    // Filter the questions with AI
     private List<String> filterWithLLM(List<String> questions, String siteCategory) {
         log.info("🔍 Filtering {} questions with LLM for category: {}",
                 questions.size(), siteCategory);
 
-        // build question list with numbers
+        // Build question list with numbers
         StringBuilder questionsText = new StringBuilder();
         for (int i = 0; i < questions.size(); i++) {
             questionsText.append((i + 1)).append(". ").append(questions.get(i)).append("\n");
         }
 
-        // prompt to AI
-        String prompt = String.format("""
-            אתה מסנן שאלות לפי רלוונטיות לאתר.
-            
-            נושא האתר: %s
-            
-            השאלות הבאות נשאלו על ידי לקוחות:
-            %s
-            
-            החזר רק את המספרים של השאלות שרלוונטיות לנושא האתר.
-            אל תכלול: בדיחות, שאלות כלליות שלא קשורות לנושא, דברים אישיים.
-            
-            פורמט תשובה: מספרים מופרדים בפסיקים בלבד (לדוגמה: 1,3,5,7)
-            אם אין שאלות רלוונטיות בכלל, החזר: NONE
-            """,
-                siteCategory,
-                questionsText
-        );
+        // Get prompt from PromptService (includes system message in first line)
+        String fullPrompt = promptService.getAnalyticsFilterPrompt(siteCategory, questionsText.toString());
 
         try {
-            // send to AI
+            // Send to AI - using the prompt as-is (no separate system message needed)
             Response<AiMessage> response = chatModel.generate(
-                    SystemMessage.from("אתה מומחה לסינון שאלות לפי רלוונטיות."),
-                    UserMessage.from(prompt)
+                    UserMessage.from(fullPrompt)
             );
 
             String answer = response.content().text().trim();
             log.info("📥 LLM response: {}", answer);
 
-            // id there is no relevant questions
+            // If there are no relevant questions
             if (answer.equalsIgnoreCase("NONE")) {
                 log.info("ℹ️ LLM found no relevant questions");
                 return new ArrayList<>();
             }
 
-            // Answer press - converting numbers to questions
+            // Answer parsing - converting numbers to questions
             List<String> filtered = new ArrayList<>();
             String[] indices = answer.split(",");
 
             for (String indexStr : indices) {
                 try {
-                    int index = Integer.parseInt(indexStr.trim()) - 1; // cuz array start from 0 index
+                    int index = Integer.parseInt(indexStr.trim()) - 1; // Because array starts from 0 index
                     if (index >= 0 && index < questions.size()) {
                         filtered.add(questions.get(index));
                     }
@@ -154,25 +137,25 @@ public class AnalyticsService {
 
         } catch (Exception e) {
             log.error("❌ LLM filtering failed, returning all questions", e);
-            return questions; // in error case, return all
+            return questions; // In error case, return all
         }
     }
 
-    // the the questions list to file
+    // Save the questions list to file
     private void saveQuestionsToFile(User user, List<String> questions) {
         String filePath = getFilePath(user);
 
-        // build context file
+        // Build file content
         StringBuilder content = new StringBuilder();
         for (int i = 0; i < questions.size(); i++) {
             content.append("שאלה ").append(i + 1).append("\n");
             content.append(questions.get(i)).append("\n\n");
         }
 
-        // convert to bytes
+        // Convert to bytes
         byte[] bytes = content.toString().getBytes(StandardCharsets.UTF_8);
 
-        // upload to s3
+        // Upload to S3
         s3Service.uploadFile(
                 new ByteArrayInputStream(bytes),
                 filePath,
@@ -183,7 +166,7 @@ public class AnalyticsService {
         log.info("💾 Saved {} questions to S3: {}", questions.size(), filePath);
     }
 
-    // download the questions file
+    // Download the questions file
     public byte[] downloadQuestionsFile(User user) {
         String filePath = getFilePath(user);
 
@@ -214,7 +197,7 @@ public class AnalyticsService {
         }
     }
 
-    // delete questions file
+    // Delete questions file
     public void deleteQuestionsFile(User user) {
         String filePath = getFilePath(user);
         
@@ -233,7 +216,7 @@ public class AnalyticsService {
         }
     }
 
-    // get file path in S3
+    // Get file path in S3
     private String getFilePath(User user) {
         return String.format("users/%d/analytics/questions.txt", user.getId());
     }
@@ -275,25 +258,30 @@ public class AnalyticsService {
 
             log.info("🔍 Analyzing {} questions with AI", questions.size());
 
-            // 5. Build prompt for AI analysis
-            String prompt = buildAnalysisPrompt(questions);
+            // 5. Build questions text for prompt
+            StringBuilder questionsText = new StringBuilder();
+            for (int i = 0; i < questions.size(); i++) {
+                questionsText.append((i + 1)).append(". ").append(questions.get(i)).append("\n");
+            }
 
-            // 6. Send to AI for analysis
+            // 6. Get prompt from PromptService (includes system message in first line)
+            String fullPrompt = promptService.getAnalyticsAnalysisPrompt(questionsText.toString());
+
+            // 7. Send to AI for analysis - using the prompt as-is (no separate system message needed)
             Response<AiMessage> response = chatModel.generate(
-                    SystemMessage.from("אתה מומחה לניתוח וסיווג שאלות לקוחות. תחזיר תשובה במבנה JSON בלבד."),
-                    UserMessage.from(prompt)
+                    UserMessage.from(fullPrompt)
             );
 
             String aiResponse = response.content().text().trim();
             log.info("📥 AI Response received: {}", aiResponse);
 
-            // 7. Clean response - remove markdown backticks if present
+            // 8. Clean response - remove markdown backticks if present
             aiResponse = aiResponse
                     .replaceAll("^```json\\s*", "")
                     .replaceAll("\\s*```$", "")
                     .trim();
 
-            // 8. Parse JSON response to AnalysisResponse object
+            // 9. Parse JSON response to AnalysisResponse object
             ObjectMapper mapper = new ObjectMapper();
             AnalysisResponse analysis = mapper.readValue(aiResponse, AnalysisResponse.class);
 
@@ -308,71 +296,4 @@ public class AnalyticsService {
             throw new RuntimeException("נכשל בניתוח השאלות: " + e.getMessage());
         }
     }
-
-    // בניית prompt מובנה
-    private String buildAnalysisPrompt(List<String> questions) {
-        StringBuilder questionsText = new StringBuilder();
-        for (int i = 0; i < questions.size(); i++) {
-            questionsText.append((i + 1)).append(". ").append(questions.get(i)).append("\n");
-        }
-
-        return String.format("""
-            נתונות השאלות הבאות מלקוחות:
-            %s
-            
-            המשימה שלך: לאחד שאלות לפי הכוונה/משמעות שלהן, לא רק לפי ניסוח זהה.
-            
-            כללי איחוד שאלות (חשוב מאוד!):
-            - שאלות עם אותה כוונה = אותה שאלה, גם אם המילים שונות
-            - "כמה עולה משלוח?" = "מה מחיר המשלוח?" = "יש עלות על משלוח?" (כולן שאלה אחת!)
-            - "אפשר להחזיר?" = "מה מדיניות ההחזרות?" = "איך מחזירים מוצר?" (כולן שאלה אחת!)
-            - "מתי מגיעה החבילה?" = "כמה זמן לוקח משלוח?" = "מה זמן האספקה?" (כולן שאלה אחת!)
-            - "יש לכם במידה X?" = "באיזה מידות יש?" = "מה המידות הזמינות?" (כולן שאלה אחת!)
-            
-            דוגמה לקלט:
-            1. כמה עולה משלוח?
-            2. מה מחיר המשלוח?
-            3. יש משלוח חינם?
-            4. האם יש עלות למשלוח?
-            
-            דוגמה לפלט נכון:
-            - "כמה עולה משלוח?" (count: 3) - מאחד שאלות 1,2,4
-            - "האם יש משלוח חינם?" (count: 1) - שאלה 3 נפרדת כי הכוונה שונה
-            
-            בצע ניתוח:
-            1. קרא כל שאלה והבן את הכוונה האמיתית שלה
-            2. אחד שאלות עם כוונה זהה (גם אם ניסוח שונה לגמרי)
-            3. בחר ניסוח מייצג ברור לכל קבוצת שאלות
-            4. קבץ לקטגוריות לפי נושא
-            5. ספור כמה שאלות מקוריות נכללו בכל שאלה מאוחדת
-            
-            החזר JSON בפורמט הזה בדיוק:
-            {
-            "categories": [
-                {
-                "categoryName": "שם הקטגוריה",
-                "icon": "אייקון אימוג'י",
-                "questions": [
-                    {
-                    "question": "השאלה המייצגת",
-                    "count": 5
-                    }
-                ],
-                "totalCount": 5
-                }
-            ],
-            "summary": "סיכום קצר של הממצאים - ציין כמה שאלות מקוריות אוחדו",
-            "totalQuestions": 10
-            }
-            
-            כללים חשובים:
-            - החזר רק JSON, ללא טקסט נוסף
-            - אל תוסיף מרכאות או backticks מסביב ל-JSON
-            - אייקון מתאים לכל קטגוריה (📦 משלוחים, 💰 מחירים, 📏 מידות, 🔄 החזרות...)
-            - totalQuestions = סה"כ השאלות המקוריות (לא אחרי איחוד)
-            - count בכל שאלה = כמה שאלות מקוריות אוחדו לשאלה זו
-            - היה אגרסיבי באיחוד! אם יש ספק - אחד!
-            """, questionsText);
-    }
-
 }

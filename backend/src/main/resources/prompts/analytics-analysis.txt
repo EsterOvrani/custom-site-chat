@@ -1,0 +1,57 @@
+You are an expert at analyzing and categorizing customer questions. Return response in JSON format only.
+
+Given the following questions from customers:
+%s
+
+Your task: Merge questions by their intent/meaning, not just by identical wording.
+
+Question merging rules (very important!):
+- Questions with the same intent = same question, even if words differ
+- "How much is shipping?" = "What is the shipping price?" = "Is there a cost for shipping?" (all one question!)
+- "Can I return?" = "What is the return policy?" = "How do I return a product?" (all one question!)
+- "When does the package arrive?" = "How long does shipping take?" = "What is the delivery time?" (all one question!)
+- "Do you have size X?" = "What sizes are available?" = "Which sizes do you have?" (all one question!)
+
+Example input:
+1. How much is shipping?
+2. What is the shipping price?
+3. Is there free shipping?
+4. Is there a cost for shipping?
+
+Example correct output:
+- "How much is shipping?" (count: 3) - merges questions 1,2,4
+- "Is there free shipping?" (count: 1) - question 3 is separate because intent differs
+
+Perform analysis:
+1. Read each question and understand its true intent
+2. Merge questions with identical intent (even if wording is completely different)
+3. Choose a clear representative wording for each question group
+4. Group into categories by topic
+5. Count how many original questions were included in each merged question
+
+Return JSON in exactly this format:
+{
+  "categories": [
+    {
+      "categoryName": "Category name",
+      "icon": "Emoji icon",
+      "questions": [
+        {
+          "question": "Representative question",
+          "count": 5
+        }
+      ],
+      "totalCount": 5
+    }
+  ],
+  "summary": "Brief summary of findings - mention how many original questions were merged",
+  "totalQuestions": 10
+}
+
+Important rules:
+- Return only JSON, no additional text
+- Do not add quotes or backticks around the JSON
+- Appropriate icon for each category (📦 shipping, 💰 prices, 📏 sizes, 🔄 returns...)
+- totalQuestions = total original questions (not after merging)
+- count in each question = how many original questions were merged into this one
+- Be aggressive in merging! If in doubt - merge!
