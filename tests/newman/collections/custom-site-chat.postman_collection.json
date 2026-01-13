@@ -1515,7 +1515,7 @@
                   "pm.test('Analysis has summary data', function () {",
                   "    const jsonData = pm.response.json();",
                   "    pm.expect(jsonData.data).to.have.property('totalQuestions');",
-                  "    pm.expect(jsonData.data).to.have.property('totalCategories');",
+                  "    pm.expect(jsonData.data).to.have.property('summary');",
                   "});"
                 ],
                 "type": "text/javascript"
