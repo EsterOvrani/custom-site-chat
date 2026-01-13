@@ -517,7 +517,7 @@
             <div class="chat-widget-empty">
               <div class="chat-widget-empty-icon">💬</div>
               <h3>שלום!</h3>
-              <p>שאל שאלה על המסמכים שלך</p>
+              <p>איך אני יכול לעזור לך היום?</p>
               ${config.voiceEnabled ? '<p style="font-size: 12px; margin-top: 10px;">💡 לחץ על 🎤 להקלטת הודעה קולית!</p>' : ''}
             </div>
           </div>
@@ -975,7 +975,7 @@
         <div class="chat-widget-empty">
           <div class="chat-widget-empty-icon">💬</div>
           <h3>שלום!</h3>
-          <p>שאל שאלה על המסמכים שלך</p>
+          <p>איך אני יכול לעזור לך היום?</p>
           ${config.voiceEnabled ? '<p style="font-size: 12px; margin-top: 10px;">💡 לחץ על 🎤 להקלטת הודעה קולית!</p>' : ''}
         </div>
       `;
