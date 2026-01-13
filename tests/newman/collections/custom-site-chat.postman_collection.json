@@ -397,7 +397,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"{{testPassword}}\"\n}"
+              "raw": "{\n    \"username\": \"{{testUsername}}\",\n    \"password\": \"{{testPassword}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",
@@ -473,7 +473,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"wrongpassword123\"\n}"
+              "raw": "{\n    \"username\": \"{{testUsername}}\",\n    \"password\": \"wrongpassword123\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",
@@ -483,7 +483,7 @@
           }
         },
         {
-          "name": "3.4 Login with Non-existent Email",
+          "name": "3.4 Login with Non-existent Username",
           "event": [
             {
               "listen": "test",
@@ -507,7 +507,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"email\": \"nonexistent@example.com\",\n    \"password\": \"somepassword\"\n}"
+              "raw": "{\n    \"username\": \"nonexistent_user_123\",\n    \"password\": \"somepassword\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",
@@ -1828,7 +1828,7 @@
               "script": {
                 "exec": [
                   "// Re-login to get a valid token",
-                  "const email = pm.collectionVariables.get('testEmail');",
+                  "const username = pm.collectionVariables.get('testUsername');",
                   "const password = pm.collectionVariables.get('testPassword');",
                   "",
                   "pm.sendRequest({",
@@ -1837,7 +1837,7 @@
                   "    header: { 'Content-Type': 'application/json' },",
                   "    body: {",
                   "        mode: 'raw',",
-                  "        raw: JSON.stringify({ email, password })",
+                  "        raw: JSON.stringify({ username, password })",
                   "    }",
                   "}, function(err, res) {",
                   "    if (!err && res.json().success) {",
