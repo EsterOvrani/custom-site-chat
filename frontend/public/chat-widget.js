@@ -458,6 +458,42 @@
         color: #666;
         text-align: center;
         padding: 20px;
+
+      /* ⭐ עיצוב קישורים - זיהוי אוטומטי של URLs */
+      .chat-link {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: rgba(102, 126, 234, 0.1);
+        border-bottom: 2px solid #667eea;
+        transition: all 0.2s;
+        display: inline-block;
+        cursor: pointer;
+      }
+
+      .chat-link:hover {
+        color: white;
+        background: #667eea;
+        border-bottom-color: #764ba2;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+      }
+
+      .chat-link::before {
+        content: "🔗 ";
+        margin-right: 4px;
+      }
+
+      .chat-message.user .chat-link {
+        color: white;
+        background: rgba(255, 255, 255, 0.2);
+        border-bottom-color: white;
+      }
+
+      .chat-message.user .chat-link:hover {
+        background: rgba(255, 255, 255, 0.3);
       }
 
       .chat-widget-empty-icon {
@@ -915,6 +951,28 @@
     return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
 
+  /**
+   * ⭐ פונקציה חדשה - זיהוי אוטומטי והמרת URLs לקישורים
+   */
+  function convertUrlsToLinks(text) {
+    // קודם - המרת Markdown links [text](url) ל-HTML
+    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/gi, function(match, linkText, url) {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link">${linkText}</a>`;
+    });
+    
+    // אחר כך - זיהוי URLs רגילים שלא בתוך Markdown
+    const urlRegex = /(?<![">])(https?:\/\/[^\s<>"{}|\\^`\[\]()]+)(?![^<]*<\/a>)/gi;
+    
+    return text.replace(urlRegex, function(url) {
+      // ניקוי סימני פיסוק מסוף ה-URL (נקודה, פסיק וכו')
+      let cleanUrl = url.replace(/[.,;:!?]$/, '');
+      const removedChar = url !== cleanUrl ? url.slice(-1) : '';
+      
+      // יצירת קישור HTML עם טקסט ידידותי
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">לחץ כאן לכניסה לדף</a>${removedChar}`;
+    });
+  }
+
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -969,6 +1027,9 @@
     }
   }
 
+  /**
+   * ⭐ פונקציה מעודכנת - עם תמיכה בהמרת URLs לקישורים
+   */
   function renderMessages(state, elements, config) {
     if (state.messages.length === 0) {
       elements.messagesContainer.innerHTML = `
@@ -986,18 +1047,29 @@
       const language = detectLanguage(msg.content);
       const textDirection = language === 'he' ? 'rtl' : 'ltr';
       
-      const cleanedContent = msg.content
+      let cleanedContent = msg.content
         .split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0)
         .join('\n')
         .trim();
       
+      // ⭐ המרת URLs לקישורים (רק להודעות מהבוט)
+      if (msg.role === 'assistant') {
+        // קודם escape HTML
+        cleanedContent = escapeHtml(cleanedContent);
+        // אחר כך המר URLs לקישורים
+        cleanedContent = convertUrlsToLinks(cleanedContent);
+      } else {
+        // למשתמש - רק escape
+        cleanedContent = escapeHtml(cleanedContent);
+      }
+      
       return `
         <div class="chat-message ${msg.role}">
           <div class="chat-message-avatar">${createAvatar(msg.role, config)}</div>
           <div class="chat-message-content">
-            <div class="chat-message-bubble ${textDirection}">${escapeHtml(cleanedContent)}</div>
+            <div class="chat-message-bubble ${textDirection}">${cleanedContent}</div>
           </div>
         </div>
       `;
@@ -1024,7 +1096,6 @@
 
     elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
   }
-
   async function sendMessage(state, elements, config) {
     const question = elements.inputField.value.trim();
 
