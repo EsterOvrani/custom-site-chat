@@ -1000,6 +1000,33 @@
     return div.innerHTML;
   }
 
+  /**
+   * ⭐ פונקציה חדשה - escape HTML אבל שומר על תגיות <a>
+   */
+  function escapeHtmlExceptLinks(text) {
+    // מחלץ את כל הקישורים ושומר אותם בצד
+    const links = [];
+    const placeholder = '___LINK___';
+    
+    // שומר את כל תגיות ה-<a> בצד
+    let textWithPlaceholders = text.replace(/<a\s+[^>]*>.*?<\/a>/gi, function(match) {
+      links.push(match);
+      return placeholder + (links.length - 1) + placeholder;
+    });
+    
+    // עושה escape לכל השאר
+    const div = document.createElement('div');
+    div.textContent = textWithPlaceholders;
+    let escapedText = div.innerHTML;
+    
+    // מחזיר את הקישורים למקומם
+    links.forEach((link, index) => {
+      escapedText = escapedText.replace(placeholder + index + placeholder, link);
+    });
+    
+    return escapedText;
+  }
+
   function detectLanguage(text) {
     if (!text || text.trim().length === 0) return 'en';
     
@@ -1077,10 +1104,10 @@
       
       // ⭐ המרת URLs לקישורים (רק להודעות מהבוט)
       if (msg.role === 'assistant') {
-        // קודם escape HTML
-        cleanedContent = escapeHtml(cleanedContent);
-        // אחר כך המר URLs לקישורים
+        // קודם המר Markdown ו-URLs לקישורים (לפני escape!)
         cleanedContent = convertUrlsToLinks(cleanedContent);
+        // עכשיו escape רק את החלקים שלא HTML
+        cleanedContent = escapeHtmlExceptLinks(cleanedContent);
       } else {
         // למשתמש - רק escape
         cleanedContent = escapeHtml(cleanedContent);
