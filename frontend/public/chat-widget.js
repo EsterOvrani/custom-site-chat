@@ -560,9 +560,6 @@
           <div class="limit-warning" id="limit-warning">
             ⚠️ הגעת למגבלת 10 שאלות. לחץ על "התחל שיחה חדשה".
           </div>
-          <div class="browser-warning" id="browser-warning">
-            ⚠️ הדפדפן שלך לא תומך בהקלטת קול
-          </div>
           <div class="recording-bar" id="recording-bar">
             <div class="recording-timer">
               <div class="recording-dot"></div>
