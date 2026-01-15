@@ -1,4 +1,4 @@
-// frontend/public/chat-widget.js - גרסה מלאה עם זיהוי URLs ושינוי כיוון
+// frontend/public/chat-widget.js - גרסה עם לינקים פשוטים
 
 (function() {
   'use strict';
@@ -224,41 +224,27 @@
         border: 1px solid #e1e8ed;
       }
 
-      /* ⭐ עיצוב קישורים - זיהוי אוטומטי של URLs */
+      /* ⭐ עיצוב קישורים - לינק רגיל פשוט */
       .chat-link {
-        color: #667eea;
-        text-decoration: none;
-        font-weight: 600;
-        padding: 4px 8px;
-        border-radius: 4px;
-        background: rgba(102, 126, 234, 0.1);
-        border-bottom: 2px solid #667eea;
-        transition: all 0.2s;
-        display: inline-block;
+        color: #0066cc;
+        text-decoration: underline;
         cursor: pointer;
+        font-weight: normal;
       }
 
       .chat-link:hover {
-        color: white;
-        background: #667eea;
-        border-bottom-color: #764ba2;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-      }
-
-      .chat-link::before {
-        content: "🔗 ";
-        margin-right: 4px;
+        color: #0052a3;
+        text-decoration: underline;
       }
 
       .chat-message.user .chat-link {
-        color: white;
-        background: rgba(255, 255, 255, 0.2);
-        border-bottom-color: white;
+        color: #e0e7ff;
+        text-decoration: underline;
       }
 
       .chat-message.user .chat-link:hover {
-        background: rgba(255, 255, 255, 0.3);
+        color: #ffffff;
+        text-decoration: underline;
       }
 
       .limit-warning {
@@ -518,7 +504,6 @@
         display: block;
       }
 
-      /* ⭐ אנימציה לאינדיקטור כיוון טקסט */
       @keyframes fadeInOut {
         0% {
           opacity: 0;
@@ -664,8 +649,6 @@
     }
 
     loadHistoryFromSession(state, elements, config);
-
-    // ⭐ הוסף תמיכה בשינוי כיוון טקסט
     setupTextDirectionToggle(elements);
 
     elements.toggleButton.addEventListener('click', () => toggleWidget(state, elements));
@@ -692,49 +675,39 @@
       elements.inputField.style.height = elements.inputField.scrollHeight + 'px';
     });
 
-    // ⭐ שמור את state ו-config ב-window לצורך beforeunload
     window.chatWidgetState = state;
     window.chatWidgetConfig = config;
   }
 
-  // ⭐ פונקציה חדשה - שינוי כיוון טקסט עם CTRL+SHIFT
   function setupTextDirectionToggle(elements) {
-    let currentDirection = 'rtl'; // ברירת מחדל
+    let currentDirection = 'rtl';
 
     elements.inputField.addEventListener('keydown', (e) => {
-      // בדוק אם CTRL + SHIFT נלחצו יחד
       if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.key === 'Shift') {
         e.preventDefault();
         
-        // החלף כיוון
         currentDirection = currentDirection === 'rtl' ? 'ltr' : 'rtl';
         
-        // החל על שדה הקלט
         elements.inputField.style.direction = currentDirection;
         elements.inputField.style.textAlign = currentDirection === 'rtl' ? 'right' : 'left';
         
-        // הצג אינדיקטור
         showDirectionIndicator(currentDirection, elements);
       }
     });
   }
 
-  // ⭐ פונקציה להצגת אינדיקטור כיוון
   function showDirectionIndicator(direction, elements) {
-    // הסר אינדיקטור קיים אם יש
     const existingIndicator = document.getElementById('direction-indicator');
     if (existingIndicator) {
       existingIndicator.remove();
     }
 
-    // צור אינדיקטור חדש
     const indicator = document.createElement('div');
     indicator.id = 'direction-indicator';
     indicator.textContent = direction === 'rtl' ? '→ עברית' : '← English';
 
     elements.inputContainer.appendChild(indicator);
 
-    // הסר אחרי אנימציה
     setTimeout(() => {
       if (indicator && indicator.parentNode) {
         indicator.remove();
@@ -1036,24 +1009,25 @@
   }
 
   /**
-   * ⭐ פונקציה - זיהוי אוטומטי והמרת URLs לקישורים
+   * ⭐ פונקציה מעודכנת - קישורים פשוטים עם "לחץ כאן"
    */
   function convertUrlsToLinks(text) {
-    // קודם - המרת Markdown links [text](url) ל-HTML
-    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/gi, function(match, linkText, url) {
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link">${linkText}</a>`;
+    const isHebrew = detectLanguage(text) === 'he';
+    const linkText = isHebrew ? 'לחץ כאן' : 'Click Here';
+    
+    // המרת Markdown links
+    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/gi, function(match, markdownText, url) {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link">${markdownText}</a>`;
     });
     
-    // אחר כך - זיהוי URLs רגילים שלא בתוך Markdown
+    // זיהוי URLs רגילים
     const urlRegex = /(?<![">])(https?:\/\/[^\s<>"{}|\\^`\[\]()]+)(?![^<]*<\/a>)/gi;
     
     return text.replace(urlRegex, function(url) {
-      // ניקוי סימני פיסוק מסוף ה-URL (נקודה, פסיק וכו')
       let cleanUrl = url.replace(/[.,;:!?]$/, '');
       const removedChar = url !== cleanUrl ? url.slice(-1) : '';
       
-      // יצירת קישור HTML שמציג את ה-URL עצמו
-      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${cleanUrl}</a>${removedChar}`;
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${linkText}</a>${removedChar}`;
     });
   }
 
@@ -1063,26 +1037,19 @@
     return div.innerHTML;
   }
 
-  /**
-   * ⭐ פונקציה - escape HTML אבל שומר על תגיות <a>
-   */
   function escapeHtmlExceptLinks(text) {
-    // מחלץ את כל הקישורים ושומר אותם בצד
     const links = [];
     const placeholder = '___LINK___';
     
-    // שומר את כל תגיות ה-<a> בצד
     let textWithPlaceholders = text.replace(/<a\s+[^>]*>.*?<\/a>/gi, function(match) {
       links.push(match);
       return placeholder + (links.length - 1) + placeholder;
     });
     
-    // עושה escape לכל השאר
     const div = document.createElement('div');
     div.textContent = textWithPlaceholders;
     let escapedText = div.innerHTML;
     
-    // מחזיר את הקישורים למקומם
     links.forEach((link, index) => {
       escapedText = escapedText.replace(placeholder + index + placeholder, link);
     });
@@ -1138,9 +1105,6 @@
     }
   }
 
-  /**
-   * ⭐ פונקציה מעודכנת - עם תמיכה בהמרת URLs לקישורים
-   */
   function renderMessages(state, elements, config) {
     if (state.messages.length === 0) {
       elements.messagesContainer.innerHTML = `
@@ -1165,14 +1129,10 @@
         .join('\n')
         .trim();
       
-      // ⭐ המרת URLs לקישורים (רק להודעות מהבוט)
       if (msg.role === 'assistant') {
-        // קודם המר Markdown ו-URLs לקישורים (לפני escape!)
         cleanedContent = convertUrlsToLinks(cleanedContent);
-        // עכשיו escape רק את החלקים שלא HTML
         cleanedContent = escapeHtmlExceptLinks(cleanedContent);
       } else {
-        // למשתמש - רק escape
         cleanedContent = escapeHtml(cleanedContent);
       }
       
