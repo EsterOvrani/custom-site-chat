@@ -1,4 +1,4 @@
-// frontend/public/chat-widget.js - גרסה נקייה בלי voice indicator
+// frontend/public/chat-widget.js - גרסה מלאה עם זיהוי URLs ושינוי כיוון
 
 (function() {
   'use strict';
@@ -224,25 +224,41 @@
         border: 1px solid #e1e8ed;
       }
 
+      /* ⭐ עיצוב קישורים - זיהוי אוטומטי של URLs */
       .chat-link {
         color: #667eea;
-        text-decoration: underline;
-        word-break: break-all;
+        text-decoration: none;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: rgba(102, 126, 234, 0.1);
+        border-bottom: 2px solid #667eea;
+        transition: all 0.2s;
+        display: inline-block;
         cursor: pointer;
-        display: inline;
       }
 
       .chat-link:hover {
-        color: #764ba2;
-        text-decoration: underline;
+        color: white;
+        background: #667eea;
+        border-bottom-color: #764ba2;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
       }
 
-      .chat-message.user .chat-message-bubble .chat-link {
-        color: #e0e7ff;
+      .chat-link::before {
+        content: "🔗 ";
+        margin-right: 4px;
       }
 
-      .chat-message.user .chat-message-bubble .chat-link:hover {
-        color: #ffffff;
+      .chat-message.user .chat-link {
+        color: white;
+        background: rgba(255, 255, 255, 0.2);
+        border-bottom-color: white;
+      }
+
+      .chat-message.user .chat-link:hover {
+        background: rgba(255, 255, 255, 0.3);
       }
 
       .limit-warning {
@@ -334,6 +350,7 @@
         align-items: center;
         gap: 8px;
         transition: background 0.3s;
+        position: relative;
       }
 
       .input-container.recording {
@@ -479,42 +496,6 @@
         color: #666;
         text-align: center;
         padding: 20px;
-
-      /* ⭐ עיצוב קישורים - זיהוי אוטומטי של URLs */
-      .chat-link {
-        color: #667eea;
-        text-decoration: none;
-        font-weight: 600;
-        padding: 4px 8px;
-        border-radius: 4px;
-        background: rgba(102, 126, 234, 0.1);
-        border-bottom: 2px solid #667eea;
-        transition: all 0.2s;
-        display: inline-block;
-        cursor: pointer;
-      }
-
-      .chat-link:hover {
-        color: white;
-        background: #667eea;
-        border-bottom-color: #764ba2;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-      }
-
-      .chat-link::before {
-        content: "🔗 ";
-        margin-right: 4px;
-      }
-
-      .chat-message.user .chat-link {
-        color: white;
-        background: rgba(255, 255, 255, 0.2);
-        border-bottom-color: white;
-      }
-
-      .chat-message.user .chat-link:hover {
-        background: rgba(255, 255, 255, 0.3);
       }
 
       .chat-widget-empty-icon {
@@ -535,6 +516,41 @@
 
       .browser-warning.show {
         display: block;
+      }
+
+      /* ⭐ אנימציה לאינדיקטור כיוון טקסט */
+      @keyframes fadeInOut {
+        0% {
+          opacity: 0;
+          transform: translateX(50%) translateY(5px);
+        }
+        20% {
+          opacity: 1;
+          transform: translateX(50%) translateY(0);
+        }
+        80% {
+          opacity: 1;
+          transform: translateX(50%) translateY(0);
+        }
+        100% {
+          opacity: 0;
+          transform: translateX(50%) translateY(-5px);
+        }
+      }
+
+      #direction-indicator {
+        position: absolute;
+        top: -30px;
+        right: 50%;
+        transform: translateX(50%);
+        background: rgba(102, 126, 234, 0.9);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 11px;
+        z-index: 1000;
+        animation: fadeInOut 1.5s ease-in-out;
+        pointer-events: none;
       }
     `;
 
@@ -649,6 +665,9 @@
 
     loadHistoryFromSession(state, elements, config);
 
+    // ⭐ הוסף תמיכה בשינוי כיוון טקסט
+    setupTextDirectionToggle(elements);
+
     elements.toggleButton.addEventListener('click', () => toggleWidget(state, elements));
     elements.resetButton.addEventListener('click', () => resetChat(state, elements, config));
     elements.sendButton.addEventListener('click', () => sendMessage(state, elements, config));
@@ -672,6 +691,55 @@
       elements.inputField.style.height = 'auto';
       elements.inputField.style.height = elements.inputField.scrollHeight + 'px';
     });
+
+    // ⭐ שמור את state ו-config ב-window לצורך beforeunload
+    window.chatWidgetState = state;
+    window.chatWidgetConfig = config;
+  }
+
+  // ⭐ פונקציה חדשה - שינוי כיוון טקסט עם CTRL+SHIFT
+  function setupTextDirectionToggle(elements) {
+    let currentDirection = 'rtl'; // ברירת מחדל
+
+    elements.inputField.addEventListener('keydown', (e) => {
+      // בדוק אם CTRL + SHIFT נלחצו יחד
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.key === 'Shift') {
+        e.preventDefault();
+        
+        // החלף כיוון
+        currentDirection = currentDirection === 'rtl' ? 'ltr' : 'rtl';
+        
+        // החל על שדה הקלט
+        elements.inputField.style.direction = currentDirection;
+        elements.inputField.style.textAlign = currentDirection === 'rtl' ? 'right' : 'left';
+        
+        // הצג אינדיקטור
+        showDirectionIndicator(currentDirection, elements);
+      }
+    });
+  }
+
+  // ⭐ פונקציה להצגת אינדיקטור כיוון
+  function showDirectionIndicator(direction, elements) {
+    // הסר אינדיקטור קיים אם יש
+    const existingIndicator = document.getElementById('direction-indicator');
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+
+    // צור אינדיקטור חדש
+    const indicator = document.createElement('div');
+    indicator.id = 'direction-indicator';
+    indicator.textContent = direction === 'rtl' ? '→ עברית' : '← English';
+
+    elements.inputContainer.appendChild(indicator);
+
+    // הסר אחרי אנימציה
+    setTimeout(() => {
+      if (indicator && indicator.parentNode) {
+        indicator.remove();
+      }
+    }, 1500);
   }
 
   function setupVoiceRecognition(state, elements) {
@@ -681,7 +749,9 @@
       if (elements.voiceButton) {
         elements.voiceButton.style.display = 'none';
       }
-      elements.browserWarning.classList.add('show');
+      if (elements.browserWarning) {
+        elements.browserWarning.classList.add('show');
+      }
       return;
     }
 
@@ -913,13 +983,11 @@
   }
 
   function isAtLimit(state) {
-    // Each question + answer = 2 messages, so divide by 2 to get question count
     const userMessageCount = Math.floor(state.history.length / 2);
     return userMessageCount >= state.maxHistoryMessages;
   }
 
   function updateUI(state, elements) {
-    // Each question + answer = 2 messages, so divide by 2 to get question count
     const userMessageCount = Math.floor(state.history.length / 2);
     
     elements.messageCounter.textContent = `${userMessageCount}/${state.maxHistoryMessages} שאלות`;
@@ -949,8 +1017,6 @@
 
   function resetChat(state, elements, config) {
     if (confirm('האם אתה בטוח שברצונך להתחיל שיחה חדשה? ההיסטוריה תימחק.')) {
-      
-      // send the unaswerd question before reset chat
       sendUnansweredQuestionsToServer(state, config);
 
       state.history = [];
@@ -970,7 +1036,7 @@
   }
 
   /**
-   * ⭐ פונקציה חדשה - זיהוי אוטומטי והמרת URLs לקישורים
+   * ⭐ פונקציה - זיהוי אוטומטי והמרת URLs לקישורים
    */
   function convertUrlsToLinks(text) {
     // קודם - המרת Markdown links [text](url) ל-HTML
@@ -998,7 +1064,7 @@
   }
 
   /**
-   * ⭐ פונקציה חדשה - escape HTML אבל שומר על תגיות <a>
+   * ⭐ פונקציה - escape HTML אבל שומר על תגיות <a>
    */
   function escapeHtmlExceptLinks(text) {
     // מחלץ את כל הקישורים ושומר אותם בצד
@@ -1141,26 +1207,24 @@
 
     elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
   }
+
   async function sendMessage(state, elements, config) {
     const question = elements.inputField.value.trim();
 
     if (!question || state.isLoading || isAtLimit(state)) return;
 
-    // 1️⃣ Save user message for UI display
     state.messages.push({
       role: 'user',
       content: question,
       timestamp: new Date().toISOString()
     });
 
-    // 2️⃣ Save to history (temporary, may be rewritten)
     const historyIndex = state.history.length;
     state.history.push({
       role: 'user',
       content: question
     });
 
-    // Clear input and update UI
     elements.inputField.value = '';
     elements.inputField.style.height = 'auto';
     state.currentTranscript = '';
@@ -1186,13 +1250,10 @@
       const data = await response.json();
 
       if (data.success && data.data.answer) {
-
-        // 🔄 Update rewritten query in history (if exists)
         if (data.data.rewrittenQuery && data.data.rewrittenQuery !== question) {
           state.history[historyIndex].content = data.data.rewrittenQuery;
         }
 
-        // 3️⃣ Save bot response
         state.messages.push({
           role: 'assistant',
           content: data.data.answer,
@@ -1204,11 +1265,6 @@
           content: data.data.answer
         });
 
-        // ===============================
-        // ⭐ Detect unanswered questions
-        // ===============================
-
-        // English patterns (optional, keep if you have English answers)
         const englishNoInfoRegexes = [
           /i (don't|do not) have .* (information|details)/i,
           /the information is not available to me/i,
@@ -1216,7 +1272,6 @@
           /i don't have specific .* information/i
         ];
 
-        // Hebrew pattern
         const hebrewNoInfoRegex = /אין\s+(?:.*\s)?(מידע|המידע)/i;
 
         const answerText = data.data.answer;
@@ -1275,7 +1330,6 @@
   }
 
   async function sendUnansweredQuestionsToServer(state, config) {
-    // אם אין שאלות - אל תעשה כלום
     if (state.unansweredQuestions.length === 0) {
       console.log('ℹ️ No unanswered questions to send');
       return;
@@ -1284,7 +1338,6 @@
     console.log('📤 Sending', state.unansweredQuestions.length, 'unanswered questions to server');
 
     try {
-      // שלח בקשה לשרת
       await fetch(`${config.apiUrl}/api/analytics/save-questions`, {
         method: 'POST',
         headers: {
@@ -1293,13 +1346,12 @@
         body: JSON.stringify({
           secretKey: config.secretKey,
           questions: state.unansweredQuestions,
-          siteCategory: config.siteCategory // ⭐ שולח גם את קטגוריית האתר
+          siteCategory: config.siteCategory
         })
       });
 
       console.log('✅ Questions sent successfully');
       
-      // אפס את הרשימה אחרי שליחה מוצלחת
       state.unansweredQuestions = [];
       sessionStorage.removeItem('unansweredQuestions_' + config.secretKey);
 
@@ -1308,9 +1360,11 @@
     }
   }
 
-  // send the unanswerd question before the page closed
   window.addEventListener('beforeunload', () => {
-    if (state.unansweredQuestions.length > 0) {
+    const state = window.chatWidgetState;
+    const config = window.chatWidgetConfig;
+    
+    if (state && config && state.unansweredQuestions && state.unansweredQuestions.length > 0) {
       console.log('📤 Page closing - sending questions via beacon');
       
       const data = JSON.stringify({
