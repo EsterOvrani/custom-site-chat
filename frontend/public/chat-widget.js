@@ -960,6 +960,10 @@
       return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link">${linkText}</a>`;
     });
     
+    // זיהוי שפת הטקסט
+    const language = detectLanguage(text);
+    const linkText = language === 'he' ? 'לחץ כאן' : 'Click Here';
+    
     // אחר כך - זיהוי URLs רגילים שלא בתוך Markdown
     const urlRegex = /(?<![">])(https?:\/\/[^\s<>"{}|\\^`\[\]()]+)(?![^<]*<\/a>)/gi;
     
@@ -968,8 +972,8 @@
       let cleanUrl = url.replace(/[.,;:!?]$/, '');
       const removedChar = url !== cleanUrl ? url.slice(-1) : '';
       
-      // יצירת קישור HTML עם טקסט ידידותי
-      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">לחץ כאן לכניסה לדף</a>${removedChar}`;
+      // יצירת קישור HTML עם טקסט ידידותי בשפה המתאימה
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${linkText}</a>${removedChar}`;
     });
   }
 
