@@ -224,6 +224,27 @@
         border: 1px solid #e1e8ed;
       }
 
+      .chat-link {
+        color: #667eea;
+        text-decoration: underline;
+        word-break: break-all;
+        cursor: pointer;
+        display: inline;
+      }
+
+      .chat-link:hover {
+        color: #764ba2;
+        text-decoration: underline;
+      }
+
+      .chat-message.user .chat-message-bubble .chat-link {
+        color: #e0e7ff;
+      }
+
+      .chat-message.user .chat-message-bubble .chat-link:hover {
+        color: #ffffff;
+      }
+
       .limit-warning {
         background: #fff3cd;
         color: #856404;
@@ -960,10 +981,6 @@
       return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link">${linkText}</a>`;
     });
     
-    // זיהוי שפת הטקסט
-    const language = detectLanguage(text);
-    const linkText = language === 'he' ? 'לחץ כאן' : 'Click Here';
-    
     // אחר כך - זיהוי URLs רגילים שלא בתוך Markdown
     const urlRegex = /(?<![">])(https?:\/\/[^\s<>"{}|\\^`\[\]()]+)(?![^<]*<\/a>)/gi;
     
@@ -972,7 +989,7 @@
       let cleanUrl = url.replace(/[.,;:!?]$/, '');
       const removedChar = url !== cleanUrl ? url.slice(-1) : '';
       
-      // יצירת קישור HTML עם ה-URL המלא כטקסט
+      // יצירת קישור HTML שמציג את ה-URL עצמו
       return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${cleanUrl}</a>${removedChar}`;
     });
   }
