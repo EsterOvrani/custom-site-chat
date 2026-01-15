@@ -972,8 +972,8 @@
       let cleanUrl = url.replace(/[.,;:!?]$/, '');
       const removedChar = url !== cleanUrl ? url.slice(-1) : '';
       
-      // יצירת קישור HTML עם טקסט ידידותי בשפה המתאימה
-      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${linkText}</a>${removedChar}`;
+      // יצירת קישור HTML עם ה-URL המלא כטקסט
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${cleanUrl}</a>${removedChar}`;
     });
   }
 
