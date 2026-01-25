@@ -151,7 +151,8 @@ export const documentAPI = {
     return api.get(`/documents/${documentId}/download`, {
       responseType: 'blob'
     });
-  }
+  },
+  deleteAllDocuments: () => api.delete('/documents/delete-all')
 };
 
 // ==================== Analytics API ====================

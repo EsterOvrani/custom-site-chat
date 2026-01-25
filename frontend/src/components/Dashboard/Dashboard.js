@@ -245,6 +245,31 @@ const Dashboard = () => {
     }
   };
 
+  const handleDeleteAllDocuments = async () => {
+    const completedDocs = documents.filter(doc => doc.processingStatus === 'COMPLETED' || doc.processingStatus === 'FAILED');
+    
+    if (completedDocs.length === 0) {
+      showToast('אין מסמכים למחיקה', 'info');
+      return;
+    }
+
+    if (!window.confirm(`האם אתה בטוח שברצונך למחוק את כל ${completedDocs.length} המסמכים? פעולה זו אינה ניתנת לביטול!`)) return;
+
+    try {
+      setLoading(true);
+      const response = await documentAPI.deleteAllDocuments();
+      if (response.data.success) {
+        showToast(`${response.data.deletedCount} מסמכים נמחקו בהצלחה`, 'success');
+        loadDocuments();
+      }
+    } catch (error) {
+      console.error('Error deleting all documents:', error);
+      showToast('שגיאה במחיקת המסמכים', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleReorderDocuments = async (newOrder) => {
     try {
       const documentIds = newOrder.map(doc => doc.id);
@@ -331,6 +356,7 @@ const Dashboard = () => {
               documents={documents}
               onUploadNew={handleUploadNew}
               onDelete={handleDeleteDocument}
+              onDeleteAll={handleDeleteAllDocuments}
               onReorder={handleReorderDocuments}
               loading={loading}
             />

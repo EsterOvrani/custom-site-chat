@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { documentAPI } from '../../services/api';
 import ProgressBar from './ProgressBar';
 
-const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading }) => {
+const DocumentsList = ({ documents, onUploadNew, onDelete, onDeleteAll, onReorder, loading }) => {
   const [downloading, setDownloading] = useState({});
   const [processingDocs, setProcessingDocs] = useState([]);
   const fileInputRef = useRef(null);
@@ -149,7 +149,7 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
       }}>
         <h2 style={{ margin: 0, color: '#333' }}>המסמכים שלי</h2>
         
-        <>
+        <div style={{ display: 'flex', gap: '10px' }}>
           {/* Input file נסתר */}
           <input
             ref={fileInputRef}
@@ -160,7 +160,39 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
             onChange={handleFileSelect}
           />
           
-          {/* כפתור שפותח את סייר הקבצים */}
+          {/* כפתור מחיקת כל המסמכים */}
+          {documents.filter(doc => doc.processingStatus === 'COMPLETED' || doc.processingStatus === 'FAILED').length > 0 && (
+            <button
+              onClick={onDeleteAll}
+              style={{
+                padding: '12px 24px',
+                background: 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 53, 69, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <span>🗑️</span>
+              <span>מחק את כל המסמכים</span>
+            </button>
+          )}
+          
+          {/* כפתור העלאת מסמך חדש */}
           <button
             className="btn-primary"
             onClick={() => fileInputRef.current?.click()}
@@ -181,7 +213,7 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onReorder, loading })
             <span>➕</span>
             <span>העלה מסמך חדש</span>
           </button>
-        </>
+        </div>
       </div>
 
       {/* ⭐ Progress Bars Section */}
