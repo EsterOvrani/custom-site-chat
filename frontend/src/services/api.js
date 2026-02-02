@@ -132,9 +132,24 @@ export const collectionAPI = {
 // ==================== Document API ====================
 export const documentAPI = {
   getMyDocuments: () => api.get('/documents/my-documents'),
-  uploadDocument: (file) => {
+  checkDuplicate: (fileName) => {
+    const formData = new FormData();
+    formData.append('fileName', fileName);
+    
+    return api.post('/documents/check-duplicate', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+  uploadDocument: (file, replaceDocumentId = null) => {
     const formData = new FormData();
     formData.append('file', file);
+    
+    // Add replaceDocumentId if this is a replacement
+    if (replaceDocumentId) {
+      formData.append('replaceDocumentId', replaceDocumentId);
+    }
 
     return api.post('/documents/upload', formData, {
       headers: {

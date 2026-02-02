@@ -1,6 +1,7 @@
 package com.example.backend.document.controller;
 
 import com.example.backend.document.dto.DocumentResponse;
+import com.example.backend.document.dto.DuplicateCheckResponse;
 import com.example.backend.document.service.DocumentService;
 import com.example.backend.common.infrastructure.storage.S3Service;
 import com.example.backend.user.model.User;
@@ -34,19 +35,60 @@ public class DocumentController {
     private final DocumentService documentService;
     private final S3Service s3Service;
 
-    // Upload PDF file/s and start async processing
-    @PostMapping("/upload")
-    public ResponseEntity<Map<String, Object>> uploadDocument(
-            @RequestParam("file") MultipartFile file) {
+
+    /**
+     * Check if a file with the same name already exists
+     * Called by frontend before upload to detect duplicates
+     */
+    @PostMapping("/check-duplicate")
+    public ResponseEntity<Map<String, Object>> checkDuplicate(
+            @RequestParam("fileName") String fileName) {
         
         User currentUser = getCurrentUser();
         
-        // This function will create the document in the DB and return it immediately
-        DocumentResponse document = documentService.processDocument(file, currentUser);
+        // Check for duplicate
+        DuplicateCheckResponse result = documentService.checkDuplicate(fileName, currentUser);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("data", result);
+        
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Upload document with optional replacement
+     * If replaceDocumentId is provided, it replaces the old document
+     * Otherwise, it's a normal upload
+     */
+    @PostMapping("/upload")
+    public ResponseEntity<Map<String, Object>> uploadDocument(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "replaceDocumentId", required = false) Long replaceDocumentId) {
+        
+        User currentUser = getCurrentUser();
+        
+        DocumentResponse document;
+        String message;
+        
+        // Decision: is this a replacement or normal upload?
+        if (replaceDocumentId != null) {
+            // Replace existing document
+            document = documentService.processDocumentWithReplacement(
+                file, 
+                currentUser, 
+                replaceDocumentId
+            );
+            message = "המסמך הוחלף ומעובד ברקע";
+        } else {
+            // Normal upload
+            document = documentService.processDocument(file, currentUser);
+            message = "המסמך הועלה ומעובד ברקע";
+        }
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("message", "המסמך הועלה ומעובד ברקע");
+        response.put("message", message);
         response.put("document", document); 
 
         return ResponseEntity.ok(response);

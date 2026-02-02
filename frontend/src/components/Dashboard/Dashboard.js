@@ -6,6 +6,7 @@ import axios from 'axios';
 import DocumentsList from './DocumentsList';
 import CollectionSettings from './CollectionSettings';
 import Analytics from './Analytics';
+import DuplicateDialog from './DuplicateDialog';
 
 import './Dashboard.css';
 
@@ -16,6 +17,7 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('documents');
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(false);
+  const [duplicateDialog, setDuplicateDialog] = useState(null);
 
   const navigate = useNavigate();
   const pollingIntervalRef = useRef(null);
@@ -156,19 +158,95 @@ const Dashboard = () => {
     }
   };
 
-  // ⭐ העלאה ישירה של קבצים ללא מודל
+  // ⭐ העלאה ישירה של קבצים עם בדיקת כפילויות
   const handleUploadNew = async (files) => {
     if (!files || files.length === 0) return;
     
     console.log(`🚀 Starting upload of ${files.length} files`);
     
     for (const file of files) {
-      await uploadSingleFile(file);
+      await checkAndUploadFile(file);
     }
   };
 
-  const uploadSingleFile = async (file) => {
+  /**
+   * בדיקה אם הקובץ כפול ואז העלאה
+   */
+  const checkAndUploadFile = async (file) => {
+    try {
+      // Check if file with same name exists
+      const checkResponse = await documentAPI.checkDuplicate(file.name);
+      
+      if (checkResponse.data.success && checkResponse.data.data.exists) {
+        // File exists - show duplicate dialog
+        const duplicateData = checkResponse.data.data;
+        
+        setDuplicateDialog({
+          file: file,
+          existingDocId: duplicateData.existingDocumentId,
+          suggestedName: duplicateData.suggestedName,
+          fileName: duplicateData.fileName
+        });
+        
+        return; // Wait for user decision
+      }
+      
+      // File doesn't exist - normal upload
+      await uploadSingleFile(file, null);
+      
+    } catch (error) {
+      console.error(`❌ Error checking duplicate for ${file.name}:`, error);
+      showToast(`שגיאה בבדיקת הקובץ ${file.name}`, 'error');
+    }
+  };
+
+  /**
+   * Handle "Replace" button from duplicate dialog
+   */
+  const handleReplace = async () => {
+    if (!duplicateDialog) return;
+    
+    const { file, existingDocId } = duplicateDialog;
+    setDuplicateDialog(null);
+    
+    // Upload with replacement
+    await uploadSingleFile(file, existingDocId);
+  };
+
+  /**
+   * Handle "Save as new" button from duplicate dialog
+   */
+  const handleRename = async () => {
+    if (!duplicateDialog) return;
+    
+    const { file, suggestedName } = duplicateDialog;
+    setDuplicateDialog(null);
+    
+    // Create new file with suggested name
+    const renamedFile = new File([file], suggestedName, { type: file.type });
+    
+    // Upload as new
+    await uploadSingleFile(renamedFile, null);
+  };
+
+  /**
+   * Handle "Cancel" button from duplicate dialog
+   */
+  const handleCancelUpload = () => {
+    setDuplicateDialog(null);
+    showToast('העלאה בוטלה', 'info');
+  };
+
+  /**
+   * העלאת קובץ בודד עם אפשרות להחלפה
+   * @param {File} file - הקובץ להעלאה
+   * @param {number|null} replaceDocumentId - ID של מסמך להחלפה (null להעלאה רגילה)
+   */
+  const uploadSingleFile = async (file, replaceDocumentId = null) => {
     // יצירת placeholder
+    console.log(`📤 [${file.name}] Starting upload - Replace ID: ${replaceDocumentId || 'NONE'}`);
+
+    // Create placeholder document for UI feedback
     const placeholderId = `temp-${Date.now()}-${Math.random()}`;
     const placeholder = {
       id: placeholderId,
@@ -178,19 +256,32 @@ const Dashboard = () => {
       processingStatus: 'PENDING',
       processingProgress: 5,
       processingStage: 'UPLOADING',
-      processingStageDescription: 'מעלה לשרת...',
+      processingStageDescription: replaceDocumentId ? 'מחליף קובץ...' : 'מעלה לשרת...',
       createdAt: new Date().toISOString(),
       active: true,
       isPlaceholder: true
     };
     
-    console.log(`📤 [${file.name}] Adding placeholder`);
+    // ⭐ ALWAYS add placeholder (even for replacement!)
+    if (replaceDocumentId) {
+      console.log(`🔄 [${file.name}] REPLACEMENT MODE - removing old ID: ${replaceDocumentId}`);
+      // Remove old document immediately
+      setDocuments(prev => prev.filter(doc => doc.id !== replaceDocumentId));
+    }
+    
+    // Add new placeholder
+    console.log(`📤 [${file.name}] Adding placeholder (ID: ${placeholderId})`);
     setDocuments(prev => [placeholder, ...prev]);
     
     // העלאה בפועל
     try {
       const formData = new FormData();
       formData.append('file', file);
+      
+      // Add replaceDocumentId if this is a replacement
+      if (replaceDocumentId) {
+        formData.append('replaceDocumentId', replaceDocumentId);
+      }
       
       const token = localStorage.getItem('token');
       const response = await axios.post('/api/documents/upload', formData, {
@@ -203,11 +294,21 @@ const Dashboard = () => {
       console.log(`✅ [${file.name}] Upload successful`);
       
       if (response.data.success && response.data.document) {
-        // החלפת placeholder במסמך אמיתי
+        console.log(`✅ [${file.name}] Upload response received:`, response.data.document);
+        
+        // Replace placeholder with actual document
         setDocuments(prev => prev.map(doc => 
           doc.id === placeholderId ? response.data.document : doc
         ));
-        showToast(`${file.name} הועלה בהצלחה`, 'success');
+
+        // Show appropriate message
+        if (replaceDocumentId) {
+          console.log(`✅ [${file.name}] Replacement successful - new ID: ${response.data.document.id}`);
+          showToast(`${file.name} הוחלף בהצלחה`, 'success');
+        } else {
+          console.log(`✅ [${file.name}] Upload successful - new ID: ${response.data.document.id}`);
+          showToast(`${file.name} הועלה בהצלחה`, 'success');
+        }
       } else {
         throw new Error('No document in response');
       }
@@ -381,6 +482,17 @@ const Dashboard = () => {
         <div className={`toast ${toast.type} show`}>
           <span>{toast.message}</span>
         </div>
+      )}
+
+      {/* Duplicate Dialog */}
+      {duplicateDialog && (
+        <DuplicateDialog
+          fileName={duplicateDialog.fileName}
+          suggestedName={duplicateDialog.suggestedName}
+          onReplace={handleReplace}
+          onRename={handleRename}
+          onCancel={handleCancelUpload}
+        />
       )}
 
       {/* Global Loading Spinner - רק אם loading=true ואין polling */}

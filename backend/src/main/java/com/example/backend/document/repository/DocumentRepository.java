@@ -107,9 +107,9 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      * בדיקה אם קיים מסמך עם אותו שם קובץ
      */
     @Query("SELECT d FROM Document d " +
-           "WHERE d.user = :user " +
-           "AND d.originalFileName = :fileName " +
-           "AND d.active = true")
+        "WHERE d.user = :user " +
+        "AND d.originalFileName = :fileName " +
+        "AND d.active = true")
     Optional<Document> findByUserAndFileName(
         @Param("user") User user,
         @Param("fileName") String fileName
