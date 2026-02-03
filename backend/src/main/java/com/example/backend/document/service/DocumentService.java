@@ -3,6 +3,8 @@ package com.example.backend.document.service;
 import com.example.backend.document.dto.DocumentResponse;
 import com.example.backend.document.mapper.DocumentMapper;
 import com.example.backend.document.dto.DuplicateCheckResponse;
+import com.example.backend.document.event.DocumentCreatedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import java.util.Optional;
 import com.example.backend.document.model.Document;
@@ -37,6 +39,7 @@ public class DocumentService {
     private final S3Service s3Service;
     private final QdrantVectorService qdrantVectorService;
     private final DocumentProcessingService documentProcessingService;
+    private final ApplicationEventPublisher eventPublisher; // ✅ NEW: For event publishing
     
 
     /**
@@ -185,7 +188,8 @@ public class DocumentService {
     }
 
     /**
-     * Save document and trigger async processing
+     * ✅ FIXED: Save document and publish event for async processing
+     * The event will be handled AFTER the transaction commits, ensuring the document is visible
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public DocumentResponse processDocument(MultipartFile file, User user) {
@@ -233,9 +237,10 @@ public class DocumentService {
             // convert to DTO object
             DocumentResponse response = documentMapper.toResponse(document);
             
-            // processing document async - now safe because document is committed!
-            log.info("🚀 Triggering async processing for document ID: {}", document.getId());
-            documentProcessingService.processDocumentAsync(
+            // ✅ FIX: Publish event instead of calling async directly
+            // This ensures the event is processed AFTER the transaction commits
+            log.info("📢 Publishing DocumentCreatedEvent for ID: {}", document.getId());
+            eventPublisher.publishEvent(new DocumentCreatedEvent(
                 document.getId(), 
                 fileBytes, 
                 originalFilename, 
@@ -244,8 +249,8 @@ public class DocumentService {
                 filePath,
                 user.getId(),
                 user.getCollectionName()
-            );
-            log.info("✅ Async processing triggered - returning response immediately");
+            ));
+            log.info("✅ Event published - will process after transaction commit");
             
             // Returns the response immediately 
             return response;

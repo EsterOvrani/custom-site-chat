@@ -37,7 +37,9 @@ const Dashboard = () => {
   // ⭐ Polling - בדיקה אוטומטית של מסמכים בעיבוד
   useEffect(() => {
     const hasProcessingDocs = documents.some(doc => 
-      doc.processingStatus === 'PROCESSING' || doc.processingStatus === 'PENDING'
+      doc.processingStatus === 'PROCESSING' || 
+      doc.processingStatus === 'PENDING' ||
+      doc.isTemporary // ✅ FIX: כולל גם placeholders זמניים
     );
 
     if (hasProcessingDocs) {
@@ -126,7 +128,7 @@ const Dashboard = () => {
   // ==================== Document Functions ====================
   
   /**
-   * טעינת מסמכים
+   * ✅ FIX: טעינת מסמכים עם שמירה של placeholders
    * @param {boolean} silent - אם true, לא להציג spinner
    */
   const loadDocuments = async (silent = false) => {
@@ -138,13 +140,47 @@ const Dashboard = () => {
       const response = await documentAPI.getMyDocuments();
       
       if (response.data.success) {
-        const newDocs = response.data.data || [];
+        const serverDocs = response.data.data || [];
         
-        // עדכן רק אם יש שינוי (למנוע re-renders מיותרים)
-        if (JSON.stringify(newDocs) !== JSON.stringify(documents)) {
-          setDocuments(newDocs);
-          console.log('📄 Documents updated:', newDocs.length);
-        }
+        // ✅ FIX: שמור placeholders זמניים
+        setDocuments(prev => {
+          // קבל את כל ה-placeholders הזמניים
+          const tempDocs = prev.filter(doc => doc.isTemporary);
+          
+          // מסמכים אמיתיים מהשרת (לא זמניים)
+          const realDocs = serverDocs.map(doc => ({ ...doc, isTemporary: false }));
+          
+          // ✅ FIX: מחק רק placeholders שהמסמך שלהם כבר הגיע
+          const validTempDocs = tempDocs.filter(tempDoc => {
+            // בדוק אם המסמך הזה כבר הגיע מהשרת
+            const matchingDoc = realDocs.find(realDoc => 
+              realDoc.originalFileName === tempDoc.originalFileName &&
+              Math.abs(realDoc.fileSize - tempDoc.fileSize) < 100 // tolerance
+            );
+            
+            if (matchingDoc) {
+              console.log(`🔄 Removing placeholder for: ${tempDoc.originalFileName} (found on server with ID: ${matchingDoc.id})`);
+              return false; // הסר את ה-placeholder
+            }
+            
+            return true; // שמור את ה-placeholder
+          });
+          
+          // שלב: מסמכים אמיתיים + placeholders תקפים
+          const combined = [...realDocs, ...validTempDocs];
+          
+          // עדכן רק אם יש שינוי
+          if (JSON.stringify(combined) !== JSON.stringify(prev)) {
+            console.log('📄 Documents updated:', {
+              real: realDocs.length,
+              temp: validTempDocs.length,
+              total: combined.length
+            });
+            return combined;
+          }
+          
+          return prev;
+        });
       }
     } catch (error) {
       console.error('Error loading documents:', error);
@@ -209,6 +245,11 @@ const Dashboard = () => {
     const { file, existingDocId } = duplicateDialog;
     setDuplicateDialog(null);
     
+    console.log(`🔄 [${file.name}] REPLACEMENT MODE - will replace document ID: ${existingDocId}`);
+    
+    // ✅ FIX: מחק את המסמך הישן מה-UI לפני ההעלאה
+    setDocuments(prev => prev.filter(doc => doc.id !== existingDocId));
+    
     // Upload with replacement
     await uploadSingleFile(file, existingDocId);
   };
@@ -238,15 +279,14 @@ const Dashboard = () => {
   };
 
   /**
-   * העלאת קובץ בודד עם אפשרות להחלפה
+   * ✅ FIX: העלאת קובץ בודד עם שמירה נכונה של placeholders
    * @param {File} file - הקובץ להעלאה
    * @param {number|null} replaceDocumentId - ID של מסמך להחלפה (null להעלאה רגילה)
    */
   const uploadSingleFile = async (file, replaceDocumentId = null) => {
-    // יצירת placeholder
     console.log(`📤 [${file.name}] Starting upload - Replace ID: ${replaceDocumentId || 'NONE'}`);
 
-    // Create placeholder document for UI feedback
+    // ✅ FIX: יצירת placeholder עם דגל isTemporary
     const placeholderId = `temp-${Date.now()}-${Math.random()}`;
     const placeholder = {
       id: placeholderId,
@@ -259,17 +299,10 @@ const Dashboard = () => {
       processingStageDescription: replaceDocumentId ? 'מחליף קובץ...' : 'מעלה לשרת...',
       createdAt: new Date().toISOString(),
       active: true,
-      isPlaceholder: true
+      isTemporary: true, // ✅ FIX: סמן כ-temporary
+      replacingDocumentId: replaceDocumentId // ✅ FIX: שמור את ה-ID שמחליפים
     };
-    
-    // ⭐ ALWAYS add placeholder (even for replacement!)
-    if (replaceDocumentId) {
-      console.log(`🔄 [${file.name}] REPLACEMENT MODE - removing old ID: ${replaceDocumentId}`);
-      // Remove old document immediately
-      setDocuments(prev => prev.filter(doc => doc.id !== replaceDocumentId));
-    }
-    
-    // Add new placeholder
+
     console.log(`📤 [${file.name}] Adding placeholder (ID: ${placeholderId})`);
     setDocuments(prev => [placeholder, ...prev]);
     
@@ -296,17 +329,22 @@ const Dashboard = () => {
       if (response.data.success && response.data.document) {
         console.log(`✅ [${file.name}] Upload response received:`, response.data.document);
         
-        // Replace placeholder with actual document
-        setDocuments(prev => prev.map(doc => 
-          doc.id === placeholderId ? response.data.document : doc
-        ));
+        // ✅ FIX: החלף את ה-placeholder במסמך האמיתי
+        setDocuments(prev => prev.map(doc => {
+          if (doc.id === placeholderId) {
+            console.log(`✅ [${file.name}] ${replaceDocumentId ? 'Replacement' : 'Upload'} successful - new ID: ${response.data.document.id}`);
+            return {
+              ...response.data.document,
+              isTemporary: false // ✅ FIX: זה כבר לא temporary
+            };
+          }
+          return doc;
+        }));
 
         // Show appropriate message
         if (replaceDocumentId) {
-          console.log(`✅ [${file.name}] Replacement successful - new ID: ${response.data.document.id}`);
           showToast(`${file.name} הוחלף בהצלחה`, 'success');
         } else {
-          console.log(`✅ [${file.name}] Upload successful - new ID: ${response.data.document.id}`);
           showToast(`${file.name} הועלה בהצלחה`, 'success');
         }
       } else {
@@ -316,8 +354,14 @@ const Dashboard = () => {
     } catch (error) {
       console.error(`❌ [${file.name}] Upload error:`, error);
       
-      // הסרת placeholder
+      // ✅ FIX: הסרת placeholder במקרה של שגיאה
       setDocuments(prev => prev.filter(doc => doc.id !== placeholderId));
+      
+      // ✅ FIX: אם זו הייתה החלפה שנכשלה, החזר את המסמך הישן
+      if (replaceDocumentId) {
+        console.log(`🔄 [${file.name}] Replacement failed - reloading documents`);
+        loadDocuments(true);
+      }
       
       const errorMsg = error.response?.data?.message || error.message;
       showToast(`שגיאה בהעלאת ${file.name}: ${errorMsg}`, 'error');
@@ -391,9 +435,11 @@ const Dashboard = () => {
     }, 3000);
   };
 
-  // ספירת מסמכים בעיבוד
+  // ספירת מסמכים בעיבוד (כולל זמניים)
   const processingCount = documents.filter(doc => 
-    doc.processingStatus === 'PROCESSING' || doc.processingStatus === 'PENDING'
+    doc.processingStatus === 'PROCESSING' || 
+    doc.processingStatus === 'PENDING' ||
+    doc.isTemporary
   ).length;
 
   // ==================== Render ====================
@@ -434,7 +480,7 @@ const Dashboard = () => {
             className={`tab ${activeTab === 'documents' ? 'active' : ''}`}
             onClick={() => setActiveTab('documents')}
           >
-            📄 המסמכים שלי ({documents.length})
+            📄 המסמכים שלי ({documents.filter(d => !d.isTemporary).length})
           </button>
           <button
             className={`tab ${activeTab === 'settings' ? 'active' : ''}`}

@@ -46,10 +46,17 @@ public class DocumentProcessingService {
             Long userId,
             String collectionName) {
         
-        log.info("====================================================");
-        log.info("[Thread: {}] Starting async processing for document ID: {}", 
-            Thread.currentThread().getName(), documentId);
-        log.info("====================================================");
+            // ✅ הוסף את זה בתחילה!
+            System.out.println("====================================================");
+            System.out.println("🚨 processDocumentAsync CALLED!");
+            System.out.println("Thread: " + Thread.currentThread().getName());
+            System.out.println("Document ID: " + documentId);
+            System.out.println("====================================================");
+            
+            log.info("====================================================");
+            log.info("[Thread: {}] Starting async processing for document ID: {}", 
+                Thread.currentThread().getName(), documentId);
+            log.info("====================================================");
 
         try {
             // ==================== load document from DB ====================
