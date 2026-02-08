@@ -21,6 +21,7 @@ public interface DocumentMapper {
     @Mapping(source = "user.id", target = "userId")
     @Mapping(target = "fileSizeFormatted", expression = "java(formatFileSize(document.getFileSize()))")
     @Mapping(target = "processingStageDescription", expression = "java(getStageDescription(document))")
+    @Mapping(target = "tokenCountFormatted", expression = "java(formatTokenCount(document.getTokenCount()))")  // ⭐ חדש!
     @Mapping(target = "statistics", ignore = true)
     DocumentResponse toResponse(Document document);
 
@@ -43,6 +44,21 @@ public interface DocumentMapper {
             return String.format("%.2f MB", fileSize / (1024.0 * 1024.0));
         } else {
             return String.format("%.2f GB", fileSize / (1024.0 * 1024.0 * 1024.0));
+        }
+    }
+
+    // ⭐ חדש - פורמט ספירת טוקנים
+    default String formatTokenCount(Integer tokenCount) {
+        if (tokenCount == null) {
+            return "לא זמין";
+        }
+        
+        if (tokenCount < 1000) {
+            return String.valueOf(tokenCount);
+        } else if (tokenCount < 1_000_000) {
+            return String.format("%.1fK", tokenCount / 1000.0);
+        } else {
+            return String.format("%.2fM", tokenCount / 1_000_000.0);
         }
     }
 
@@ -114,7 +130,6 @@ public interface DocumentMapper {
     // Add statistics after mapping
     @AfterMapping
     default void enrichDocumentResponse(@MappingTarget DocumentResponse response, Document document) {
-
         // Add statistics if the document is complete
         if (document.isProcessed()) {
             response.setStatistics(buildStatistics(document));
@@ -123,6 +138,11 @@ public interface DocumentMapper {
         // Make sure there is fileSizeFormatted
         if (response.getFileSizeFormatted() == null) {
             response.setFileSizeFormatted(formatFileSize(document.getFileSize()));
+        }
+        
+        // ⭐ חדש - וודא שיש tokenCountFormatted
+        if (response.getTokenCountFormatted() == null) {
+            response.setTokenCountFormatted(formatTokenCount(document.getTokenCount()));
         }
     }
 }

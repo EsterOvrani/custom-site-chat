@@ -14,6 +14,7 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.model.openai.OpenAiTokenizer;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -102,11 +103,17 @@ public class DocumentProcessingService {
             String text = langchainDoc.text();
             int characterCount = text.length();
             document.setCharacterCount(characterCount);
-            
+
+            // ⭐ חדש - חישוב טוקנים
+            OpenAiTokenizer tokenizer = new OpenAiTokenizer("gpt-4o");
+            int tokenCount = tokenizer.estimateTokenCountInText(text);
+            document.setTokenCount(tokenCount);
+            log.info("📊 [{}] Token count estimated: {} tokens", documentId, tokenCount);
+
             document.updateStage(ProcessingStage.EXTRACTING_TEXT, 45);
             documentRepository.save(document);
-            log.info("✅ [{}] Extracted {} characters - Progress: 45%", 
-                documentId, characterCount);
+            log.info("✅ [{}] Extracted {} characters, {} tokens - Progress: 45%", 
+                documentId, characterCount, tokenCount);
 
             Thread.sleep(500); // Small delay to see the update
 
@@ -187,11 +194,13 @@ public class DocumentProcessingService {
 
             // ==================== Mark as completed ====================
             log.info("📍 [{}] Stage 6: Finalizing", documentId);
-            document.markAsCompleted(characterCount, chunkCount);
+            document.markAsCompletedWithTokens(characterCount, chunkCount, tokenCount);  // ⭐ שונה!
             documentRepository.save(document);
-            
+
             log.info("====================================================");
             log.info("✅ [{}] Document processed SUCCESSFULLY - 100%", documentId);
+            log.info("📊 Statistics: {} chars, {} chunks, {} tokens",   // ⭐ הוספנו שורה
+                characterCount, chunkCount, tokenCount);
             log.info("====================================================");
 
         } catch (Exception e) {

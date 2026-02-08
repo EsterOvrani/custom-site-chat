@@ -34,6 +34,9 @@ public class DocumentResponse {
     private Integer characterCount;
     private Integer chunkCount;
 
+    private Integer tokenCount;
+    private String tokenCountFormatted;
+
     private Boolean active;
     private String errorMessage;
 
@@ -116,5 +119,15 @@ public class DocumentResponse {
             case COMPLETED -> "הושלם בהצלחה";
             case FAILED -> "נכשל: " + (errorMessage != null ? errorMessage : "שגיאה לא ידועה");
         };
+    }
+
+    /**
+     * פורמט ספירת טוקנים עם פסיקים
+     */
+    public String getFormattedTokenCount() {
+        if (tokenCount == null) {
+            return "לא זמין";
+        }
+        return String.format("%,d", tokenCount);
     }
 }

@@ -34,6 +34,12 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onDeleteAll, onReorde
     return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
   };
 
+  // ⭐ חדש - פורמט טוקנים
+  const formatTokenCount = (count) => {
+    if (!count) return 'לא זמין';
+    return count.toLocaleString('he-IL');
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return '';
     return new Date(dateString).toLocaleDateString('he-IL');
@@ -317,6 +323,21 @@ const DocumentsList = ({ documents, onUploadNew, onDelete, onDeleteAll, onReorde
                   {/* Metadata */}
                   <div style={{ fontSize: '13px', color: '#666', marginBottom: '15px' }}>
                     <div>📅 הועלה: {formatDate(doc.createdAt)}</div>
+                    
+                    {/* ⭐ חדש - הצגת ספירת טוקנים */}
+                    {doc.processingStatus === 'COMPLETED' && doc.tokenCount && (
+                      <div style={{ 
+                        color: '#667eea', 
+                        marginTop: '5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}>
+                        <span>🔢</span>
+                        <span>{formatTokenCount(doc.tokenCount)} טוקנים נותחו</span>
+                      </div>
+                    )}
+                    
                     {doc.processingStatus === 'COMPLETED' && (
                       <div style={{ color: '#28a745', marginTop: '5px' }}>
                         ✓ מוכן לשאילת שאלות

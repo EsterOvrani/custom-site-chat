@@ -61,6 +61,9 @@ public class Document {
     @Column(name = "chunk_count")
     private Integer chunkCount;
 
+    @Column(name = "token_count")
+    private Integer tokenCount;
+
     @Column(name = "display_order")
     @Builder.Default
     private Integer displayOrder = 0;
@@ -145,6 +148,21 @@ public class Document {
         this.processingProgress = 100;
         this.characterCount = characterCount;
         this.chunkCount = chunkCount;
+        this.processedAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+        this.errorMessage = null;
+    }
+    
+    /**
+     * סיום עיבוד עם ספירת טוקנים
+     */
+    public void markAsCompletedWithTokens(int characterCount, int chunkCount, int tokenCount) {
+        this.processingStatus = ProcessingStatus.COMPLETED;
+        this.processingStage = ProcessingStage.COMPLETED;
+        this.processingProgress = 100;
+        this.characterCount = characterCount;
+        this.chunkCount = chunkCount;
+        this.tokenCount = tokenCount;  // ⭐ החדש!
         this.processedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
         this.errorMessage = null;
