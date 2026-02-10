@@ -6,6 +6,8 @@ import com.example.backend.document.repository.DocumentRepository;
 import com.example.backend.common.infrastructure.storage.S3Service;
 import com.example.backend.common.infrastructure.vectordb.QdrantVectorService;
 import com.example.backend.common.infrastructure.document.DocumentChunkingService;
+import com.example.backend.user.service.TokenService;
+import com.example.backend.user.repository.UserRepository;
 import com.example.backend.common.exception.*;
 
 import dev.langchain4j.data.document.DocumentParser;
@@ -34,6 +36,8 @@ public class DocumentProcessingService {
     private final QdrantVectorService qdrantVectorService;
     private final EmbeddingModel embeddingModel;
     private final DocumentChunkingService chunkingService;
+    private final TokenService tokenService;
+    private final UserRepository userRepository;
 
     // Async: upload, extract, embed, store
     @Async("documentProcessingExecutor") 
@@ -194,8 +198,21 @@ public class DocumentProcessingService {
 
             // ==================== Mark as completed ====================
             log.info("📍 [{}] Stage 6: Finalizing", documentId);
-            document.markAsCompletedWithTokens(characterCount, chunkCount, tokenCount);  // ⭐ שונה!
+            document.markAsCompletedWithTokens(characterCount, chunkCount, tokenCount);
             documentRepository.save(document);
+
+            // ==================== Consume tokens from user ====================
+            try {
+                com.example.backend.user.model.User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("משתמש", userId));
+                
+                tokenService.consumeTokens(user, tokenCount);
+                log.info("💰 [{}] Consumed {} tokens from user {} for document processing", 
+                    documentId, tokenCount, userId);
+            } catch (Exception tokenError) {
+                log.error("Failed to consume tokens for document {}", documentId, tokenError);
+                // Continue - document is already processed
+            }
 
             log.info("====================================================");
             log.info("✅ [{}] Document processed SUCCESSFULLY - 100%", documentId);

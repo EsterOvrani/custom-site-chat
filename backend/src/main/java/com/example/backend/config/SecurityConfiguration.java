@@ -41,11 +41,14 @@ public class SecurityConfiguration {
                 .requestMatchers("/login/oauth2/**").permitAll()
                 .requestMatchers("/oauth2/**").permitAll()
                 .requestMatchers("/error").permitAll()
-
+                
                 // Public Query API (without authentication)
                 .requestMatchers("/api/query/ask").permitAll()
                 .requestMatchers("/api/analytics/save-questions").permitAll()
-
+                
+                // ✅ SSE endpoint - requires authentication
+                .requestMatchers("/api/tokens/stream").authenticated()
+                
                 // all the another need authentication
                 .anyRequest().authenticated()
             )

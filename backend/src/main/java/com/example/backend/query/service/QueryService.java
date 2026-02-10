@@ -6,6 +6,7 @@ import com.example.backend.query.dto.QueryResponse;
 import com.example.backend.user.model.User;
 import com.example.backend.common.infrastructure.vectordb.QdrantVectorService;
 import com.example.backend.common.exception.UnauthorizedException;
+import com.example.backend.user.service.TokenService;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -38,6 +39,7 @@ public class QueryService {
     private final EmbeddingModel embeddingModel;
     private final OpenAiChatModel chatModel;
     private final PromptService promptService;
+    private final TokenService tokenService;
 
     private static final int MAX_RELEVANT_CHUNKS = 5;
     private static final int MAX_HISTORY_MESSAGES = 10;
@@ -82,28 +84,45 @@ public class QueryService {
                 validatedHistory
             );
 
-            // 7. Sending to GPT
-            Response<AiMessage> response = chatModel.generate(messages);
-            String answer = response.content().text();
+        // 7. Sending to GPT
+        Response<AiMessage> response = chatModel.generate(messages);
+        String answer = response.content().text();
 
-            // 8. Calculating metrics
-            long responseTime = System.currentTimeMillis() - startTime;
-            Double confidence = calculateConfidence(relevantDocs);
-            
-            OpenAiTokenizer tokenizer = new OpenAiTokenizer("gpt-4");
-            int tokensUsed = tokenizer.estimateTokenCountInMessage(response.content());
+        // 8. Calculating metrics and tokens
+        long responseTime = System.currentTimeMillis() - startTime;
+        Double confidence = calculateConfidence(relevantDocs);
 
-            // 9. Building sources
-            List<QueryResponse.Source> sources = buildSources(relevantDocs);
+        OpenAiTokenizer tokenizer = new OpenAiTokenizer("gpt-4");
+        int tokensUsed = tokenizer.estimateTokenCountInMessage(response.content());
 
-            return QueryResponse.builder()
-                .answer(answer)
-                .rewrittenQuery(enhancedQuery)  
-                .sources(sources)
-                .confidence(confidence)
-                .tokensUsed(tokensUsed)
-                .responseTimeMs(responseTime)
-                .build();
+        // 8.1. Count input tokens as well
+        int inputTokens = messages.stream()
+            .mapToInt(msg -> tokenizer.estimateTokenCountInMessage(msg))
+            .sum();
+
+        int totalTokens = tokensUsed + inputTokens;
+
+        // 8.2. Consume tokens from user quota
+        try {
+            tokenService.consumeTokens(user, totalTokens);
+            log.info("💰 Consumed {} tokens (input: {}, output: {}) for user {}", 
+                totalTokens, inputTokens, tokensUsed, user.getId());
+        } catch (Exception e) {
+            log.error("Failed to consume tokens", e);
+            // Continue anyway - we already generated the response
+        }
+
+        // 9. Building sources
+        List<QueryResponse.Source> sources = buildSources(relevantDocs);
+
+        return QueryResponse.builder()
+            .answer(answer)
+            .rewrittenQuery(enhancedQuery)  
+            .sources(sources)
+            .confidence(confidence)
+            .tokensUsed(totalTokens) // Return total tokens
+            .responseTimeMs(responseTime)
+            .build();
 
         } catch (UnauthorizedException e) {
             throw e;

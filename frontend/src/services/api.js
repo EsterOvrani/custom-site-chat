@@ -129,6 +129,11 @@ export const collectionAPI = {
   getEmbedCode: () => api.get('/collection/embed-code')
 };
 
+// ==================== Token API ====================
+export const tokenAPI = {
+  getTokenUsage: () => api.get('/users/me/tokens')
+};
+
 // ==================== Document API ====================
 export const documentAPI = {
   getMyDocuments: () => api.get('/documents/my-documents'),

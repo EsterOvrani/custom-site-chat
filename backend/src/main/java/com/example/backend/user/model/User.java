@@ -100,6 +100,19 @@ public class User implements UserDetails {
     @Column(name = "temp_password")
     private String tempPassword;
 
+    // ==================== Token Management Fields ====================
+
+    @Column(name = "token_quota")
+    @Builder.Default
+    private Long tokenQuota = 100000L; // Default 100K tokens
+
+    @Column(name = "tokens_used")
+    @Builder.Default
+    private Long tokensUsed = 0L;
+
+    @Column(name = "last_token_reset")
+    private LocalDateTime lastTokenReset;
+
     // ==================== Lifecycle ====================
 
     @PrePersist
@@ -126,6 +139,30 @@ public class User implements UserDetails {
 
     public String generateSecretKey() {
         return "sk_" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    // ==================== Token Management Methods ====================
+
+    public boolean hasTokensAvailable(long requiredTokens) {
+        return (tokenQuota - tokensUsed) >= requiredTokens;
+    }
+
+    public long getRemainingTokens() {
+        return Math.max(0, tokenQuota - tokensUsed);
+    }
+
+    public void consumeTokens(long tokens) {
+        this.tokensUsed += tokens;
+    }
+
+    public void resetTokens() {
+        this.tokensUsed = 0L;
+        this.lastTokenReset = LocalDateTime.now();
+    }
+
+    public double getTokenUsagePercentage() {
+        if (tokenQuota == 0) return 100.0;
+        return (tokensUsed * 100.0) / tokenQuota;
     }
 
     // ==================== UserDetails ====================

@@ -1,12 +1,13 @@
-// frontend/src/components/Dashboard/Dashboard.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authAPI, collectionAPI, documentAPI } from '../../services/api';
+import { authAPI, collectionAPI, documentAPI, tokenAPI } from '../../services/api';
 import axios from 'axios';
 import DocumentsList from './DocumentsList';
 import CollectionSettings from './CollectionSettings';
 import Analytics from './Analytics';
 import DuplicateDialog from './DuplicateDialog';
+import TokenUsage from './TokenUsage';
+import tokenSSEService from '../../services/tokenSSE'; // ✅ זה כבר יש לך
 
 import './Dashboard.css';
 
@@ -18,6 +19,8 @@ const Dashboard = () => {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(false);
   const [duplicateDialog, setDuplicateDialog] = useState(null);
+  const [tokenInfo, setTokenInfo] = useState(null);
+  const [tokenLoading, setTokenLoading] = useState(false);
 
   const navigate = useNavigate();
   const pollingIntervalRef = useRef(null);
@@ -31,6 +34,7 @@ const Dashboard = () => {
     if (currentUser) {
       loadCollection();
       loadDocuments();
+      loadTokenInfo();
     }
   }, [currentUser]);
 
@@ -39,19 +43,17 @@ const Dashboard = () => {
     const hasProcessingDocs = documents.some(doc => 
       doc.processingStatus === 'PROCESSING' || 
       doc.processingStatus === 'PENDING' ||
-      doc.isTemporary // ✅ FIX: כולל גם placeholders זמניים
+      doc.isTemporary
     );
 
     if (hasProcessingDocs) {
       console.log('🔄 Starting polling - documents in progress detected');
       
-      // בדיקה כל 2 שניות
       pollingIntervalRef.current = setInterval(() => {
         console.log('🔄 Polling for updates...');
-        loadDocuments(true); // true = silent refresh (ללא spinner)
+        loadDocuments(true);
       }, 2000);
     } else {
-      // אין מסמכים בעיבוד - עצור polling
       if (pollingIntervalRef.current) {
         console.log('⏹️ Stopping polling - no documents in progress');
         clearInterval(pollingIntervalRef.current);
@@ -59,13 +61,56 @@ const Dashboard = () => {
       }
     }
 
-    // Cleanup
     return () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
       }
     };
   }, [documents]);
+
+  // ⭐ SSE - חיבור לעדכוני טוקנים בזמן אמת ✅ חדש
+  useEffect(() => {
+    if (!currentUser) return;
+
+    console.log('🚀 Setting up SSE for token updates');
+
+    const handleTokenUpdate = (data) => {
+      console.log('💰 Received real-time token update:', data);
+      
+      setTokenInfo(prevInfo => {
+        if (!prevInfo) return prevInfo;
+        
+        return {
+          ...prevInfo,
+          used: data.used,
+          remaining: data.remaining,
+          usagePercentage: data.usagePercentage
+        };
+      });
+
+      if (data.usagePercentage >= 95 && data.remaining > 0) {
+        showToast(`⚠️ נותרו רק ${data.remaining.toLocaleString()} טוקנים!`, 'warning');
+      } else if (data.remaining === 0) {
+        showToast('❌ מכסת הטוקנים הסתיימה!', 'error');
+      }
+    };
+
+    tokenSSEService.connect();
+    tokenSSEService.addListener(handleTokenUpdate);
+
+    return () => {
+      console.log('🔌 Cleaning up SSE connection');
+      tokenSSEService.removeListener(handleTokenUpdate);
+    };
+  }, [currentUser]);
+
+  // ⭐ בדיקה אם הדפדפן תומך ב-SSE ✅ חדש
+  useEffect(() => {
+    if (typeof EventSource === 'undefined') {
+      console.error('❌ Browser does not support SSE');
+      showToast('הדפדפן לא תומך בעדכונים בזמן אמת', 'warning');
+    }
+  }, []);
 
   // ==================== Auth Functions ====================
   const checkAuth = async () => {
@@ -86,6 +131,8 @@ const Dashboard = () => {
     if (!window.confirm('האם אתה בטוח שברצונך להתנתק?')) return;
 
     try {
+      tokenSSEService.disconnect(); // ✅ הוספנו את זה
+      
       await authAPI.logout();
       navigate('/login');
     } catch (error) {
@@ -122,6 +169,21 @@ const Dashboard = () => {
       showToast('שגיאה ביצירת מפתח חדש', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ==================== Token Functions ====================
+  const loadTokenInfo = async () => {
+    try {
+      setTokenLoading(true);
+      const response = await tokenAPI.getTokenUsage();
+      if (response.data) {
+        setTokenInfo(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading token info:', error);
+    } finally {
+      setTokenLoading(false);
     }
   };
 
@@ -347,6 +409,10 @@ const Dashboard = () => {
         } else {
           showToast(`${file.name} הועלה בהצלחה`, 'success');
         }
+
+        // ✅ עדכן מכסת טוקנים לאחר העלאה
+        loadTokenInfo();
+
       } else {
         throw new Error('No document in response');
       }
@@ -498,6 +564,9 @@ const Dashboard = () => {
 
         {/* Tab Content */}
         <div className="tab-content">
+          {/* Token Usage - מוצג בכל הטאבים */}
+          <TokenUsage tokenInfo={tokenInfo} loading={tokenLoading} />
+          
           {activeTab === 'documents' && (
             <DocumentsList
               documents={documents}
