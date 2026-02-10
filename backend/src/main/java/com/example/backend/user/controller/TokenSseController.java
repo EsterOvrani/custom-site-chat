@@ -2,6 +2,12 @@ package com.example.backend.user.controller;
 
 import com.example.backend.user.event.TokenUpdateEvent;
 import com.example.backend.user.model.User;
+import com.example.backend.auth.service.JwtService;
+import com.example.backend.user.service.UserService;
+import com.example.backend.user.repository.UserRepository;
+import com.example.backend.common.exception.UnauthorizedException;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.RequestParam;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -26,20 +32,42 @@ public class TokenSseController {
 
     // מפה של כל ה-emitters לפי userId
     private final Map<Long, CopyOnWriteArrayList<SseEmitter>> userEmitters = new ConcurrentHashMap<>();
+    private final JwtService jwtService; // ✅ הוסף
+    private final UserRepository userRepository; // ✅ שונה
+
+
 
     /**
      * Endpoint להתחברות ל-SSE
      */
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamTokenUpdates() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        User currentUser = (User) authentication.getPrincipal();
-        Long userId = currentUser.getId();
+    public SseEmitter streamTokenUpdates(@RequestParam(required = false) String token) {
+        
+        // ✅ אימות מה-token שבשאילתה
+        User currentUser;
+        try {
+            if (token != null && !token.isEmpty()) {
+                // אימות ה-token
+                currentUser = authenticateFromToken(token);
+            } else {
+                // נסה לקבל מה-SecurityContext (אם יש session)
+                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                if (authentication != null && authentication.getPrincipal() instanceof User) {
+                    currentUser = (User) authentication.getPrincipal();
+                } else {
+                    throw new UnauthorizedException("No valid authentication");
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to authenticate SSE connection", e);
+            throw new UnauthorizedException("Invalid token");
+        }
 
+        Long userId = currentUser.getId();
         log.info("📡 User {} connected to token SSE stream", userId);
 
         // יצירת emitter עם timeout של שעה
-        SseEmitter emitter = new SseEmitter(3600000L); // 1 hour
+        SseEmitter emitter = new SseEmitter(3600000L);
 
         // הוספת ה-emitter לרשימה של המשתמש
         userEmitters.computeIfAbsent(userId, k -> new CopyOnWriteArrayList<>()).add(emitter);
@@ -71,6 +99,29 @@ public class TokenSseController {
         }
 
         return emitter;
+    }
+
+    /**
+     * אימות token ידנית
+     */
+    private User authenticateFromToken(String token) {
+        try {
+            // השתמש ב-JwtService לאימות
+            String username = jwtService.extractUsername(token);
+            
+            // ✅ תיקון: השתמש ב-UserRepository במקום UserService
+            User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+            
+            if (jwtService.isTokenValid(token, user)) {
+                return user;
+            }
+            
+            throw new UnauthorizedException("Invalid token");
+        } catch (Exception e) {
+            log.error("Token authentication failed", e);
+            throw new UnauthorizedException("Invalid token");
+        }
     }
 
     /**

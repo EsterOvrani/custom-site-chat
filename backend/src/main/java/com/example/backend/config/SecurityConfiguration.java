@@ -47,7 +47,7 @@ public class SecurityConfiguration {
                 .requestMatchers("/api/analytics/save-questions").permitAll()
                 
                 // ✅ SSE endpoint - requires authentication
-                .requestMatchers("/api/tokens/stream").authenticated()
+                .requestMatchers("/api/tokens/stream").permitAll() // ✅ לא צריך authenticated
                 
                 // all the another need authentication
                 .anyRequest().authenticated()

@@ -12,57 +12,53 @@ class TokenSSEService {
   /**
    * התחברות ל-SSE stream
    */
-  connect() {
+    connect() {
     if (this.eventSource) {
-      console.log('⚠️ SSE already connected');
-      return;
+        console.log('⚠️ SSE already connected');
+        return;
     }
 
     const token = localStorage.getItem('token');
     if (!token) {
-      console.error('❌ No token found, cannot connect to SSE');
-      return;
+        console.error('❌ No token found, cannot connect to SSE');
+        return;
     }
 
     console.log('📡 Connecting to token SSE stream...');
 
-    // יצירת EventSource עם header של Authorization
-    const url = `/api/tokens/stream`;
+    // ✅ שלח את ה-token כ-query parameter
+    const url = `/api/tokens/stream?token=${encodeURIComponent(token)}`;
     
-    this.eventSource = new EventSource(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
+    this.eventSource = new EventSource(url);
 
     // אירוע חיבור
     this.eventSource.addEventListener('connected', (event) => {
-      console.log('✅ Connected to token SSE:', event.data);
-      this.reconnectAttempts = 0; // איפוס מונה ניסיונות
+        console.log('✅ Connected to token SSE:', event.data);
+        this.reconnectAttempts = 0;
     });
 
     // אירוע עדכון טוקנים
     this.eventSource.addEventListener('token-update', (event) => {
-      console.log('💰 Token update received:', event.data);
-      
-      try {
+        console.log('💰 Token update received:', event.data);
+        
+        try {
         const data = JSON.parse(event.data);
         this.notifyListeners(data);
-      } catch (error) {
+        } catch (error) {
         console.error('Error parsing token update:', error);
-      }
+        }
     });
 
     // טיפול בשגיאות
     this.eventSource.onerror = (error) => {
-      console.error('❌ SSE error:', error);
-      
-      if (this.eventSource.readyState === EventSource.CLOSED) {
+        console.error('❌ SSE error:', error);
+        
+        if (this.eventSource.readyState === EventSource.CLOSED) {
         console.log('🔄 SSE connection closed, attempting to reconnect...');
         this.handleReconnect();
-      }
+        }
     };
-  }
+    }
 
   /**
    * ניסיון חיבור מחדש
