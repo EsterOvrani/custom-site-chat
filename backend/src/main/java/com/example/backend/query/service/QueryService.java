@@ -48,6 +48,7 @@ public class QueryService {
     public QueryResponse askQuestion(String secretKey, String question, List<PublicQueryRequest.HistoryMessage> history) {
         
         long startTime = System.currentTimeMillis();
+        int rewriteTokens = 0;
 
         try {
             // 1. Verify secretKey
@@ -62,8 +63,10 @@ public class QueryService {
                 validatedHistory.size());
 
             // 3. Improved query construction (rewritten with LLM!)
-            String enhancedQuery = buildEnhancedQuery(question, validatedHistory);
-            log.info("🔍 Searching with query: '{}'", enhancedQuery);
+            RewriteResult rewriteResult = buildEnhancedQuery(question, validatedHistory);
+            String enhancedQuery = rewriteResult.getQuery();
+            rewriteTokens = rewriteResult.getTokensUsed();
+            log.info("🔍 Searching with query: '{}', rewrite tokens: {}", enhancedQuery, rewriteTokens);
 
             // 4. Search for relevant documents (with the rewritten question!)
             List<RelevantDocument> relevantDocs = searchRelevantDocuments(
@@ -74,7 +77,17 @@ public class QueryService {
 
             // 5. If no relevant documents were found
             if (relevantDocs.isEmpty()) {
-                return createNoResultsResponse(question, enhancedQuery, startTime);
+                // Still consume rewrite tokens even if no docs found
+                if (rewriteTokens > 0) {
+                    try {
+                        tokenService.consumeTokens(user, rewriteTokens);
+                        log.info("💰 Consumed {} rewrite tokens (no docs found) for user {}", 
+                            rewriteTokens, user.getId());
+                    } catch (Exception e) {
+                        log.error("Failed to consume rewrite tokens", e);
+                    }
+                }
+                return createNoResultsResponse(question, enhancedQuery, startTime, rewriteTokens);
             }
 
             // 6. Building messages with history
@@ -93,20 +106,21 @@ public class QueryService {
         Double confidence = calculateConfidence(relevantDocs);
 
         OpenAiTokenizer tokenizer = new OpenAiTokenizer("gpt-4");
-        int tokensUsed = tokenizer.estimateTokenCountInMessage(response.content());
+        int outputTokens = tokenizer.estimateTokenCountInMessage(response.content());
 
         // 8.1. Count input tokens as well
         int inputTokens = messages.stream()
             .mapToInt(msg -> tokenizer.estimateTokenCountInMessage(msg))
             .sum();
 
-        int totalTokens = tokensUsed + inputTokens;
+        // 8.2. Total = rewrite + main query (input + output)
+        int totalTokens = rewriteTokens + inputTokens + outputTokens;
 
-        // 8.2. Consume tokens from user quota
+        // 8.3. Consume tokens from user quota
         try {
             tokenService.consumeTokens(user, totalTokens);
-            log.info("💰 Consumed {} tokens (input: {}, output: {}) for user {}", 
-                totalTokens, inputTokens, tokensUsed, user.getId());
+            log.info("💰 Consumed {} tokens (rewrite: {}, input: {}, output: {}) for user {}", 
+                totalTokens, rewriteTokens, inputTokens, outputTokens, user.getId());
         } catch (Exception e) {
             log.error("Failed to consume tokens", e);
             // Continue anyway - we already generated the response
@@ -120,7 +134,7 @@ public class QueryService {
             .rewrittenQuery(enhancedQuery)  
             .sources(sources)
             .confidence(confidence)
-            .tokensUsed(totalTokens) // Return total tokens
+            .tokensUsed(totalTokens) // Return total tokens including rewrite
             .responseTimeMs(responseTime)
             .build();
 
@@ -210,12 +224,12 @@ public class QueryService {
 
 
     // Improved query builder - rewrites with LLM to be independent
-    private String buildEnhancedQuery(String question, List<PublicQueryRequest.HistoryMessage> history) {
+    private RewriteResult buildEnhancedQuery(String question, List<PublicQueryRequest.HistoryMessage> history) {
         
-        // If no history - return original question
+        // If no history - return original question with 0 tokens
         if (history == null || history.isEmpty()) {
             log.info("📝 No history - using original question");
-            return question;
+            return new RewriteResult(question, 0);
         }
         
         // Rewrite query with LLM
@@ -223,7 +237,7 @@ public class QueryService {
     }
 
     // Rewrite the query with LLM to be independent, Uses all available history (up to 10 messages)
-    private String rewriteQueryWithLLM(String question, List<PublicQueryRequest.HistoryMessage> history) {
+    private RewriteResult rewriteQueryWithLLM(String question, List<PublicQueryRequest.HistoryMessage> history) {
         
         try {
             log.info("🔄 Rewriting query with LLM...");
@@ -242,13 +256,14 @@ public class QueryService {
             // Build rewrite prompt
             String rewritePrompt = buildRewritePrompt(contextBuilder.toString(), question);
             
+            // Build messages for token counting
+            SystemMessage systemMsg = SystemMessage.from("You are a query rewriting assistant. Your ONLY job is to rewrite user questions to be standalone based on conversation history.");
+            UserMessage userMsg = UserMessage.from(rewritePrompt);
+            
             // Send to LLM
             log.info("🚀 Sending rewrite request to LLM...");
             
-            Response<AiMessage> response = chatModel.generate(
-                SystemMessage.from("You are a query rewriting assistant. Your ONLY job is to rewrite user questions to be standalone based on conversation history."),
-                UserMessage.from(rewritePrompt)
-            );
+            Response<AiMessage> response = chatModel.generate(systemMsg, userMsg);
             
             String rewrittenQuery = response.content().text().trim();
             
@@ -258,18 +273,25 @@ public class QueryService {
                 .replaceAll("^(Rewritten question:|Rewritten question)\\s*", "")
                 .trim();
             
+            // Calculate tokens used
+            OpenAiTokenizer tokenizer = new OpenAiTokenizer("gpt-4");
+            int inputTokens = tokenizer.estimateTokenCountInMessage(systemMsg) 
+                            + tokenizer.estimateTokenCountInMessage(userMsg);
+            int outputTokens = tokenizer.estimateTokenCountInMessage(response.content());
+            int totalTokens = inputTokens + outputTokens;
+            
             long duration = System.currentTimeMillis() - startTime;
             
-            log.info("✅ Query rewriting completed in {}ms", duration);
+            log.info("✅ Query rewriting completed in {}ms, tokens: {}", duration, totalTokens);
             log.info("📥 Original:  '{}'", question);
             log.info("📤 Rewritten: '{}'", rewrittenQuery);
             
-            return rewrittenQuery;
+            return new RewriteResult(rewrittenQuery, totalTokens);
             
         } catch (Exception e) {
             log.error("❌ Failed to rewrite query - using original question", e);
-            // In case of error - return original question
-            return question;
+            // In case of error - return original question with 0 tokens
+            return new RewriteResult(question, 0);
         }
     }
 
@@ -388,7 +410,7 @@ public class QueryService {
     }
 
     // Response when no documents found
-    private QueryResponse createNoResultsResponse(String originalQuestion, String enhancedQuery, long startTime) {
+    private QueryResponse createNoResultsResponse(String originalQuestion, String enhancedQuery, long startTime, int tokensUsed) {
         
         String detectedLanguage = detectLanguage(originalQuestion);
         String message = promptService.getNoResultsMessage(detectedLanguage);
@@ -400,7 +422,7 @@ public class QueryService {
             .rewrittenQuery(enhancedQuery)
             .sources(Collections.emptyList())
             .confidence(0.0)
-            .tokensUsed(0)
+            .tokensUsed(tokensUsed)
             .responseTimeMs(responseTime)
             .build();
     }
@@ -411,5 +433,13 @@ public class QueryService {
         private String text;
         private Double score;
         private String documentName;
+    }
+
+    // Inner class for rewrite result with tokens
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    private static class RewriteResult {
+        private String query;
+        private int tokensUsed;
     }
 }

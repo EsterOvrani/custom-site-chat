@@ -3,9 +3,11 @@ package com.example.backend.analytics.service;
 import com.example.backend.analytics.dto.AnalysisResponse;
 import com.example.backend.collection.service.CollectionService;
 import com.example.backend.user.model.User;
+import com.example.backend.user.service.TokenService;
 import com.example.backend.common.infrastructure.storage.S3Service;
 import com.example.backend.query.service.PromptService;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiTokenizer;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.data.message.AiMessage;
@@ -31,6 +33,7 @@ public class AnalyticsService {
     private final CollectionService collectionService;
     private final OpenAiChatModel chatModel;
     private final PromptService promptService;
+    private final TokenService tokenService;
 
     // Get user by the key
     public User getUserBySecretKey(String secretKey) {
@@ -69,7 +72,7 @@ public class AnalyticsService {
             log.info("🔍 Filtering {} new questions for category: {}",
                     newQuestions.size(), siteCategory);
 
-            List<String> filteredNew = filterWithLLM(newQuestions, siteCategory);
+            List<String> filteredNew = filterWithLLM(newQuestions, siteCategory, user);
             allQuestions.addAll(filteredNew);
 
             log.info("✅ Added {} relevant questions (filtered from {} total)",
@@ -88,7 +91,7 @@ public class AnalyticsService {
     }
 
     // Filter the questions with AI
-    private List<String> filterWithLLM(List<String> questions, String siteCategory) {
+    private List<String> filterWithLLM(List<String> questions, String siteCategory, User user) {
         log.info("🔍 Filtering {} questions with LLM for category: {}",
                 questions.size(), siteCategory);
 
@@ -102,13 +105,27 @@ public class AnalyticsService {
         String fullPrompt = promptService.getAnalyticsFilterPrompt(siteCategory, questionsText.toString());
 
         try {
+            // Build message for token counting
+            UserMessage userMsg = UserMessage.from(fullPrompt);
+            
             // Send to AI - using the prompt as-is (no separate system message needed)
-            Response<AiMessage> response = chatModel.generate(
-                    UserMessage.from(fullPrompt)
-            );
+            Response<AiMessage> response = chatModel.generate(userMsg);
 
             String answer = response.content().text().trim();
             log.info("📥 LLM response: {}", answer);
+
+            // Calculate and consume tokens
+            OpenAiTokenizer tokenizer = new OpenAiTokenizer("gpt-4");
+            int inputTokens = tokenizer.estimateTokenCountInMessage(userMsg);
+            int outputTokens = tokenizer.estimateTokenCountInMessage(response.content());
+            int totalTokens = inputTokens + outputTokens;
+            
+            try {
+                tokenService.consumeTokens(user, totalTokens);
+                log.info("💰 Consumed {} tokens (filter) for user {}", totalTokens, user.getId());
+            } catch (Exception e) {
+                log.error("Failed to consume tokens for filter", e);
+            }
 
             // If there are no relevant questions
             if (answer.equalsIgnoreCase("NONE")) {
@@ -267,21 +284,35 @@ public class AnalyticsService {
             // 6. Get prompt from PromptService (includes system message in first line)
             String fullPrompt = promptService.getAnalyticsAnalysisPrompt(questionsText.toString());
 
-            // 7. Send to AI for analysis - using the prompt as-is (no separate system message needed)
-            Response<AiMessage> response = chatModel.generate(
-                    UserMessage.from(fullPrompt)
-            );
+            // 7. Build message for token counting
+            UserMessage userMsg = UserMessage.from(fullPrompt);
+
+            // 8. Send to AI for analysis - using the prompt as-is (no separate system message needed)
+            Response<AiMessage> response = chatModel.generate(userMsg);
 
             String aiResponse = response.content().text().trim();
             log.info("📥 AI Response received: {}", aiResponse);
 
-            // 8. Clean response - remove markdown backticks if present
+            // 9. Calculate and consume tokens
+            OpenAiTokenizer tokenizer = new OpenAiTokenizer("gpt-4");
+            int inputTokens = tokenizer.estimateTokenCountInMessage(userMsg);
+            int outputTokens = tokenizer.estimateTokenCountInMessage(response.content());
+            int totalTokens = inputTokens + outputTokens;
+            
+            try {
+                tokenService.consumeTokens(user, totalTokens);
+                log.info("💰 Consumed {} tokens (analysis) for user {}", totalTokens, user.getId());
+            } catch (Exception e) {
+                log.error("Failed to consume tokens for analysis", e);
+            }
+
+            // 10. Clean response - remove markdown backticks if present
             aiResponse = aiResponse
                     .replaceAll("^```json\\s*", "")
                     .replaceAll("\\s*```$", "")
                     .trim();
 
-            // 9. Parse JSON response to AnalysisResponse object
+            // 11. Parse JSON response to AnalysisResponse object
             ObjectMapper mapper = new ObjectMapper();
             AnalysisResponse analysis = mapper.readValue(aiResponse, AnalysisResponse.class);
 
