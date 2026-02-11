@@ -109,35 +109,7 @@
         font-size: 18px;
       }
 
-      .message-counter {
-        font-size: 11px;
-        opacity: 0.9;
-        margin-top: 3px;
-      }
 
-      .reset-button {
-        position: absolute;
-        left: 20px;
-        top: 50%;
-        transform: translateY(-50%);
-        background: rgba(255,255,255,0.2);
-        border: 1px solid rgba(255,255,255,0.3);
-        color: white;
-        padding: 6px 12px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 11px;
-        transition: all 0.3s;
-        display: none;
-      }
-
-      .reset-button:hover {
-        background: rgba(255,255,255,0.3);
-      }
-
-      .reset-button.show {
-        display: block;
-      }
 
       .chat-widget-messages {
         flex: 1;
@@ -247,20 +219,7 @@
         text-decoration: underline;
       }
 
-      .limit-warning {
-        background: #fff3cd;
-        color: #856404;
-        padding: 10px;
-        border-radius: 8px;
-        margin: 10px 20px;
-        font-size: 13px;
-        text-align: center;
-        display: none;
-      }
 
-      .limit-warning.show {
-        display: block;
-      }
 
       .recording-bar {
         background: #fce8e6;
@@ -550,16 +509,9 @@
         <button class="chat-widget-button" id="chat-widget-toggle">💬</button>
         <div class="chat-widget-window" id="chat-widget-window">
           <div class="chat-widget-header">
-            <button class="reset-button" id="reset-button">
-              🔄 התחל שיחה חדשה
-            </button>
             <div>
               <h3>${escapeHtml(config.title)}</h3>
-              <div class="message-counter" id="message-counter">0/10 שאלות</div>
             </div>
-          </div>
-          <div class="limit-warning" id="limit-warning">
-            ⚠️ הגעת למגבלת 10 שאלות. לחץ על "התחל שיחה חדשה".
           </div>
           <div class="recording-bar" id="recording-bar">
             <div class="recording-timer">
@@ -623,20 +575,16 @@
         currentLanguage: 'he-IL',
         sessionId: generateSessionId(),
         maxHistoryMessages: config.maxHistoryMessages,
-        currentTranscript: '',
-        unansweredQuestions: []
+        currentTranscript: ''
     };
 
     const elements = {
       toggleButton: document.getElementById('chat-widget-toggle'),
-      resetButton: document.getElementById('reset-button'),
       widgetWindow: document.getElementById('chat-widget-window'),
       messagesContainer: document.getElementById('chat-widget-messages'),
       inputField: document.getElementById('chat-widget-input'),
       sendButton: document.getElementById('chat-widget-send'),
       voiceButton: document.getElementById('chat-widget-voice'),
-      messageCounter: document.getElementById('message-counter'),
-      limitWarning: document.getElementById('limit-warning'),
       browserWarning: document.getElementById('browser-warning'),
       recordingBar: document.getElementById('recording-bar'),
       recordingTimer: document.getElementById('recording-timer'),
@@ -652,7 +600,6 @@
     setupTextDirectionToggle(elements);
 
     elements.toggleButton.addEventListener('click', () => toggleWidget(state, elements));
-    elements.resetButton.addEventListener('click', () => resetChat(state, elements, config));
     elements.sendButton.addEventListener('click', () => sendMessage(state, elements, config));
     
     if (elements.voiceButton) {
@@ -879,10 +826,6 @@
       return;
     }
 
-    if (isAtLimit(state)) {
-      return;
-    }
-
     if (state.isRecording) {
       state.recognition.stop();
     } else {
@@ -955,53 +898,8 @@
     }
   }
 
-  function isAtLimit(state) {
-    const userMessageCount = Math.floor(state.history.length / 2);
-    return userMessageCount >= state.maxHistoryMessages;
-  }
-
   function updateUI(state, elements) {
-    const userMessageCount = Math.floor(state.history.length / 2);
-    
-    elements.messageCounter.textContent = `${userMessageCount}/${state.maxHistoryMessages} שאלות`;
-    
-    if (userMessageCount > 0) {
-      elements.resetButton.classList.add('show');
-    } else {
-      elements.resetButton.classList.remove('show');
-    }
-    
-    if (isAtLimit(state)) {
-      elements.limitWarning.classList.add('show');
-      elements.inputField.disabled = true;
-      elements.sendButton.disabled = true;
-      if (elements.voiceButton) {
-        elements.voiceButton.disabled = true;
-      }
-    } else {
-      elements.limitWarning.classList.remove('show');
-      elements.inputField.disabled = false;
-      elements.sendButton.disabled = false;
-      if (elements.voiceButton) {
-        elements.voiceButton.disabled = false;
-      }
-    }
-  }
-
-  function resetChat(state, elements, config) {
-    if (confirm('האם אתה בטוח שברצונך להתחיל שיחה חדשה? ההיסטוריה תימחק.')) {
-      sendUnansweredQuestionsToServer(state, config);
-
-      state.history = [];
-      state.messages = [];
-      state.currentTranscript = '';
-      
-      const storageKey = 'chatHistory_' + config.secretKey;
-      sessionStorage.removeItem(storageKey);
-      
-      renderMessages(state, elements, config);
-      updateUI(state, elements);
-    }
+    // UI is now simplified - no limits to display
   }
 
   function generateSessionId() {
@@ -1171,7 +1069,7 @@
   async function sendMessage(state, elements, config) {
     const question = elements.inputField.value.trim();
 
-    if (!question || state.isLoading || isAtLimit(state)) return;
+    if (!question || state.isLoading) return;
 
     state.messages.push({
       role: 'user',
@@ -1225,6 +1123,20 @@
           content: data.data.answer
         });
 
+        // Trim history to last 10 messages (for AI context)
+        const MAX_HISTORY_SIZE = 10;
+        if (state.history.length > MAX_HISTORY_SIZE) {
+          state.history = state.history.slice(-MAX_HISTORY_SIZE);
+          console.log('📋 History trimmed to last', MAX_HISTORY_SIZE, 'messages');
+        }
+
+        // Trim messages to last 50 messages (for display)
+        const MAX_MESSAGES_SIZE = 50;
+        if (state.messages.length > MAX_MESSAGES_SIZE) {
+          state.messages = state.messages.slice(-MAX_MESSAGES_SIZE);
+          console.log('💬 Messages trimmed to last', MAX_MESSAGES_SIZE, 'messages');
+        }
+
         const englishNoInfoRegexes = [
           /i (don't|do not) have .* (information|details)/i,
           /the information is not available to me/i,
@@ -1246,18 +1158,10 @@
               ? data.data.rewrittenQuery
               : question;
 
-          console.log('📝 Detected unanswered question:', questionToSave);
+          console.log('📝 Detected unanswered question - sending to server:', questionToSave);
 
-          state.unansweredQuestions.push(questionToSave);
-
-          try {
-            sessionStorage.setItem(
-              'unansweredQuestions_' + config.secretKey,
-              JSON.stringify(state.unansweredQuestions)
-            );
-          } catch (e) {
-            console.error('Failed to save unanswered questions', e);
-          }
+          // Send immediately to server
+          saveUnansweredQuestionToServer(config, questionToSave);
         }
 
       } else {
@@ -1278,7 +1182,7 @@
     } finally {
       state.isLoading = false;
       elements.sendButton.disabled = false;
-      if (elements.voiceButton && !isAtLimit(state)) {
+      if (elements.voiceButton) {
         elements.voiceButton.disabled = false;
       }
 
@@ -1289,15 +1193,11 @@
     }
   }
 
-  async function sendUnansweredQuestionsToServer(state, config) {
-    if (state.unansweredQuestions.length === 0) {
-      console.log('ℹ️ No unanswered questions to send');
-      return;
-    }
-
-    console.log('📤 Sending', state.unansweredQuestions.length, 'unanswered questions to server');
-
+  // Send single unanswered question immediately to server
+  async function saveUnansweredQuestionToServer(config, question) {
     try {
+      console.log('📤 Sending unanswered question to server...');
+      
       await fetch(`${config.apiUrl}/api/analytics/save-questions`, {
         method: 'POST',
         headers: {
@@ -1305,38 +1205,17 @@
         },
         body: JSON.stringify({
           secretKey: config.secretKey,
-          questions: state.unansweredQuestions,
+          questions: [question],
           siteCategory: config.siteCategory
         })
       });
 
-      console.log('✅ Questions sent successfully');
-      
-      state.unansweredQuestions = [];
-      sessionStorage.removeItem('unansweredQuestions_' + config.secretKey);
+      console.log('✅ Unanswered question saved successfully');
 
     } catch (error) {
-      console.error('❌ Failed to send questions:', error);
+      console.error('❌ Failed to save unanswered question:', error);
     }
   }
-
-  window.addEventListener('beforeunload', () => {
-    const state = window.chatWidgetState;
-    const config = window.chatWidgetConfig;
-    
-    if (state && config && state.unansweredQuestions && state.unansweredQuestions.length > 0) {
-      console.log('📤 Page closing - sending questions via beacon');
-      
-      const data = JSON.stringify({
-        secretKey: config.secretKey,
-        questions: state.unansweredQuestions,
-        siteCategory: config.siteCategory
-      });
-      
-      const blob = new Blob([data], { type: 'application/json' });
-      navigator.sendBeacon(`${config.apiUrl}/api/analytics/save-questions`, blob);
-    }
-  });
 
   console.log('✅ Chat Widget initialized');
 })();
