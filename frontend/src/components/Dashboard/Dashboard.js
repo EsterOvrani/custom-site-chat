@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { authAPI, collectionAPI, documentAPI, tokenAPI } from '../../services/api';
 import axios from 'axios';
 import DocumentsList from './DocumentsList';
-import CollectionSettings from './CollectionSettings';
+import MyAccount from './MyAccount';
+import Customization from './Customization';
+import EmbedCode from './EmbedCode';
 import Analytics from './Analytics';
 import DuplicateDialog from './DuplicateDialog';
-import TokenUsage from './TokenUsage';
-import tokenSSEService from '../../services/tokenSSE'; // ✅ זה כבר יש לך
+import tokenSSEService from '../../services/tokenSSE';
 
 import './Dashboard.css';
 
@@ -15,12 +16,13 @@ const Dashboard = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [collection, setCollection] = useState(null);
   const [documents, setDocuments] = useState([]);
-  const [activeTab, setActiveTab] = useState('documents');
+  const [activeTab, setActiveTab] = useState('account');
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(false);
   const [duplicateDialog, setDuplicateDialog] = useState(null);
   const [tokenInfo, setTokenInfo] = useState(null);
   const [tokenLoading, setTokenLoading] = useState(false);
+  const [customizationSettings, setCustomizationSettings] = useState(null);
 
   const navigate = useNavigate();
   const pollingIntervalRef = useRef(null);
@@ -509,6 +511,14 @@ const Dashboard = () => {
   ).length;
 
   // ==================== Render ====================
+  
+  // Helper function for progress bar color
+  const getProgressColor = (percentage) => {
+    if (percentage < 50) return '#10b981'; // ירוק
+    if (percentage < 75) return '#f59e0b'; // כתום
+    return '#ef4444'; // אדום
+  };
+
   return (
     <div className="dashboard">
       {/* Header */}
@@ -529,6 +539,25 @@ const Dashboard = () => {
               ⏳ {processingCount} מעבד
             </span>
           )}
+          
+          {/* Token Progress Bar in Header */}
+          {tokenInfo && (
+            <div className="header-token-usage" title={`${tokenInfo.usagePercentage?.toFixed(1)}% בשימוש`}>
+              <div className="header-token-progress">
+                <div 
+                  className="header-token-fill"
+                  style={{ 
+                    width: `${Math.min(tokenInfo.usagePercentage || 0, 100)}%`,
+                    backgroundColor: getProgressColor(tokenInfo.usagePercentage || 0)
+                  }}
+                />
+              </div>
+              <span className="header-token-text" style={{ color: getProgressColor(tokenInfo.usagePercentage || 0) }}>
+                {tokenInfo.usagePercentage?.toFixed(0)}%
+              </span>
+            </div>
+          )}
+          
           <span className="welcome-text">
             שלום, {currentUser?.fullName || currentUser?.username}
           </span>
@@ -543,16 +572,28 @@ const Dashboard = () => {
         {/* Tabs */}
         <div className="tabs">
           <button
+            className={`tab ${activeTab === 'account' ? 'active' : ''}`}
+            onClick={() => setActiveTab('account')}
+          >
+            👤 החשבון שלי
+          </button>
+          <button
             className={`tab ${activeTab === 'documents' ? 'active' : ''}`}
             onClick={() => setActiveTab('documents')}
           >
             📄 המסמכים שלי ({documents.filter(d => !d.isTemporary).length})
           </button>
           <button
-            className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
+            className={`tab ${activeTab === 'customization' ? 'active' : ''}`}
+            onClick={() => setActiveTab('customization')}
           >
-            ⚙️ קוד הטמעה והגדרות
+            🎨 התאמה אישית
+          </button>
+          <button
+            className={`tab ${activeTab === 'embed' ? 'active' : ''}`}
+            onClick={() => setActiveTab('embed')}
+          >
+            📦 קוד הטמעה
           </button>
           <button
             className={`tab ${activeTab === 'analytics' ? 'active' : ''}`}
@@ -564,8 +605,13 @@ const Dashboard = () => {
 
         {/* Tab Content */}
         <div className="tab-content">
-          {/* Token Usage - מוצג בכל הטאבים */}
-          <TokenUsage tokenInfo={tokenInfo} loading={tokenLoading} />
+          {activeTab === 'account' && (
+            <MyAccount 
+              tokenInfo={tokenInfo} 
+              loading={tokenLoading} 
+              currentUser={currentUser}
+            />
+          )}
           
           {activeTab === 'documents' && (
             <DocumentsList
@@ -578,11 +624,19 @@ const Dashboard = () => {
             />
           )}
 
-          {activeTab === 'settings' && collection && (
-            <CollectionSettings
+          {activeTab === 'customization' && collection && (
+            <Customization
               collection={collection}
               onRegenerateKey={handleRegenerateKey}
               loading={loading}
+              onSettingsChange={setCustomizationSettings}
+            />
+          )}
+
+          {activeTab === 'embed' && collection && (
+            <EmbedCode
+              collection={collection}
+              customizationSettings={customizationSettings}
             />
           )}
 

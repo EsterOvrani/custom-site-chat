@@ -44,6 +44,38 @@
   gap: 15px;
 }
 
+/* Header Token Usage Progress Bar */
+.header-token-usage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #f8f9ff;
+  border-radius: 20px;
+  border: 1px solid #e1e8ed;
+}
+
+.header-token-progress {
+  width: 80px;
+  height: 8px;
+  background: #e1e8ed;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.header-token-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease, background-color 0.3s ease;
+}
+
+.header-token-text {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 35px;
+  text-align: center;
+}
+
 .welcome-text {
   color: #333;
   font-weight: 500;
